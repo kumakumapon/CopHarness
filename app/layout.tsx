@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'CopChat',
-  description: 'GitHub Copilot Chat',
+  title: 'CopHarness',
+  description: 'LLM harness with CLI and Discord bot support',
 }
 
 export default function RootLayout({
