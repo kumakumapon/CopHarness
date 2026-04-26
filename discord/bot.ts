@@ -15,6 +15,7 @@
  *   DISCORD_PREFIX         – Command prefix (default: "!")
  *   COPILOT_SYSTEM_PROMPT  – System prompt sent to the LLM
  *   DISCORD_MAX_HISTORY    – Max messages to keep per channel (default: 20)
+ *   DISCORD_MAX_IMAGE_BYTES – Max bytes per image attachment to download (default: 8388608 = 8 MB)
  */
 
 import * as fs from 'fs';
@@ -45,12 +46,14 @@ import {
   Partials,
 } from 'discord.js';
 import { createAdapter, resolveProvider } from '../lib/adapterFactory';
-import { type LLMAdapter, type LLMMessage } from '../lib/adapter';
+import { type LLMAdapter, type LLMAttachment, type LLMMessage } from '../lib/adapter';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
 const MAX_HISTORY = Math.max(1, Number(process.env.DISCORD_MAX_HISTORY) || 20);
 const DISCORD_RESPONSE_MAX_LENGTH = 2000; // Discord message character limit
+// Maximum size (bytes) for a single image attachment to download (default: 8 MB)
+const MAX_IMAGE_BYTES = Number(process.env.DISCORD_MAX_IMAGE_BYTES) || 8 * 1024 * 1024;
 
 if (!DISCORD_BOT_TOKEN) {
   console.error('Error: DISCORD_BOT_TOKEN is not set.');
@@ -59,6 +62,36 @@ if (!DISCORD_BOT_TOKEN) {
 
 // Per-channel conversation history
 const channelHistory = new Map<string, LLMMessage[]>();
+
+/**
+ * Download an image URL and return it as a base64-encoded LLMAttachment.
+ * Returns null if the content type is not an image or the file exceeds MAX_IMAGE_BYTES.
+ */
+async function fetchImageAttachment(
+  url: string,
+  contentType: string | null,
+): Promise<LLMAttachment | null> {
+  const mimeType = contentType ?? '';
+  if (!mimeType.startsWith('image/')) return null;
+
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+
+  const contentLength = Number(resp.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_IMAGE_BYTES) {
+    console.warn(`[Discord Bot] Skipping image attachment: size ${contentLength} exceeds limit ${MAX_IMAGE_BYTES}`);
+    return null;
+  }
+
+  const buffer = await resp.arrayBuffer();
+  if (buffer.byteLength > MAX_IMAGE_BYTES) {
+    console.warn(`[Discord Bot] Skipping image attachment: downloaded size ${buffer.byteLength} exceeds limit ${MAX_IMAGE_BYTES}`);
+    return null;
+  }
+
+  const data = Buffer.from(buffer).toString('base64');
+  return { type: 'blob', data, mimeType };
+}
 
 function getHistory(channelId: string): LLMMessage[] {
   if (!channelHistory.has(channelId)) {
@@ -120,9 +153,25 @@ async function handleMessage(
     .replace(new RegExp(`<@!?${botUserId}>`, 'g'), '')
     .trim();
 
-  if (!userText) {
+  // Collect image attachments from the message
+  const attachments: LLMAttachment[] = [];
+  for (const attachment of message.attachments.values()) {
+    if (!attachment.contentType?.startsWith('image/')) continue;
+    const llmAttachment = await fetchImageAttachment(attachment.url, attachment.contentType).catch((err) => {
+      console.warn(`[Discord Bot] Failed to fetch image attachment: ${err}`);
+      return null;
+    });
+    if (llmAttachment) attachments.push(llmAttachment);
+  }
+
+  if (!userText && attachments.length === 0) {
     await message.reply('何かご用件はありますか？');
     return;
+  }
+
+  // When only images are sent (no text), use a default prompt
+  if (!userText) {
+    userText = '画像について教えてください。';
   }
 
   const channelId = message.channelId;
@@ -137,7 +186,7 @@ async function handleMessage(
     }
 
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-    const resp = await adapter.complete({ messages: [...history], timeoutMs });
+    const resp = await adapter.complete({ messages: [...history], attachments, timeoutMs });
     const replyText = resp.content || '（応答がありませんでした）';
 
     history.push({ role: 'assistant', content: replyText });
