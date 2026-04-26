@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Chat App</title>
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Warm & Soft Color Palette */
+            --primary-bg: #faf6f1;
+            --secondary-bg: #f5ede5;
+            --accent-warm: #e8d5c4;
+            --accent-orange: #f4c4a6;
+            --accent-peachy: #f9d9c5;
+            --text-primary: #5a4a42;
+            --text-secondary: #9b8b85;
+            --user-bubble: #f4c4a6;
+            --ai-bubble: #ffffff;
+            --border-color: #e8d5c4;
+            --shadow-light: rgba(90, 74, 66, 0.08);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+        }
+
+        #app {
+            width: 100%;
+            max-width: 390px;
+            height: 100vh;
+            margin: 0 auto;
+            background-color: var(--primary-bg);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 30px var(--shadow-light);
+        }
+
+        /* Header */
+        .header {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #faf6f1 0%, #f5ede5 100%);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--accent-orange);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        /* Messages Container */
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background-color: var(--accent-warm);
+            border-radius: 3px;
+        }
+
+        /* Message Row */
+        .message-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 4px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-row.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .message-avatar.ai {
+            background-color: var(--accent-orange);
+            color: #fff;
+        }
+
+        .message-avatar.user {
+            background-color: var(--accent-peachy);
+            color: #fff;
+        }
+
+        .message-bubble {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 24px;
+            word-wrap: break-word;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+
+        .message-bubble.ai {
+            background-color: var(--ai-bubble);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .message-bubble.user {
+            background-color: var(--user-bubble);
+            color: #fff;
+        }
+
+        .message-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            text-align: right;
+        }
+
+        .message-row.user .message-info {
+            text-align: right;
+        }
+
+        .message-row.ai .message-info {
+            text-align: left;
+        }
+
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            height: 32px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--text-secondary);
+            animation: typingBounce 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typingBounce {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.6;
+            }
+            30% {
+                transform: translateY(-8px);
+                opacity: 1;
+            }
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 12px 12px 20px;
+            background-color: var(--primary-bg);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            font-size: 15px;
+            font-family: inherit;
+            color: var(--text-primary);
+            background-color: var(--ai-bubble);
+            resize: none;
+            max-height: 100px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 0 3px rgba(244, 196, 166, 0.2);
+        }
+
+        .input-field::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .send-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-warm) 100%);
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(244, 196, 166, 0.3);
+        }
+
+        .send-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(244, 196, 166, 0.4);
+        }
+
+        .send-button:active {
+            transform: scale(0.95);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            #app {
+                max-width: 100%;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script type="text/babel">
+
+const { useState, useEffect, useRef } = React;
+
+const sampleMessages = [
+{ id: 1, role: 'ai', text: 'こんにちは！👋 何かお手伝いできることはありますか？', timestamp: '14:00' },
+{ id: 2, role: 'user', text: 'こんにちは！JavaScriptについて質問があります', timestamp: '14:01' },
+{ id: 3, role: 'ai', text: 'もちろんです！JavaScriptのことなら何でもお気軽にお聞きください。どのようなことをお知りになりたいですか？', timestamp: '14:01' },
+{ id: 4, role: 'user', text: 'async/awaitについて教えてください', timestamp: '14:02' },
+{ id: 5, role: 'ai', text: 'async/awaitは非同期処理をシンプルに書く方法です。Promiseの糖衣構文で、以下のように使います:\n\nasync function getData() {\n  const data = await fetch(\'/api/data\');\n  return data.json();\n}', timestamp: '14:03' },
+{ id: 6, role: 'user', text: 'エラーハンドリングはどうするんですか？', timestamp: '14:04' },
+{ id: 7, role: 'ai', text: 'try/catchを使います！\n\ntry {\n  const data = await fetch(\'/api/data\');\n  const json = await data.json();\n} catch (error) {\n  console.error(\'エラー:\', error);\n}', timestamp: '14:05' },
+{ id: 8, role: 'user', text: 'わかりました。ありがとうございます！', timestamp: '14:06' },
+{ id: 9, role: 'ai', text: 'どういたしまして！何か他に質問があればいつでもどうぞ。😊', timestamp: '14:07' },
+{ id: 10, role: 'user', text: '実装してみます', timestamp: '14:08' }];
+
+
+function ChatApp() {
+  const [messages, setMessages] = useState(sampleMessages);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSend = () => {
+    if (input.trim() === '') return;
+
+    // Add user message
+    const userMessage = {
+      id: messages.length + 1,
+      role: 'user',
+      text: input,
+      timestamp: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setIsTyping(true);
+
+    // Simulate AI response
+    setTimeout(() => {
+      const aiResponses = [
+      'その通りですね。頑張ってください！🎉',
+      'いい質問ですね。もし分からないことがあれば、いつでも聞いてください。',
+      'そうですね。他に何かお手伝いできることがあれば、お気軽にどうぞ！'];
+
+
+      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
+
+      const aiMessage = {
+        id: messages.length + 2,
+        role: 'ai',
+        text: randomResponse,
+        timestamp: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+      setIsTyping(false);
+    }, 1500);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    {/* Header */}
+                    <div className="header">
+                        <div className="header-title">CopChat</div>
+                        <div className="header-icon">🤖</div>
+                    </div>
+
+                    {/* Messages */}
+                    <div className="messages-container">
+                        {messages.map((msg) =>
+        <div key={msg.id}>
+                                <div className={`message-row ${msg.role}`}>
+                                    <div className={`message-avatar ${msg.role}`}>
+                                        {msg.role === 'ai' ? '✨' : '👤'}
+                                    </div>
+                                    <div>
+                                        <div className={`message-bubble ${msg.role}`}>
+                                            {msg.text}
+                                        </div>
+                                        <div className="message-info">{msg.timestamp}</div>
+                                    </div>
+                                </div>
+                            </div>
+        )}
+                        
+                        {isTyping &&
+        <div className="message-row ai">
+                                <div className="message-avatar ai">✨</div>
+                                <div>
+                                    <div className="message-bubble ai" style={{ padding: '12px 16px' }}>
+                                        <div className="typing-indicator">
+                                            <div className="typing-dot"></div>
+                                            <div className="typing-dot"></div>
+                                            <div className="typing-dot"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+        }
+                        
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Input */}
+                    <div className="input-area">
+                        <div className="input-wrapper">
+                            <textarea
+            className="input-field"
+            placeholder="メッセージを入力..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows="1" />
+          
+                            <button
+            className="send-button"
+            onClick={handleSend}
+            disabled={input.trim() === ''}>
+            
+                                ➤
+                            </button>
+                        </div>
+                    </div>
+                </div>);
+
+}
+
+const root = ReactDOM.createRoot(document.getElementById('app'));
+root.render(<ChatApp />);
+</script>
+</body>
+</html>
