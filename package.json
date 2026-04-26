@@ -1,5 +1,5 @@
 {
-  "name": "copchat",
+  "name": "copharness",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "jest"
+    "test": "jest",
+    "cli": "tsx scripts/cli.ts",
+    "discord": "tsx discord/bot.ts"
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.2.2",
+    "discord.js": "^14.26.3",
     "next": "^15.5.15",
     "openai": "^4.98.0",
     "react": "^19.1.0",
@@ -29,6 +32,7 @@
     "postcss": "^8",
     "tailwindcss": "^3",
     "ts-jest": "^29.4.9",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

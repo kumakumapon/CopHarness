@@ -1,6 +1,179 @@
-# CopChat
+# CopHarness
 
-GitHub Copilot SDK を使ったチャットアプリケーション（Next.js 15 + TypeScript）。
+複数の LLM プロバイダ（GitHub Copilot / OpenAI / Anthropic / Gemini）と対話するためのハーネス（TypeScript）。
+
+- **CLI** — コマンドラインから対話型でやり取り
+- **Discord Bot** — Discord の DM / @メンションで LLM と会話
+- **HTTP API** — `POST /api/copilot` エンドポイント（Next.js）
+
+---
+
+## セットアップ
+
+### 1. 環境変数の設定
+
+```bash
+cp .env.example .env.local
+```
+
+`.env.local` を開き、利用したいプロバイダに応じて API キーを設定してください。
+
+| 変数名 | 説明 |
+|--------|------|
+| `GITHUB_COPILOT_API_KEY` | GitHub Copilot PAT（`read:user` + `copilot` スコープ） |
+| `OPENAI_API_KEY` | OpenAI API キー |
+| `ANTHROPIC_API_KEY` | Anthropic API キー |
+| `GEMINI_API_KEY` | Google Gemini API キー |
+| `DISCORD_BOT_TOKEN` | Discord ボットトークン（Discord Bot のみ必要） |
+
+どれか一つの LLM キーがあれば自動判定されます。複数セット時は `COPILOT_PROVIDER` で明示指定も可能です。
+
+> ⚠️ `.env.local` はリポジトリにコミットしないでください（`.gitignore` に含まれています）。
+
+**GitHub Copilot トークン取得方法:**
+1. [https://github.com/settings/tokens](https://github.com/settings/tokens) を開く
+2. "Generate new token (classic)" をクリック
+3. スコープで **`read:user`** と **`copilot`** を選択してトークンを生成
+4. GitHub Copilot Individual または Business のサブスクリプションが有効であることを確認
+
+### 2. 依存パッケージのインストール
+
+```bash
+npm install
+```
+
+---
+
+## CLI（対話型コマンドライン）
+
+```bash
+npm run cli
+```
+
+起動すると `You:` プロンプトが表示されます。メッセージを入力して Enter を押すと LLM の返答が表示されます。会話履歴は同一セッション中は保持されます。
+
+```
+CopHarness CLI — provider: openai, model: gpt-5-mini
+Type your message and press Enter. Type "exit" or "quit" to quit.
+
+You: こんにちは
+Assistant: こんにちは！何かお手伝いできることはありますか？
+
+You: exit
+Goodbye!
+```
+
+### オプション設定
+
+| 変数名 | 説明 | デフォルト |
+|--------|------|-----------|
+| `COPILOT_MODEL` | 使用するモデル名 | `gpt-5-mini` |
+| `COPILOT_TIMEOUT_MS` | LLM タイムアウト（ミリ秒） | `120000` |
+| `COPILOT_SYSTEM_PROMPT` | システムプロンプト | （なし） |
+
+---
+
+## Discord Bot
+
+### Discord アプリの作成
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) でアプリを作成
+2. "Bot" タブでボットを作成し、**Bot Token** をコピー
+3. 必要な Privileged Gateway Intents を有効化:
+   - **Message Content Intent**
+4. OAuth2 → URL Generator で `bot` スコープ + 必要な権限（`Send Messages`, `Read Message History`）を選択してサーバーに招待
+
+### 起動
+
+```bash
+npm run discord
+```
+
+### 使い方
+
+- **DM（ダイレクトメッセージ）**: ボットに直接メッセージを送ると返答します
+- **サーバー内**: ボットを @メンションしてメッセージを送ると返答します
+
+```
+@CopHarness こんにちは！
+```
+
+### オプション設定
+
+| 変数名 | 説明 | デフォルト |
+|--------|------|-----------|
+| `DISCORD_BOT_TOKEN` | Discord ボットトークン | （必須） |
+| `DISCORD_MAX_HISTORY` | チャンネルごとの会話履歴保持数（ペア） | `20` |
+| `COPILOT_SYSTEM_PROMPT` | システムプロンプト | （なし） |
+| `COPILOT_MODEL` | 使用するモデル名 | `gpt-5-mini` |
+| `COPILOT_TIMEOUT_MS` | LLM タイムアウト（ミリ秒） | `120000` |
+
+---
+
+## HTTP API（Next.js）
+
+開発サーバーを起動して HTTP 経由で LLM を呼び出すこともできます。
+
+```bash
+npm run dev
+```
+
+### POST /api/copilot
+
+**リクエスト**
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "こんにちは" }
+  ]
+}
+```
+
+**レスポンス（成功）**
+
+```json
+{
+  "reply": "こんにちは！今日はどうされましたか？"
+}
+```
+
+**エラーレスポンス**
+
+| ステータス | 説明 |
+|-----------|------|
+| 400 | リクエストボディが不正（messages なし・空配列・不正 JSON） |
+| 401 | API キー未設定、または LLM 認証失敗 |
+| 502 | LLM API エラー |
+| 504 | LLM API タイムアウト |
+
+---
+
+## テスト
+
+```bash
+npm test
+```
+
+---
+
+## セキュリティについて
+
+- API キーはサーバー側の環境変数にのみ保存されます。
+- `.env.local` は `.gitignore` に含まれています。コミットしないよう注意してください。
+- Discord Bot を使用する場合、**Message Content Intent** が必要です。
+
+---
+
+## 対応プロバイダ
+
+| プロバイダ | キー変数 | 備考 |
+|-----------|---------|------|
+| GitHub Copilot | `GITHUB_COPILOT_API_KEY` | Copilot サブスクリプション必須 |
+| OpenAI | `OPENAI_API_KEY` | `OPENAI_MODEL` でモデル指定可 |
+| Anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL` でモデル指定可 |
+| Google Gemini | `GEMINI_API_KEY` | 詳細は [docs/GEMINI-INTEGRATION.md](docs/GEMINI-INTEGRATION.md) |
+
 
 ## セットアップ
 
