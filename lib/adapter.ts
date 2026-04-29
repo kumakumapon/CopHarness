@@ -3,6 +3,8 @@
  * Allows switching between Copilot, OpenAI, Anthropic, etc. at the command level.
  */
 
+import { type SkillDefinition } from './skill';
+
 export interface LLMMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -20,6 +22,8 @@ export interface LLMRequest {
   timeoutMs?: number;
   model?: string;
   abortSignal?: AbortSignal;
+  /** Optional list of skills (tools) the model may call during completion. */
+  skills?: SkillDefinition[];
 }
 
 export interface LLMResponse {
