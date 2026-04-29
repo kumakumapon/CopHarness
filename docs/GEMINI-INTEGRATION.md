@@ -120,6 +120,21 @@ model (from request)                 →  LLMResponse.model
 "gemini"                             →  LLMResponse.provider
 ```
 
+#### Skill (Function Calling) Support
+
+The adapter supports Gemini function calling via `LLMRequest.skills`:
+
+- Skills are sent as `tools[].functionDeclarations` in the request payload.
+- When the model returns `functionCall` parts, the adapter executes the matching handler locally and sends back `functionResponse` parts in the next user turn.
+- This loop continues until the model returns a text response or `MAX_SKILL_ITERATIONS` (10) is reached.
+
+```typescript
+const response = await adapter.complete({
+  messages: [{ role: 'user', content: '現在時刻を教えて' }],
+  skills: [currentDateTime],
+});
+```
+
 ---
 
 ## Error Handling

@@ -5,7 +5,8 @@
 - **CLI** — コマンドラインから対話型でやり取り
 - **Discord Bot** — Discord の DM / @メンションで LLM と会話（画像添付対応）
 - **HTTP API** — `POST /api/copilot` エンドポイント（Next.js）
-- **スケジューラー** — cron 式でプロンプトを定期実行
+- **スケジューラー** — cron 式でプロンプトを定期実行（即時実行・中断対応）
+- **スキル（ツール呼び出し）** — LLM からローカル関数を呼び出すツール機能
 
 ---
 
@@ -121,13 +122,15 @@ cron 式またはショートハンドでプロンプトを定期実行できま
 ### コマンド一覧
 
 ```bash
-npm run schedule list                             # 登録済みスケジュール一覧
-npm run schedule add <cron> <prompt>              # スケジュール追加
-npm run schedule add <cron> <prompt> --name <名前> # 名前付きで追加
-npm run schedule remove <id>                      # スケジュール削除（ID プレフィックス可）
-npm run schedule enable <id>                      # スケジュール有効化
-npm run schedule disable <id>                     # スケジュール無効化
-npm run schedule run                              # スケジューラーデーモン起動
+npm run schedule list                              # 登録済みスケジュール一覧
+npm run schedule add <cron> <prompt>               # スケジュール追加
+npm run schedule add <cron> <prompt> --name <名前>  # 名前付きで追加
+npm run schedule remove <id>                       # スケジュール削除（ID プレフィックス可）
+npm run schedule enable <id>                       # スケジュール有効化
+npm run schedule disable <id>                      # スケジュール無効化
+npm run schedule fire <id>                         # 実行中のデーモンに即時実行を指示
+npm run schedule stop <id>                         # 実行中のプロンプトを中断
+npm run schedule run                               # スケジューラーデーモン起動
 ```
 
 ### cron 形式
@@ -159,13 +162,86 @@ npm run schedule list
 # スケジュール削除（ID の先頭数文字で指定可能）
 npm run schedule remove abc123
 
+# cron 時刻を待たずに即時実行（デーモン起動中に有効）
+npm run schedule fire abc123
+
+# 実行中のプロンプトを中断
+npm run schedule stop abc123
+
 # デーモン起動（SIGINT / SIGTERM で終了）
 npm run schedule run
 ```
 
 ### デーモンの動作
 
-`npm run schedule run` を実行すると、次の分境界まで待機してから 1 分ごとにスケジュールを評価します。該当するスケジュールがあれば LLM を呼び出し、結果を標準出力に表示します。`Ctrl+C` または SIGTERM で正常終了します。
+`npm run schedule run` を実行すると、5 秒ごとにポーリングしながら次の処理を行います。
+
+- **cron 評価**: 分境界ごとに cron 式を評価し、該当スケジュールを実行
+- **即時実行** (`fire`): `runNow` フラグが立ったスケジュールを 5 秒以内に実行
+- **中断** (`stop`): `stopRequested` フラグが立ったスケジュールの実行中プロンプトを中断
+- 複数スケジュールは並列実行（各スケジュールは同時に 1 実行のみ）
+
+`Ctrl+C` または SIGTERM で正常終了します（実行中のプロンプトはすべて中断されます）。
+
+---
+
+## スキル（ツール呼び出し）
+
+スキルは LLM がリクエスト中にローカル関数を呼び出せるようにする仕組みです（OpenAI function calling / Anthropic tool use / Gemini function calling に対応）。
+
+### 組み込みスキル
+
+| スキル名 | 説明 |
+|---------|------|
+| `currentDateTime` | 現在の日時を ISO 8601 形式で返す |
+
+### スキルの定義
+
+```typescript
+import { type SkillDefinition } from './lib/skill';
+
+const mySkill: SkillDefinition = {
+  name: 'mySkill',
+  description: 'スキルの説明（LLM に渡されます）',
+  parameters: {
+    type: 'object',
+    properties: {
+      input: { type: 'string', description: '入力値' },
+    },
+    required: ['input'],
+  },
+  handler: async (args) => {
+    return { content: `結果: ${args.input}` };
+  },
+};
+```
+
+### スキルの登録と利用
+
+```typescript
+import { registerSkill, resolveSkills } from './lib/skill';
+import { createAdapter } from './lib/adapterFactory';
+
+registerSkill(mySkill);
+
+const adapter = createAdapter({ provider: 'openai', model: 'gpt-4o', apiKey: '...' });
+const response = await adapter.complete({
+  messages: [{ role: 'user', content: '現在時刻を教えて' }],
+  skills: resolveSkills(['currentDateTime']),
+});
+```
+
+### 動作の仕組み
+
+LLM がツール呼び出しを要求した場合、アダプターが自動的にハンドラーを実行して結果を LLM に返します。無限ループを防ぐため、1 回のリクエストあたりの最大反復回数は **10 回**（`MAX_SKILL_ITERATIONS`）に制限されています。
+
+### 対応プロバイダ
+
+| プロバイダ | 実装方式 |
+|-----------|---------|
+| OpenAI | function calling (`tools` / `tool_calls`) |
+| Anthropic | tool use (`tools` / `tool_use` blocks) |
+| Gemini | function calling (`functionDeclarations` / `functionResponse`) |
 
 ---
 
