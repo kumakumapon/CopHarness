@@ -37,6 +37,8 @@ import {
   addSchedule,
   removeSchedule,
   setEnabled,
+  setRunNow,
+  setStopRequested,
 } from '../lib/scheduler/store';
 import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
 import { startScheduler } from '../lib/scheduler/engine';
@@ -59,6 +61,8 @@ Commands:
   remove <id>                   Remove a schedule by ID (prefix match)
   enable <id>                   Enable a schedule
   disable <id>                  Disable a schedule
+  fire <id>                     Immediately execute a schedule (daemon picks up within 5 s)
+  stop <id>                     Abort the in-flight execution of a schedule
   run                           Start the scheduler daemon
 
 Cron format:
@@ -72,6 +76,8 @@ Examples:
   npm run schedule add "*/30 * * * *" "Ping"
   npm run schedule list
   npm run schedule remove abc123
+  npm run schedule fire abc123
+  npm run schedule stop abc123
   npm run schedule run
 `);
 }
@@ -198,6 +204,40 @@ function cmdSetEnabled(args: string[], enabled: boolean): void {
   console.log(`Schedule ${id} ${enabled ? 'enabled' : 'disabled'}.`);
 }
 
+function cmdFire(args: string[]): void {
+  const prefix = args[0];
+  if (!prefix) {
+    console.error('Usage: schedule fire <id>');
+    process.exit(1);
+  }
+  const id = resolveId(prefix);
+  if (!id) {
+    console.error(`No schedule found with ID prefix: ${prefix}`);
+    process.exit(1);
+  }
+  setRunNow(id, true);
+  const schedule = listSchedules().find((s) => s.id === id)!;
+  console.log(`Schedule "${schedule.name}" (${id.slice(0, 8)}) flagged for immediate execution.`);
+  console.log('The running daemon will pick this up within 5 seconds.');
+}
+
+function cmdStop(args: string[]): void {
+  const prefix = args[0];
+  if (!prefix) {
+    console.error('Usage: schedule stop <id>');
+    process.exit(1);
+  }
+  const id = resolveId(prefix);
+  if (!id) {
+    console.error(`No schedule found with ID prefix: ${prefix}`);
+    process.exit(1);
+  }
+  setStopRequested(id, true);
+  const schedule = listSchedules().find((s) => s.id === id)!;
+  console.log(`Stop requested for schedule "${schedule.name}" (${id.slice(0, 8)}).`);
+  console.log('The running daemon will abort the in-flight execution within 5 seconds.');
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 
 function main(): void {
@@ -220,6 +260,12 @@ function main(): void {
       break;
     case 'disable':
       cmdSetEnabled(rest, false);
+      break;
+    case 'fire':
+      cmdFire(rest);
+      break;
+    case 'stop':
+      cmdStop(rest);
       break;
     case 'run':
       startScheduler();
