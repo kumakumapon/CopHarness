@@ -3,8 +3,9 @@
 複数の LLM プロバイダ（GitHub Copilot / OpenAI / Anthropic / Gemini）と対話するためのハーネス（TypeScript）。
 
 - **CLI** — コマンドラインから対話型でやり取り
-- **Discord Bot** — Discord の DM / @メンションで LLM と会話
+- **Discord Bot** — Discord の DM / @メンションで LLM と会話（画像添付対応）
 - **HTTP API** — `POST /api/copilot` エンドポイント（Next.js）
+- **スケジューラー** — cron 式でプロンプトを定期実行
 
 ---
 
@@ -93,9 +94,11 @@ npm run discord
 
 - **DM（ダイレクトメッセージ）**: ボットに直接メッセージを送ると返答します
 - **サーバー内**: ボットを @メンションしてメッセージを送ると返答します
+- **画像添付**: メッセージに画像を添付すると LLM に渡されます（テキストなしの場合は「画像について教えてください。」がデフォルトプロンプトになります）
 
 ```
 @CopHarness こんにちは！
+@CopHarness [画像を添付] この画像について説明して
 ```
 
 ### オプション設定
@@ -104,15 +107,71 @@ npm run discord
 |--------|------|-----------|
 | `DISCORD_BOT_TOKEN` | Discord ボットトークン | （必須） |
 | `DISCORD_MAX_HISTORY` | チャンネルごとの会話履歴保持数（ペア） | `20` |
+| `DISCORD_MAX_IMAGE_BYTES` | 画像添付のダウンロード上限（バイト） | `8388608`（8 MB） |
 | `COPILOT_SYSTEM_PROMPT` | システムプロンプト | （なし） |
 | `COPILOT_MODEL` | 使用するモデル名 | `gpt-5-mini` |
 | `COPILOT_TIMEOUT_MS` | LLM タイムアウト（ミリ秒） | `120000` |
 
 ---
 
+## スケジューラー
+
+cron 式またはショートハンドでプロンプトを定期実行できます。スケジュール情報はプロジェクトルートの `schedules.json` に保存されます。
+
+### コマンド一覧
+
+```bash
+npm run schedule list                             # 登録済みスケジュール一覧
+npm run schedule add <cron> <prompt>              # スケジュール追加
+npm run schedule add <cron> <prompt> --name <名前> # 名前付きで追加
+npm run schedule remove <id>                      # スケジュール削除（ID プレフィックス可）
+npm run schedule enable <id>                      # スケジュール有効化
+npm run schedule disable <id>                     # スケジュール無効化
+npm run schedule run                              # スケジューラーデーモン起動
+```
+
+### cron 形式
+
+| 形式 | 例 | 説明 |
+|------|----|------|
+| `HH:MM` | `09:00` | 毎日 09:00 に実行 |
+| 5フィールド cron | `0 9 * * *` | 毎日 09:00 に実行 |
+| 5フィールド cron | `*/15 * * * *` | 15 分ごとに実行 |
+| 5フィールド cron | `0 18 * * 5` | 毎週金曜 18:00 に実行 |
+
+フィールドの記法: `*`、`N`、`N-M`（範囲）、`*/N`（ステップ）、`N,M`（リスト）
+
+### 使用例
+
+```bash
+# 毎朝 9 時に今日のフォーカスを確認
+npm run schedule add "09:00" "今日何に集中すべきか教えて" --name "朝の確認"
+
+# 毎週金曜 18 時に週次サマリー
+npm run schedule add "0 18 * * 5" "今週のまとめを教えて" --name "週次サマリー"
+
+# 30 分ごとに ping
+npm run schedule add "*/30 * * * *" "Ping"
+
+# 一覧表示
+npm run schedule list
+
+# スケジュール削除（ID の先頭数文字で指定可能）
+npm run schedule remove abc123
+
+# デーモン起動（SIGINT / SIGTERM で終了）
+npm run schedule run
+```
+
+### デーモンの動作
+
+`npm run schedule run` を実行すると、次の分境界まで待機してから 1 分ごとにスケジュールを評価します。該当するスケジュールがあれば LLM を呼び出し、結果を標準出力に表示します。`Ctrl+C` または SIGTERM で正常終了します。
+
+---
+
 ## HTTP API（Next.js）
 
-開発サーバーを起動して HTTP 経由で LLM を呼び出すこともできます。
+開発サーバーを起動して HTTP 経由で LLM を呼び出せます。
 
 ```bash
 npm run dev
@@ -157,14 +216,6 @@ npm test
 
 ---
 
-## セキュリティについて
-
-- API キーはサーバー側の環境変数にのみ保存されます。
-- `.env.local` は `.gitignore` に含まれています。コミットしないよう注意してください。
-- Discord Bot を使用する場合、**Message Content Intent** が必要です。
-
----
-
 ## 対応プロバイダ
 
 | プロバイダ | キー変数 | 備考 |
@@ -174,117 +225,20 @@ npm test
 | Anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL` でモデル指定可 |
 | Google Gemini | `GEMINI_API_KEY` | 詳細は [docs/GEMINI-INTEGRATION.md](docs/GEMINI-INTEGRATION.md) |
 
+プロバイダの自動判定順（`COPILOT_PROVIDER` 未設定時）:
 
-## セットアップ
+1. `GEMINI_API_KEY` あり → `gemini`
+2. `ANTHROPIC_API_KEY` あり → `anthropic`
+3. `OPENAI_API_KEY` あり → `openai`
+4. それ以外 → `copilot`
 
-### 1. 環境変数の設定
+`COPILOT_PROVIDER` 環境変数で明示指定した場合はその値が優先されます。
 
-```bash
-cp .env.example .env.local
-```
-
-
-`.env.local` を開き、利用したいプロバイダに応じて API キーを設定してください。
-
-- Copilot: `GITHUB_COPILOT_API_KEY` または `COPILOT_PROVIDER_API_KEY` または `COPILOT_API_KEY`
-- OpenAI: `OPENAI_API_KEY`
-- Anthropic: `ANTHROPIC_API_KEY`
-- Gemini: `GEMINI_API_KEY`（詳細は [docs/GEMINI-INTEGRATION.md](docs/GEMINI-INTEGRATION.md) を参照）
-
-（どれか一つがあれば自動判定されます。複数セット時は `COPILOT_PROVIDER` で明示指定も可能）
-
-**トークン取得方法:**
-1. [https://github.com/settings/tokens](https://github.com/settings/tokens) を開く
-2. "Generate new token (classic)" をクリック
-3. スコープで **`read:user`** と **`copilot`** を選択してトークンを生成
-4. GitHub Copilot Individual または Business のサブスクリプションが有効であることを確認
-
-> ⚠️ `.env.local` はリポジトリにコミットしないでください（`.gitignore` に含まれています）。
-
-```env
-GITHUB_COPILOT_API_KEY=ghp_xxxxxxxxxxxx
-```
-
-### オプション: タイムアウト設定
-
-デフォルトの LLM 待機タイムアウトは **120 秒（2 分）** です。  
-`COPILOT_TIMEOUT_MS` 環境変数を設定することで任意の値（ミリ秒）に変更できます。
-
-```env
-# タイムアウトを 3 分に延長する例
-COPILOT_TIMEOUT_MS=180000
-```
-
-**認証フロー:**  
-アプリはリクエストごとに各プロバイダの API キーを利用し、BotHarness 由来のアダプタ群（Copilot/OpenAI/Anthropic）を自動選択して呼び出します。
-
-
-### 注意: 403 Forbidden や認証エラー
-
-各プロバイダの API キーやトークンが無効・権限不足の場合、認証エラーや 403/401 が返ります。Copilot の場合は `copilot` スコープ付き PAT を推奨します。OpenAI/Anthropic も同様に有効な API キーが必要です。
-
-### 2. 依存パッケージのインストール
-
-```bash
-npm install
-```
-
-### 3. 開発サーバーの起動
-
-```bash
-npm run dev
-```
-
-ブラウザで [http://localhost:3000](http://localhost:3000) を開くとチャット画面が表示されます。
-
-## テスト
-
-```bash
-npm test
-```
-
-## API 仕様
-
-### POST /api/copilot
-
-**リクエスト**
-
-```json
-{
-  "messages": [
-    { "role": "user", "content": "こんにちは" }
-  ]
-}
-```
-
-**レスポンス（成功）**
-
-```json
-{
-  "reply": "こんにちは！今日はどうされましたか？"
-}
-```
-
-
-**エラーレスポンス**
-
-| ステータス | 説明 |
-|-----------|------|
-| 400 | リクエストボディが不正（messages なし・空配列・不正 JSON） |
-| 401 | API キー未設定、または LLM 認証失敗 |
-| 502 | LLM API エラー |
-| 504 | LLM API タイムアウト（30 秒） |
+---
 
 ## セキュリティについて
 
-- API キーはサーバー側の環境変数にのみ保存され、クライアントには公開されません。
-- **個人情報や機密情報はチャットに入力しないでください。** 送信内容は GitHub Copilot API に転送されます。
+- API キーはサーバー側の環境変数にのみ保存されます。
 - `.env.local` は `.gitignore` に含まれています。コミットしないよう注意してください。
-
-## 手動確認手順
-
-1. `.env.local` に利用したいプロバイダの API キー（例: `GITHUB_COPILOT_API_KEY` や `OPENAI_API_KEY` など）を設定
-2. `npm install && npm run dev` を実行
-3. ブラウザで <http://localhost:3000> を開く
-4. テキスト欄に「こんにちは」と入力して **送信**
-5. LLM からの返信がチャットバブルとして表示されることを確認
+- Discord Bot を使用する場合、**Message Content Intent** が必要です。
+- `schedules.json` にはプロンプトの内容が平文で保存されます。機密情報を含めないよう注意してください。

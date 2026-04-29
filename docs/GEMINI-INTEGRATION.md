@@ -1,12 +1,12 @@
 # Gemini API Integration
 
-This document describes how to configure and use the Google Gemini provider in CopChat.
+This document describes how to configure and use the Google Gemini provider in CopHarness.
 
 ---
 
 ## Overview
 
-CopChat supports Google Gemini as an LLM provider via the `GeminiAdapter`.  
+CopHarness supports Google Gemini as an LLM provider via the `GeminiAdapter`.  
 The adapter follows the same `LLMAdapter` interface as the existing Copilot, OpenAI, and Anthropic adapters.
 
 **Layer structure:**
@@ -45,7 +45,7 @@ Copy `.env.example` to `.env.local` and set the following variables:
 ## Provider Auto-Detection
 
 When `GEMINI_API_KEY` is set (and `COPILOT_PROVIDER` is not explicitly set to another value),  
-CopChat will automatically select the Gemini provider. The priority order is:
+CopHarness will automatically select the Gemini provider. The priority order is:
 
 1. Explicit `COPILOT_PROVIDER` env var (`gemini`, `openai`, `anthropic`, `copilot`)
 2. `GEMINI_API_KEY` present → `gemini`
