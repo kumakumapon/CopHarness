@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdapter, resolveProvider } from '../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
+import { resolveSkills } from '../../../lib/skill';
+import '../../../lib/skills/index';
 
 
 export async function POST(req: NextRequest) {
@@ -15,7 +17,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { messages?: LLMMessage[]; attachments?: LLMAttachment[]; timeoutMs?: number }
+  let body: { messages?: LLMMessage[]; attachments?: LLMAttachment[]; timeoutMs?: number; skills?: string[] }
   try {
     body = await req.json()
   } catch {
@@ -45,7 +47,8 @@ export async function POST(req: NextRequest) {
       apiKey,
       timeoutMs,
     });
-    const resp = await adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal });
+    const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : undefined;
+    const resp = await adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal, skills });
     return NextResponse.json({ reply: resp.content });
   } catch (err: unknown) {
     console.error('LLM API handler error:', err);

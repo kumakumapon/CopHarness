@@ -4,9 +4,11 @@
  */
 
 import { type LLMAdapter, type LLMRequest, type LLMResponse } from '../adapter';
+import { type SkillDefinition, MAX_SKILL_ITERATIONS } from '../skill';
 import {
   GeminiClient,
   type GeminiContent,
+  type GeminiPart,
   type GeminiRequestPayload,
   GEMINI_DEFAULT_ENDPOINT,
   GEMINI_DEFAULT_TIMEOUT_MS,
@@ -42,6 +44,7 @@ export class GeminiAdapter implements LLMAdapter {
 
   async complete(request: LLMRequest): Promise<LLMResponse> {
     const model = request.model ?? this.model;
+    const skills = request.skills ?? [];
 
     const systemMessages = request.messages.filter((m) => m.role === 'system');
     const conversationMessages = request.messages.filter(
@@ -59,21 +62,75 @@ export class GeminiAdapter implements LLMAdapter {
       return { role: mapRoleToGemini(m.role), parts };
     });
 
-    const payload: GeminiRequestPayload = { contents };
-
-    if (systemMessages.length > 0) {
-      payload.systemInstruction = {
-        parts: [{ text: systemMessages.map((m) => m.content).join('\n') }],
-      };
-    }
+    const skillMap = new Map(skills.map((s) => [s.name, s]));
 
     console.info('[GeminiAdapter] Sending request', { model, provider: 'gemini' });
 
-    const raw = await this.client.request(model, payload, { signal: request.abortSignal });
+    for (let iteration = 0; iteration < MAX_SKILL_ITERATIONS; iteration++) {
+      const payload: GeminiRequestPayload = { contents: [...contents] };
 
-    const content =
-      raw.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') ?? '';
+      if (systemMessages.length > 0) {
+        payload.systemInstruction = {
+          parts: [{ text: systemMessages.map((m) => m.content).join('\n') }],
+        };
+      }
 
-    return { content, model, provider: 'gemini' };
+      if (skills.length > 0) {
+        payload.tools = [
+          {
+            functionDeclarations: skills.map((s: SkillDefinition) => ({
+              name: s.name,
+              description: s.description,
+              parameters: s.parameters as unknown as Record<string, unknown>,
+            })),
+          },
+        ];
+      }
+
+      const raw = await this.client.request(model, payload, { signal: request.abortSignal });
+
+      const candidate = raw.candidates?.[0];
+      const parts = candidate?.content?.parts ?? [];
+
+      const functionCallParts = parts.filter(
+        (p): p is Extract<GeminiPart, { functionCall: unknown }> =>
+          'functionCall' in p && p.functionCall != null,
+      );
+
+      // No function calls – return the text response
+      if (functionCallParts.length === 0) {
+        const content = parts
+          .filter((p): p is Extract<GeminiPart, { text: string }> => 'text' in p && p.text != null)
+          .map((p) => p.text)
+          .join('');
+        return { content, model, provider: 'gemini' };
+      }
+
+      // Append the model's function-call turn
+      contents.push({
+        role: 'model',
+        parts: parts as GeminiContent['parts'],
+      });
+
+      // Execute each function call and append results as a single user turn
+      const responseParts: GeminiPart[] = [];
+      for (const part of functionCallParts) {
+        const { name, args } = part.functionCall;
+        const skill = skillMap.get(name);
+        let response: Record<string, unknown>;
+        if (skill) {
+          const result = await skill.handler(args);
+          response = { content: result.content, ...(result.isError ? { isError: true } : {}) };
+        } else {
+          response = { error: `Unknown skill: ${name}` };
+        }
+        responseParts.push({ functionResponse: { name, response } });
+      }
+      contents.push({ role: 'user', parts: responseParts });
+    }
+
+    // Fallback: return empty content if loop exhausted without a text response
+    console.warn('[GeminiAdapter] MAX_SKILL_ITERATIONS reached without a text response');
+    return { content: '', model, provider: 'gemini' };
   }
 }

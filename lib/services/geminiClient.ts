@@ -41,18 +41,27 @@ export interface GeminiInlineData {
 }
 
 export type GeminiPart =
-  | { text: string; inlineData?: never }
-  | { inlineData: GeminiInlineData; text?: never };
+  | { text: string; inlineData?: never; functionCall?: never; functionResponse?: never }
+  | { inlineData: GeminiInlineData; text?: never; functionCall?: never; functionResponse?: never }
+  | { functionCall: { name: string; args: Record<string, unknown> }; text?: never; inlineData?: never; functionResponse?: never }
+  | { functionResponse: { name: string; response: Record<string, unknown> }; text?: never; inlineData?: never; functionCall?: never };
 
 export interface GeminiContent {
   role: 'user' | 'model';
   parts: GeminiPart[];
 }
 
+export interface GeminiFunctionDeclaration {
+  name: string;
+  description: string;
+  parameters?: Record<string, unknown>;
+}
+
 export interface GeminiRequestPayload {
   contents: GeminiContent[];
   systemInstruction?: { parts: GeminiPart[] };
   generationConfig?: { temperature?: number };
+  tools?: Array<{ functionDeclarations: GeminiFunctionDeclaration[] }>;
 }
 
 export interface GeminiResponseCandidate {
