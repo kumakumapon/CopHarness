@@ -63,3 +63,21 @@ export function updateLastRun(id: string, date: Date): void {
     saveStore(store);
   }
 }
+
+export function setRunNow(id: string, value: boolean): boolean {
+  const store = loadStore();
+  const s = store.schedules.find((x) => x.id === id);
+  if (!s) return false;
+  s.runNow = value || undefined;
+  saveStore(store);
+  return true;
+}
+
+export function setStopRequested(id: string, value: boolean): boolean {
+  const store = loadStore();
+  const s = store.schedules.find((x) => x.id === id);
+  if (!s) return false;
+  s.stopRequested = value || undefined;
+  saveStore(store);
+  return true;
+}
