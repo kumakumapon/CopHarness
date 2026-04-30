@@ -8,6 +8,8 @@ export const currentDateTime: SkillDefinition = {
     type: 'object',
     properties: {},
   },
+  category: 'utility',
+  riskLevel: 'low',
   handler: async (_args) => {
     return { content: new Date().toISOString() };
   },

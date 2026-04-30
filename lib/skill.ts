@@ -4,17 +4,49 @@
  * can expose to the model as callable tools.
  */
 
+/** A single property definition within a skill's parameter schema. */
+export interface SkillParameterProperty {
+  type: string;
+  description?: string;
+  /** Allowed values (for enum-like string parameters). */
+  enum?: string[];
+  /** Item schema for array-type parameters. */
+  items?: { type: string; description?: string };
+  /** Minimum value for numeric parameters. */
+  minimum?: number;
+  /** Maximum value for numeric parameters. */
+  maximum?: number;
+}
+
 export interface SkillParameterSchema {
   type: 'object';
-  properties: Record<string, { type: string; description?: string }>;
+  properties: Record<string, SkillParameterProperty>;
   required?: string[];
 }
+
+/** Risk classification for a skill. */
+export type SkillRiskLevel = 'low' | 'medium' | 'high';
+
+/** Functional grouping for a skill. */
+export type SkillCategory =
+  | 'utility'
+  | 'file'
+  | 'web'
+  | 'system'
+  | 'memory'
+  | 'external';
 
 export interface SkillDefinition {
   name: string;
   description: string;
   parameters: SkillParameterSchema;
   handler: (args: Record<string, unknown>) => Promise<SkillResult>;
+  /** Functional category used for grouping in the dashboard. */
+  category?: SkillCategory;
+  /** Environment variable names required for this skill to function. */
+  requiresEnv?: string[];
+  /** Risk level: low = read-only / side-effect free, medium = writes local state, high = executes code / calls external APIs with side effects. */
+  riskLevel?: SkillRiskLevel;
 }
 
 export interface SkillResult {
@@ -38,9 +70,15 @@ export function getSkill(name: string): SkillDefinition | undefined {
   return skillRegistry.get(name);
 }
 
-/** Return the definitions for a list of skill names, silently ignoring unknown names. */
+/**
+ * Return the definitions for a list of skill names, silently ignoring unknown names.
+ * If the ENABLED_SKILLS environment variable is set (comma-separated list of skill names),
+ * only skills in that list are returned even if they were requested.
+ */
 export function resolveSkills(names: string[]): SkillDefinition[] {
+  const enabledSet = buildEnabledSet();
   return names.flatMap((name) => {
+    if (enabledSet && !enabledSet.has(name)) return [];
     const skill = skillRegistry.get(name);
     return skill ? [skill] : [];
   });
@@ -49,4 +87,22 @@ export function resolveSkills(names: string[]): SkillDefinition[] {
 /** Return all registered skill definitions. */
 export function listSkills(): SkillDefinition[] {
   return Array.from(skillRegistry.values());
+}
+
+/**
+ * Return registered skills that are currently active.
+ * When ENABLED_SKILLS is set, only skills in that list are returned.
+ * When unset, all registered skills are returned.
+ */
+export function listActiveSkills(): SkillDefinition[] {
+  const enabledSet = buildEnabledSet();
+  if (!enabledSet) return listSkills();
+  return listSkills().filter((s) => enabledSet.has(s.name));
+}
+
+/** Build the set of allowed skill names from ENABLED_SKILLS env var, or null if unrestricted. */
+function buildEnabledSet(): Set<string> | null {
+  const env = process.env.ENABLED_SKILLS;
+  if (!env || env.trim() === '') return null;
+  return new Set(env.split(',').map((s) => s.trim()).filter(Boolean));
 }

@@ -80,6 +80,9 @@ interface LogsData {
 interface Skill {
   name: string;
   description: string;
+  category: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  requiresEnv: string[];
 }
 
 interface SkillsData {
@@ -481,6 +484,21 @@ function LogFeed({ data }: { data: LogsData | undefined }) {
 // Section: Skills Panel
 // ---------------------------------------------------------------------------
 
+const CATEGORY_LABELS: Record<string, string> = {
+  utility: 'ユーティリティ',
+  file: 'ファイル',
+  web: 'Web',
+  system: 'システム',
+  memory: 'メモリ',
+  external: '外部API',
+};
+
+const RISK_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  low:    { bg: 'bg-green-100', text: 'text-green-700', label: '低' },
+  medium: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '中' },
+  high:   { bg: 'bg-red-100',   text: 'text-red-700',   label: '高' },
+};
+
 function SkillsPanel({ data }: { data: SkillsData | undefined }) {
   return (
     <section className="mb-6">
@@ -502,13 +520,34 @@ function SkillsPanel({ data }: { data: SkillsData | undefined }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {data.skills.map((skill) => (
-            <div key={skill.name} className="rounded-xl p-4"
-              style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
-              <div className="font-mono font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>{skill.name}</div>
-              <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{skill.description}</div>
-            </div>
-          ))}
+          {data.skills.map((skill) => {
+            const risk = RISK_STYLES[skill.riskLevel] ?? RISK_STYLES.low;
+            const categoryLabel = CATEGORY_LABELS[skill.category] ?? skill.category;
+            return (
+              <div key={skill.name} className="rounded-xl p-4 flex flex-col gap-2"
+                style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-mono font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{skill.name}</div>
+                  <span className={`shrink-0 inline-block px-1.5 py-0.5 rounded text-xs font-medium ${risk.bg} ${risk.text}`}>
+                    リスク: {risk.label}
+                  </span>
+                </div>
+                <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{skill.description}</div>
+                <div className="flex flex-wrap items-center gap-1.5 mt-auto">
+                  <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                    style={{ background: 'var(--accent-warm)', color: 'var(--text-secondary)' }}>
+                    {categoryLabel}
+                  </span>
+                  {skill.requiresEnv.map((env) => (
+                    <span key={env} className="inline-block px-1.5 py-0.5 rounded text-xs font-mono"
+                      style={{ background: 'var(--accent-peachy)', color: 'var(--text-secondary)' }}>
+                      {env}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
