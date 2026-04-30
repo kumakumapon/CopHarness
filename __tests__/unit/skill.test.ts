@@ -419,3 +419,146 @@ describe('GeminiAdapter skill tool-calling loop', () => {
     expect(body.tools).toBeUndefined();
   });
 });
+
+// -----------------------------------------------------------------------
+// LmStudioAdapter
+// -----------------------------------------------------------------------
+
+import { LmStudioAdapter, LMSTUDIO_DEFAULT_BASE_URL } from '../../lib/adapters/lmstudioAdapter';
+
+describe('LmStudioAdapter', () => {
+  let mockCreate: jest.Mock;
+  let adapter: LmStudioAdapter;
+
+  beforeEach(() => {
+    mockCreate = jest.fn();
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create: mockCreate } },
+    }));
+    adapter = new LmStudioAdapter('local-model');
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('has provider "lmstudio"', () => {
+    expect(adapter.provider).toBe('lmstudio');
+  });
+
+  it('uses the model passed to constructor', () => {
+    expect(adapter.model).toBe('local-model');
+  });
+
+  it('exposes correct default base URL constant', () => {
+    expect(LMSTUDIO_DEFAULT_BASE_URL).toBe('http://localhost:1234/v1');
+  });
+
+  it('returns text content and overrides provider to "lmstudio"', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { role: 'assistant', content: 'Hello from LM Studio!', tool_calls: [] } }],
+    });
+
+    const result = await adapter.complete({
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    expect(result.content).toBe('Hello from LM Studio!');
+    expect(result.provider).toBe('lmstudio');
+  });
+});
+
+// -----------------------------------------------------------------------
+// LemonadeAdapter
+// -----------------------------------------------------------------------
+
+import { LemonadeAdapter, LEMONADE_DEFAULT_BASE_URL } from '../../lib/adapters/lemonadeAdapter';
+
+describe('LemonadeAdapter', () => {
+  let mockCreate: jest.Mock;
+  let adapter: LemonadeAdapter;
+
+  beforeEach(() => {
+    mockCreate = jest.fn();
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create: mockCreate } },
+    }));
+    adapter = new LemonadeAdapter('lemonade-model');
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('has provider "lemonade"', () => {
+    expect(adapter.provider).toBe('lemonade');
+  });
+
+  it('uses the model passed to constructor', () => {
+    expect(adapter.model).toBe('lemonade-model');
+  });
+
+  it('exposes correct default base URL constant', () => {
+    expect(LEMONADE_DEFAULT_BASE_URL).toBe('http://localhost:8000/api/v0');
+  });
+
+  it('returns text content and overrides provider to "lemonade"', async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { role: 'assistant', content: 'Hello from Lemonade!', tool_calls: [] } }],
+    });
+
+    const result = await adapter.complete({
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    expect(result.content).toBe('Hello from Lemonade!');
+    expect(result.provider).toBe('lemonade');
+  });
+});
+
+// -----------------------------------------------------------------------
+// resolveProvider — lmstudio / lemonade detection
+// -----------------------------------------------------------------------
+
+import { resolveProvider } from '../../lib/adapterFactory';
+
+describe('resolveProvider local LLM detection', () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in originalEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, originalEnv);
+  });
+
+  it('returns "lmstudio" when COPILOT_PROVIDER=lmstudio', () => {
+    process.env.COPILOT_PROVIDER = 'lmstudio';
+    delete process.env.LMSTUDIO_BASE_URL;
+    expect(resolveProvider()).toBe('lmstudio');
+  });
+
+  it('returns "lemonade" when COPILOT_PROVIDER=lemonade', () => {
+    process.env.COPILOT_PROVIDER = 'lemonade';
+    delete process.env.LEMONADE_BASE_URL;
+    expect(resolveProvider()).toBe('lemonade');
+  });
+
+  it('returns "lmstudio" when LMSTUDIO_BASE_URL is set and no API keys are present', () => {
+    delete process.env.COPILOT_PROVIDER;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.LEMONADE_BASE_URL;
+    process.env.LMSTUDIO_BASE_URL = 'http://localhost:1234/v1';
+    expect(resolveProvider()).toBe('lmstudio');
+  });
+
+  it('returns "lemonade" when LEMONADE_BASE_URL is set and no API keys are present', () => {
+    delete process.env.COPILOT_PROVIDER;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.LMSTUDIO_BASE_URL;
+    process.env.LEMONADE_BASE_URL = 'http://localhost:8000/api/v0';
+    expect(resolveProvider()).toBe('lemonade');
+  });
+});
