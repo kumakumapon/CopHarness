@@ -2,6 +2,7 @@ import { listSchedules, setRunNow, setStopRequested, updateLastRun } from './sto
 import { matchesCron, normalizeCron } from './cron';
 import { createAdapter, resolveProvider } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
+import { startLog, finishLog } from '../logs/store';
 
 /** Execute a single prompt against the configured LLM and return the response text. */
 export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Promise<string> {
@@ -111,18 +112,28 @@ async function tick(): Promise<void> {
     const reason = runNow ? 'manual fire' : 'cron';
     console.log(`[${ts}] Schedule "${schedule.name}" (${schedule.id.slice(0, 8)}) firing [${reason}]`);
 
+    const logId = startLog({
+      scheduleId: schedule.id,
+      scheduleName: schedule.name,
+      prompt: schedule.prompt,
+      reason,
+    });
+
     // Launch async without awaiting — daemon stays unblocked
     runPrompt(schedule.prompt, controller.signal)
       .then(async (result) => {
         await updateLastRun(schedule.id, now);
+        finishLog(await logId, 'success', result);
         console.log(`[${ts}] Response from "${schedule.name}":\n${result}\n`);
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         const name = err instanceof Error ? err.name : '';
         if (name === 'AbortError') {
+          finishLog(await logId, 'aborted');
           console.log(`[${ts}] Schedule "${schedule.name}" stopped (aborted).`);
         } else {
           const msg = err instanceof Error ? err.message : String(err);
+          finishLog(await logId, 'failed', msg);
           console.error(`[${ts}] Schedule "${schedule.name}" failed: ${msg}`);
         }
       })
