@@ -218,7 +218,7 @@ export const calculator: SkillDefinition = {
       const result = evaluate(expression);
       if (!isFinite(result)) return { content: String(result) };
       // Format: avoid unnecessary decimals for integers
-      const formatted = Number.isInteger(result) ? String(result) : String(result);
+      const formatted = String(result);
       return { content: formatted };
     } catch (err) {
       return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };

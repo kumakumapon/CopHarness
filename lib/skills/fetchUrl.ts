@@ -2,10 +2,14 @@ import { type SkillDefinition } from '../skill';
 
 /** Very simple HTML → plain-text conversion (no external dependencies). */
 function htmlToText(html: string): string {
-  // Remove <script> and <style> blocks entirely
+  // Remove <script> and <style> blocks entirely (greedy, handles whitespace before >)
   let text = html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, ' ');
+
+  // Second pass: remove any residual <script or <style open tags that survived
+  // (e.g., malformed/unclosed tags) to prevent partial injection
+  text = text.replace(/<script\b[^>]*>/gi, ' ').replace(/<style\b[^>]*>/gi, ' ');
 
   // Convert common block/inline elements to spacing
   text = text
@@ -24,16 +28,16 @@ function htmlToText(html: string): string {
   // Strip remaining tags
   text = text.replace(/<[^>]+>/g, '');
 
-  // Decode common HTML entities
+  // Decode HTML entities — decode &amp; LAST to avoid double-decoding artifacts
   text = text
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
     .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&amp;/g, '&');
 
   // Collapse excessive blank lines
   text = text.replace(/\n{3,}/g, '\n\n').trim();
