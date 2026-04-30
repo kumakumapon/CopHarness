@@ -244,13 +244,75 @@ npm run schedule run
 
 スキルは LLM がリクエスト中にローカル関数を呼び出せるようにする仕組みです（OpenAI function calling / Anthropic tool use / Gemini function calling に対応）。
 
-### 組み込みスキル
+### 組み込みスキル一覧
 
-| スキル名 | 説明 |
-|---------|------|
-| `currentDateTime` | 現在の日時を ISO 8601 形式で返す |
+#### ユーティリティ系（外部依存なし）
 
-### スキルの定義
+| スキル名 | 説明 | リスク |
+|---------|------|-------|
+| `currentDateTime` | 現在の日時を ISO 8601 形式で返す | 低 |
+| `calculator` | 算術式を安全に評価して結果を返す（+, -, *, /, %, ^, 数学関数, 定数 pi/e） | 低 |
+| `randomNumber` | 指定範囲の乱数を返す（整数モードあり） | 低 |
+| `uuidGenerate` | UUID v4 を生成する（複数生成も可） | 低 |
+| `base64Encode` | 文字列を Base64 にエンコード | 低 |
+| `base64Decode` | Base64 文字列をデコード | 低 |
+| `jsonFormat` | JSON 文字列を整形して返す | 低 |
+
+#### ファイル操作系
+
+ファイル操作は `SKILL_FILE_SANDBOX_DIR`（デフォルト: `./workspace`）内に制限されます。パストラバーサルは拒否されます。
+
+| スキル名 | 説明 | リスク |
+|---------|------|-------|
+| `readFile` | サンドボックス内ファイルの内容を読み込む | 中 |
+| `writeFile` | サンドボックス内にファイルを書き込む（上書き・追記対応） | 中 |
+| `listDirectory` | サンドボックス内のディレクトリ一覧を取得 | 低 |
+| `searchInFiles` | サンドボックス内のファイルをパターン検索（正規表現対応） | 低 |
+
+#### Web 系
+
+| スキル名 | 説明 | リスク | 必要な環境変数 |
+|---------|------|-------|--------------|
+| `fetchUrl` | URL のコンテンツを取得（HTML は自動でテキスト変換） | 中 | — |
+| `webSearch` | Tavily API でウェブ検索 | 中 | `TAVILY_API_KEY` |
+| `getWeather` | Open-Meteo API で現在の天気情報を取得（無料・キー不要） | 低 | — |
+
+#### システム系
+
+| スキル名 | 説明 | リスク | 備考 |
+|---------|------|-------|-----|
+| `runCommand` | ホワイトリスト制限付きコマンドを実行 | 高 | 許可コマンド: `ls`, `echo`, `date`, `cat`, `grep` 等 |
+| `getSystemInfo` | OS・CPU・メモリ・Node.js バージョン等を返す | 低 | — |
+| `getEnvVariable` | 許可リスト内の環境変数を返す（`EXPOSED_ENV_VARS` で制御） | 低 | — |
+
+#### メモリ系
+
+メモリは `SKILL_MEMORY_FILE`（デフォルト: `./memory.json`）に JSON で永続化されます。
+
+| スキル名 | 説明 | リスク |
+|---------|------|-------|
+| `memorySet` | キーバリュー形式でメモを保存 | 中 |
+| `memoryGet` | 保存済みメモを取得 | 低 |
+| `memoryList` | 保存済みメモ一覧を表示 | 低 |
+
+#### 外部 API 連携系
+
+| スキル名 | 説明 | リスク | 必要な環境変数 |
+|---------|------|-------|--------------|
+| `githubSearch` | GitHub API でリポジトリ・Issue を検索 | 低 | `GITHUB_TOKEN`（任意、レート制限緩和） |
+| `translateText` | DeepL API でテキストを翻訳 | 低 | `DEEPL_API_KEY` |
+| `sendNotification` | Slack / Discord Webhook に通知を送信 | 高 | `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` |
+
+### スキルの有効/無効設定
+
+`ENABLED_SKILLS` 環境変数（カンマ区切りのスキル名）を設定すると、そのスキルのみが利用可能になります。未設定時は全スキルが有効です。
+
+```env
+# 例: 特定スキルのみ有効にする
+ENABLED_SKILLS=currentDateTime,calculator,getWeather,memorySet,memoryGet,memoryList
+```
+
+### スキルのカスタム定義
 
 ```typescript
 import { type SkillDefinition } from './lib/skill';
@@ -262,9 +324,13 @@ const mySkill: SkillDefinition = {
     type: 'object',
     properties: {
       input: { type: 'string', description: '入力値' },
+      count: { type: 'number', description: '件数', minimum: 1, maximum: 100 },
     },
     required: ['input'],
   },
+  category: 'utility',  // 'utility' | 'file' | 'web' | 'system' | 'memory' | 'external'
+  riskLevel: 'low',     // 'low' | 'medium' | 'high'
+  requiresEnv: [],      // 必要な環境変数名（任意）
   handler: async (args) => {
     return { content: `結果: ${args.input}` };
   },
@@ -282,7 +348,7 @@ registerSkill(mySkill);
 const adapter = createAdapter({ provider: 'openai', model: 'gpt-4o', apiKey: '...' });
 const response = await adapter.complete({
   messages: [{ role: 'user', content: '現在時刻を教えて' }],
-  skills: resolveSkills(['currentDateTime']),
+  skills: resolveSkills(['currentDateTime', 'mySkill']),
 });
 ```
 
@@ -299,6 +365,7 @@ LLM がツール呼び出しを要求した場合、アダプターが自動的�
 | Gemini | function calling (`functionDeclarations` / `functionResponse`) |
 
 ---
+
 
 ## HTTP API（Next.js）
 
