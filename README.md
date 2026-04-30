@@ -300,15 +300,44 @@ npm test
 | OpenAI | `OPENAI_API_KEY` | `OPENAI_MODEL` でモデル指定可 |
 | Anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL` でモデル指定可 |
 | Google Gemini | `GEMINI_API_KEY` | 詳細は [docs/GEMINI-INTEGRATION.md](docs/GEMINI-INTEGRATION.md) |
+| LM Studio | なし（ローカル） | `LMSTUDIO_BASE_URL` / `LMSTUDIO_MODEL` で設定 |
+| Lemonade Server | なし（ローカル） | `LEMONADE_BASE_URL` / `LEMONADE_MODEL` で設定 |
 
 プロバイダの自動判定順（`COPILOT_PROVIDER` 未設定時）:
 
 1. `GEMINI_API_KEY` あり → `gemini`
 2. `ANTHROPIC_API_KEY` あり → `anthropic`
 3. `OPENAI_API_KEY` あり → `openai`
-4. それ以外 → `copilot`
+4. `LMSTUDIO_BASE_URL` あり → `lmstudio`
+5. `LEMONADE_BASE_URL` あり → `lemonade`
+6. それ以外 → `copilot`
 
-`COPILOT_PROVIDER` 環境変数で明示指定した場合はその値が優先されます。
+`COPILOT_PROVIDER` 環境変数で明示指定した場合はその値が優先されます（`lmstudio` / `lemonade` も指定可）。
+
+### LM Studio の使い方
+
+1. [LM Studio](https://lmstudio.ai/) を起動し、使用したいモデルをロードする
+2. LM Studio の「Local Server」タブでサーバーを起動（デフォルト: `http://localhost:1234`）
+3. `.env.local` に以下を設定:
+
+```env
+COPILOT_PROVIDER=lmstudio
+# または LMSTUDIO_BASE_URL を設定するだけでも自動検出されます
+LMSTUDIO_BASE_URL=http://localhost:1234/v1
+LMSTUDIO_MODEL=          # 空白にするとロード済みモデルをそのまま使用
+```
+
+### Lemonade Server の使い方
+
+1. [AMD Lemonade Server](https://github.com/amd/lemonade) を起動する（デフォルト: `http://localhost:8000`）
+2. `.env.local` に以下を設定:
+
+```env
+COPILOT_PROVIDER=lemonade
+# または LEMONADE_BASE_URL を設定するだけでも自動検出されます
+LEMONADE_BASE_URL=http://localhost:8000/api/v0
+LEMONADE_MODEL=your-model-name
+```
 
 ---
 

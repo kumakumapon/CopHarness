@@ -45,7 +45,8 @@ async function main() {
     process.env.ANTHROPIC_API_KEY ||
     process.env.GEMINI_API_KEY;
 
-  if (!apiKey && provider !== 'copilot') {
+  const localProviders = ['copilot', 'lmstudio', 'lemonade'];
+  if (!apiKey && !localProviders.includes(provider)) {
     console.error(
       'Error: No API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY',
     );
@@ -57,6 +58,8 @@ async function main() {
     process.env.OPENAI_MODEL ||
     process.env.ANTHROPIC_MODEL ||
     process.env.GEMINI_MODEL ||
+    process.env.LMSTUDIO_MODEL ||
+    process.env.LEMONADE_MODEL ||
     'gpt-5-mini';
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;

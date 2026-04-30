@@ -3,6 +3,8 @@ import { CopilotAdapter } from './adapters/copilotAdapter';
 import { OpenAIAdapter } from './adapters/openaiAdapter';
 import { AnthropicAdapter } from './adapters/anthropicAdapter';
 import { GeminiAdapter } from './adapters/geminiAdapter';
+import { LmStudioAdapter } from './adapters/lmstudioAdapter';
+import { LemonadeAdapter } from './adapters/lemonadeAdapter';
 import {
   GEMINI_DEFAULT_ENDPOINT,
   GEMINI_DEFAULT_TIMEOUT_MS,
@@ -39,6 +41,10 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
       const retryMax = Number(process.env.GEMINI_RETRY_MAX) || GEMINI_DEFAULT_RETRY_MAX;
       return new GeminiAdapter(options.model, options.apiKey, endpoint, timeoutMs, retryMax);
     }
+    case 'lmstudio':
+      return new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs);
+    case 'lemonade':
+      return new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs);
     case 'copilot':
     default:
       return new CopilotAdapter(options.model, options.timeoutMs);
@@ -51,7 +57,9 @@ export function resolveProvider(): ProviderType {
     explicit === 'openai' ||
     explicit === 'anthropic' ||
     explicit === 'copilot' ||
-    explicit === 'gemini'
+    explicit === 'gemini' ||
+    explicit === 'lmstudio' ||
+    explicit === 'lemonade'
   ) {
     return explicit;
   }
@@ -59,6 +67,9 @@ export function resolveProvider(): ProviderType {
   if (process.env.GEMINI_API_KEY) return 'gemini';
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
   if (process.env.OPENAI_API_KEY) return 'openai';
+  // Local LLM servers detected by their endpoint env vars
+  if (process.env.LMSTUDIO_BASE_URL) return 'lmstudio';
+  if (process.env.LEMONADE_BASE_URL) return 'lemonade';
   // When any BYOK API key is configured, default to openai-compatible adapter
   const byokKey = process.env.COPILOT_PROVIDER_API_KEY ?? process.env.COPILOT_API_KEY ?? '';
   if (byokKey) return 'openai';

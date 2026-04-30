@@ -9,8 +9,9 @@ export async function POST(req: NextRequest) {
   // プロバイダ自動判定
   const provider = resolveProvider();
   // Copilot, OpenAI, Anthropic などで環境変数名が異なるため柔軟に取得
+  const localProviders = ['lmstudio', 'lemonade'];
   const apiKey = process.env.COPILOT_PROVIDER_API_KEY || process.env.COPILOT_API_KEY || process.env.GITHUB_COPILOT_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!apiKey && !localProviders.includes(provider)) {
     return NextResponse.json(
       { error: 'Missing API key (COPILOT_PROVIDER_API_KEY, OPENAI_API_KEY, etc)' },
       { status: 401 }
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // モデル名は環境変数またはデフォルト
-    const model = process.env.COPILOT_MODEL || process.env.OPENAI_MODEL || process.env.ANTHROPIC_MODEL || process.env.GEMINI_MODEL || 'gpt-5-mini';
+    const model = process.env.COPILOT_MODEL || process.env.OPENAI_MODEL || process.env.ANTHROPIC_MODEL || process.env.GEMINI_MODEL || process.env.LMSTUDIO_MODEL || process.env.LEMONADE_MODEL || 'gpt-5-mini';
     const defaultTimeout = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     // Cap user-supplied timeoutMs to the server default to prevent resource exhaustion.
     const timeoutMs =
