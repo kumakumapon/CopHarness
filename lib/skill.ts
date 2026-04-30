@@ -45,3 +45,8 @@ export function resolveSkills(names: string[]): SkillDefinition[] {
     return skill ? [skill] : [];
   });
 }
+
+/** Return all registered skill definitions. */
+export function listSkills(): SkillDefinition[] {
+  return Array.from(skillRegistry.values());
+}
