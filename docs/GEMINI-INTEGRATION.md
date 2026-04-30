@@ -47,12 +47,14 @@ Copy `.env.example` to `.env.local` and set the following variables:
 When `GEMINI_API_KEY` is set (and `COPILOT_PROVIDER` is not explicitly set to another value),  
 CopHarness will automatically select the Gemini provider. The priority order is:
 
-1. Explicit `COPILOT_PROVIDER` env var (`gemini`, `openai`, `anthropic`, `copilot`)
+1. Explicit `COPILOT_PROVIDER` env var (`gemini`, `openai`, `anthropic`, `copilot`, `lmstudio`, `lemonade`)
 2. `GEMINI_API_KEY` present → `gemini`
 3. `ANTHROPIC_API_KEY` present → `anthropic`
 4. `OPENAI_API_KEY` present → `openai`
-5. BYOK key present → `openai`
-6. Default → `copilot`
+5. `LMSTUDIO_BASE_URL` present → `lmstudio`
+6. `LEMONADE_BASE_URL` present → `lemonade`
+7. BYOK key present → `openai`
+8. Default → `copilot`
 
 ---
 

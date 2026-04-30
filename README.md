@@ -30,6 +30,8 @@ cp .env.example .env.local
 | `OPENAI_API_KEY` | OpenAI API キー |
 | `ANTHROPIC_API_KEY` | Anthropic API キー |
 | `GEMINI_API_KEY` | Google Gemini API キー |
+| `LMSTUDIO_BASE_URL` | LM Studio ローカルサーバーの URL（デフォルト: `http://localhost:1234/v1`） |
+| `LEMONADE_BASE_URL` | Lemonade Server の URL（デフォルト: `http://localhost:8000/api/v0`） |
 | `DISCORD_BOT_TOKEN` | Discord ボットトークン（Discord Bot のみ必要） |
 
 どれか一つの LLM キーがあれば自動判定されます。複数セット時は `COPILOT_PROVIDER` で明示指定も可能です。
@@ -441,6 +443,7 @@ npm run dev
 | `GET` | `/api/dashboard/status` | アクティブなプロバイダ・モデル、各プロバイダとボットの設定状況を返す |
 | `GET` | `/api/dashboard/schedules` | 登録済みスケジュール一覧（次回実行時刻付き）を返す |
 | `PATCH` | `/api/dashboard/schedules` | スケジュールの有効/無効を切り替える（`{ id, enabled }` を送信） |
+| `PATCH` | `/api/dashboard/schedules/[id]` | 指定スケジュールの有効/無効を切り替える（`{ enabled }` を送信） |
 | `POST` | `/api/dashboard/schedules/[id]/fire` | 指定スケジュールをデーモンに即時実行させる |
 | `POST` | `/api/dashboard/schedules/[id]/stop` | 指定スケジュールの実行中プロンプトを中断させる |
 | `GET` | `/api/dashboard/logs` | 実行ログを返す（`?limit=N` で件数指定、最大 200） |
