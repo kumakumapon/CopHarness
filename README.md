@@ -4,6 +4,7 @@
 
 - **CLI** — コマンドラインから対話型でやり取り
 - **Discord Bot** — Discord の DM / @メンションで LLM と会話（画像添付対応）
+- **LINE Bot** — LINE メッセージに LLM が返答（ウェブフック経由）
 - **HTTP API** — `POST /api/copilot` エンドポイント（Next.js）
 - **スケジューラー** — cron 式でプロンプトを定期実行（即時実行・中断対応）
 - **スキル（ツール呼び出し）** — LLM からローカル関数を呼び出すツール機能
@@ -72,6 +73,52 @@ Goodbye!
 | `COPILOT_MODEL` | 使用するモデル名 | `gpt-5-mini` |
 | `COPILOT_TIMEOUT_MS` | LLM タイムアウト（ミリ秒） | `120000` |
 | `COPILOT_SYSTEM_PROMPT` | システムプロンプト | （なし） |
+
+---
+
+## LINE Bot
+
+LINE Messaging API Webhook として動作するボットです。Next.js の開発サーバーまたはデプロイ済み環境で `POST /api/line` エンドポイントがウェブフックを受け取ります。
+
+### LINE チャネルの作成
+
+1. [LINE Developers Console](https://developers.line.biz/console/) でプロバイダーとチャネル（Messaging API）を作成
+2. チャネル基本設定から **Channel Secret** をコピー
+3. Messaging API 設定から **Channel Access Token** を発行・コピー
+4. Webhook URL に `https://<your-domain>/api/line` を設定し、**Webhook の利用** を有効化
+5. （ローカル開発時は [ngrok](https://ngrok.com/) 等で HTTPS トンネルを作成してください）
+
+### 環境変数の設定
+
+`.env.local` に以下を追加してください。
+
+```env
+LINE_CHANNEL_SECRET=your_line_channel_secret_here
+LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token_here
+```
+
+### 起動
+
+```bash
+npm run dev
+```
+
+Next.js の開発サーバーが起動し、`POST /api/line` でウェブフックを受け付けます。
+
+### 使い方
+
+LINE 公式アカウントにメッセージを送ると LLM が返答します。ユーザーごとに会話履歴が保持されます。
+
+### オプション設定
+
+| 変数名 | 説明 | デフォルト |
+|--------|------|-----------|
+| `LINE_CHANNEL_SECRET` | チャネルシークレット（必須） | — |
+| `LINE_CHANNEL_ACCESS_TOKEN` | チャネルアクセストークン（必須） | — |
+| `LINE_MAX_HISTORY` | ユーザーごとの会話履歴保持数（ペア） | `20` |
+| `COPILOT_SYSTEM_PROMPT` | システムプロンプト | （なし） |
+| `COPILOT_MODEL` | 使用するモデル名 | `gpt-5-mini` |
+| `COPILOT_TIMEOUT_MS` | LLM タイムアウト（ミリ秒） | `120000` |
 
 ---
 
