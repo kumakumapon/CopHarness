@@ -6,6 +6,7 @@
 - **Discord Bot** — Discord の DM / @メンションで LLM と会話（画像添付対応）
 - **LINE Bot** — LINE メッセージに LLM が返答（ウェブフック経由）
 - **HTTP API** — `POST /api/copilot` エンドポイント（Next.js）
+- **ダッシュボード** — `/dashboard` でプロバイダ状態・スケジュール・スキル・実行ログを確認（Web UI）
 - **スケジューラー** — cron 式でプロンプトを定期実行（即時実行・中断対応）
 - **スキル（ツール呼び出し）** — LLM からローカル関数を呼び出すツール機能
 
@@ -24,6 +25,8 @@ cp .env.example .env.local
 | 変数名 | 説明 |
 |--------|------|
 | `GITHUB_COPILOT_API_KEY` | GitHub Copilot PAT（`read:user` + `copilot` スコープ） |
+| `COPILOT_PROVIDER_API_KEY` | 汎用 BYOK キー（`GITHUB_COPILOT_API_KEY` の別名として利用可） |
+| `COPILOT_API_KEY` | 汎用 BYOK キー（`GITHUB_COPILOT_API_KEY` の別名として利用可） |
 | `OPENAI_API_KEY` | OpenAI API キー |
 | `ANTHROPIC_API_KEY` | Anthropic API キー |
 | `GEMINI_API_KEY` | Google Gemini API キー |
@@ -70,7 +73,12 @@ Goodbye!
 
 | 変数名 | 説明 | デフォルト |
 |--------|------|-----------|
-| `COPILOT_MODEL` | 使用するモデル名 | `gpt-5-mini` |
+| `COPILOT_MODEL` | 使用するモデル名（全プロバイダ共通） | `gpt-5-mini` |
+| `OPENAI_MODEL` | OpenAI 用モデル名（`COPILOT_MODEL` より優先度低） | （なし） |
+| `ANTHROPIC_MODEL` | Anthropic 用モデル名 | （なし） |
+| `GEMINI_MODEL` | Gemini 用モデル名 | `gemini-1.5-pro` |
+| `LMSTUDIO_MODEL` | LM Studio 用モデル名 | （ロード済みモデル） |
+| `LEMONADE_MODEL` | Lemonade Server 用モデル名 | （なし） |
 | `COPILOT_TIMEOUT_MS` | LLM タイムアウト（ミリ秒） | `120000` |
 | `COPILOT_SYSTEM_PROMPT` | システムプロンプト | （なし） |
 
@@ -308,9 +316,19 @@ npm run dev
 {
   "messages": [
     { "role": "user", "content": "こんにちは" }
-  ]
+  ],
+  "attachments": [],
+  "skills": ["currentDateTime"],
+  "timeoutMs": 30000
 }
 ```
+
+| フィールド | 型 | 必須 | 説明 |
+|------------|-----|------|------|
+| `messages` | `LLMMessage[]` | ✅ | 会話メッセージ配列（`role`: `user` / `assistant` / `system`） |
+| `attachments` | `LLMAttachment[]` | — | 画像などのバイナリ添付（`type: "blob"`, `data`, `mimeType`） |
+| `skills` | `string[]` | — | 有効にするスキル名のリスト（例: `["currentDateTime"]`） |
+| `timeoutMs` | `number` | — | タイムアウト上書き（ミリ秒）。サーバー設定値が上限 |
 
 **レスポンス（成功）**
 
@@ -326,8 +344,40 @@ npm run dev
 |-----------|------|
 | 400 | リクエストボディが不正（messages なし・空配列・不正 JSON） |
 | 401 | API キー未設定、または LLM 認証失敗 |
+| 403 | LLM 認証拒否（403 エラーが返された場合） |
 | 502 | LLM API エラー |
 | 504 | LLM API タイムアウト |
+
+---
+
+## ダッシュボード（Web UI）
+
+`npm run dev` でサーバーを起動した後、ブラウザで `http://localhost:3000/dashboard` を開くと管理ダッシュボードが表示されます。
+
+### 機能
+
+| タブ / パネル | 説明 |
+|--------------|------|
+| **プロバイダ状態** | 設定済みの LLM プロバイダ・ボット一覧と設定状況を表示 |
+| **スケジュール** | スケジュール一覧の確認、有効/無効の切り替え、即時実行・中断操作 |
+| **スキル** | 登録済みスキル（ツール）の一覧表示 |
+| **実行ログ** | スケジューラーの実行履歴（成功・失敗・中断）を最大 200 件表示 |
+
+ダッシュボードは自動更新に対応しており、右上のトグルで切り替え可能です。
+
+### Dashboard API エンドポイント
+
+ダッシュボードは以下の REST API を内部で使用しています。直接呼び出すことも可能です。
+
+| メソッド | パス | 説明 |
+|---------|------|------|
+| `GET` | `/api/dashboard/status` | アクティブなプロバイダ・モデル、各プロバイダとボットの設定状況を返す |
+| `GET` | `/api/dashboard/schedules` | 登録済みスケジュール一覧（次回実行時刻付き）を返す |
+| `PATCH` | `/api/dashboard/schedules` | スケジュールの有効/無効を切り替える（`{ id, enabled }` を送信） |
+| `POST` | `/api/dashboard/schedules/[id]/fire` | 指定スケジュールをデーモンに即時実行させる |
+| `POST` | `/api/dashboard/schedules/[id]/stop` | 指定スケジュールの実行中プロンプトを中断させる |
+| `GET` | `/api/dashboard/logs` | 実行ログを返す（`?limit=N` で件数指定、最大 200） |
+| `GET` | `/api/dashboard/skills` | 登録済みスキルの名前と説明一覧を返す |
 
 ---
 
@@ -357,7 +407,8 @@ npm test
 3. `OPENAI_API_KEY` あり → `openai`
 4. `LMSTUDIO_BASE_URL` あり → `lmstudio`
 5. `LEMONADE_BASE_URL` あり → `lemonade`
-6. それ以外 → `copilot`
+6. `COPILOT_PROVIDER_API_KEY` または `COPILOT_API_KEY` あり → `openai`（互換アダプター）
+7. それ以外 → `copilot`（GitHub Copilot SDK）
 
 `COPILOT_PROVIDER` 環境変数で明示指定した場合はその値が優先されます（`lmstudio` / `lemonade` も指定可）。
 
@@ -394,3 +445,4 @@ LEMONADE_MODEL=your-model-name
 - `.env.local` は `.gitignore` に含まれています。コミットしないよう注意してください。
 - Discord Bot を使用する場合、**Message Content Intent** が必要です。
 - `schedules.json` にはプロンプトの内容が平文で保存されます。機密情報を含めないよう注意してください。
+- `logs.json` にはスケジュール実行結果（プロンプト・LLM の返答）が平文で保存されます。同様に機密情報を含めないよう注意してください。
