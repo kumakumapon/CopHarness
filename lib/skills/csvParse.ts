@@ -53,8 +53,8 @@ function parseCSV(raw: string, delimiter: string): string[][] {
     }
   }
 
-  // Flush last field / row
-  if (field !== '' || row.length > 0) {
+  // Flush last field / row (skip trailing empty row caused by a final newline)
+  if (field !== '' || inQuote || row.length > 0) {
     row.push(field);
     rows.push(row);
   }

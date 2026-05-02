@@ -24,7 +24,7 @@ export const textStats: SkillDefinition = {
     const lines = text === '' ? 0 : text.split('\n').length;
     const wordTokens = text.trim() === '' ? [] : text.trim().split(/\s+/);
     const wordCount = wordTokens.length === 1 && wordTokens[0] === '' ? 0 : wordTokens.length;
-    const sentences = text.trim() === '' ? 0 : (text.match(/[.!?]+/g) ?? []).length;
+    const sentences = text.trim() === '' ? 0 : (text.match(/[.!?]/g) ?? []).length;
     const avgWordLen =
       wordCount === 0
         ? 0
