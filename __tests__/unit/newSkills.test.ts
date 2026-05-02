@@ -798,7 +798,7 @@ describe('note skills (noteCreate / noteRead / noteList / noteDelete)', () => {
 
   it('reads a note by ID', async () => {
     const created = await noteCreate.handler({ title: 'By ID', content: 'Content here' });
-    const idMatch = created.content.match(/ID:\s*([\w]+)/);
+    const idMatch = created.content.match(/ID:\s*([\w-]+)/);
     expect(idMatch).not.toBeNull();
     const id = idMatch![1];
     const result = await noteRead.handler({ id });
@@ -807,7 +807,7 @@ describe('note skills (noteCreate / noteRead / noteList / noteDelete)', () => {
 
   it('deletes a note', async () => {
     const created = await noteCreate.handler({ title: 'Delete Me', content: 'temporary' });
-    const idMatch = created.content.match(/ID:\s*([\w]+)/);
+    const idMatch = created.content.match(/ID:\s*([\w-]+)/);
     const id = idMatch![1];
     const deleted = await noteDelete.handler({ id });
     expect(deleted.isError).toBeFalsy();

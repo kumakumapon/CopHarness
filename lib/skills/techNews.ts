@@ -82,8 +82,8 @@ function stripHtml(html: string): string {
   }
   // Decode HTML entities (order matters: &amp; last to prevent double-decoding)
   text = text
-    .replace(/&lt;/g, '\u003c')
-    .replace(/&gt;/g, '\u003e')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')

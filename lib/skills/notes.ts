@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { type SkillDefinition } from '../skill';
 
 /**
@@ -39,7 +40,7 @@ async function saveNotes(notes: Note[]): Promise<void> {
 }
 
 function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  return randomUUID();
 }
 
 export const noteCreate: SkillDefinition = {

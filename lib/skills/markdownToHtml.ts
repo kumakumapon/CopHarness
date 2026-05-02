@@ -117,8 +117,30 @@ ${body}
 }
 
 function inlineMarkdown(text: string): string {
-  // Inline code — escape content before wrapping to prevent XSS
-  text = text.replace(/`([^`]+)`/g, (_, code: string) => `<code>${escapeHtml(code)}</code>`);
+  // Process links and images FIRST (before HTML-escaping to preserve raw URLs).
+  // Both link text and href are escaped inside the replacer.
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => {
+    const safeSrc = /^https?:\/\//i.test(src.trim()) ? escapeHtml(src.trim()) : '';
+    return `<img alt="${escapeHtml(alt)}"${safeSrc ? ` src="${safeSrc}"` : ''}>`;
+  });
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText: string, href: string) => {
+    const safeHref = /^https?:\/\//i.test(href.trim()) ? escapeHtml(href.trim()) : '#';
+    return `<a href="${safeHref}">${escapeHtml(linkText)}</a>`;
+  });
+
+  // Escape all remaining HTML characters in the plain-text parts to prevent XSS.
+  // We do this by escaping everything and then restoring the safe HTML tags we just
+  // inserted above. Use a placeholder trick: replace already-safe tags temporarily.
+  const placeholders: string[] = [];
+  text = text.replace(/<a [^>]*>|<\/a>|<img [^>]*>/g, (tag) => {
+    placeholders.push(tag);
+    return `\x00${placeholders.length - 1}\x00`;
+  });
+  text = escapeHtml(text);
+  text = text.replace(/\x00(\d+)\x00/g, (_, i: string) => placeholders[Number(i)]);
+
+  // Inline code — content is now HTML-escaped, just wrap it
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
   // Bold + italic
   text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   // Bold
@@ -129,16 +151,6 @@ function inlineMarkdown(text: string): string {
   text = text.replace(/_(.+?)_/g, '<em>$1</em>');
   // Strikethrough
   text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
-  // Links — validate URL scheme and escape text/href
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText: string, href: string) => {
-    const safeHref = /^https?:\/\//i.test(href.trim()) ? escapeHtml(href.trim()) : '#';
-    return `<a href="${safeHref}">${escapeHtml(linkText)}</a>`;
-  });
-  // Images — escape alt and src, only allow http/https src
-  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => {
-    const safeSrc = /^https?:\/\//i.test(src.trim()) ? escapeHtml(src.trim()) : '';
-    return `<img alt="${escapeHtml(alt)}"${safeSrc ? ` src="${safeSrc}"` : ''}>`;
-  });
   return text;
 }
 
