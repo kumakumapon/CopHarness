@@ -14,6 +14,11 @@ import { randomNumber } from './randomNumber';
 import { uuidGenerate } from './uuidGenerate';
 import { base64Encode, base64Decode } from './base64';
 import { jsonFormat } from './jsonFormat';
+import { hashText } from './hashText';
+import { regexMatch } from './regexMatch';
+import { textStats } from './textStats';
+import { generatePassword } from './generatePassword';
+import { csvParse } from './csvParse';
 
 // Phase 2: file
 import { readFile } from './readFile';
@@ -47,6 +52,11 @@ const allSkills = [
   base64Encode,
   base64Decode,
   jsonFormat,
+  hashText,
+  regexMatch,
+  textStats,
+  generatePassword,
+  csvParse,
   readFile,
   writeFile,
   listDirectory,
@@ -77,6 +87,11 @@ export {
   base64Encode,
   base64Decode,
   jsonFormat,
+  hashText,
+  regexMatch,
+  textStats,
+  generatePassword,
+  csvParse,
   readFile,
   writeFile,
   listDirectory,
