@@ -130,14 +130,14 @@ function inlineMarkdown(text: string): string {
 
   // Escape all remaining HTML characters in the plain-text parts to prevent XSS.
   // We do this by escaping everything and then restoring the safe HTML tags we just
-  // inserted above. Use a placeholder trick: replace already-safe tags temporarily.
+  // inserted above. Use a unique placeholder pattern to avoid conflicts with user input.
   const placeholders: string[] = [];
   text = text.replace(/<a [^>]*>|<\/a>|<img [^>]*>/g, (tag) => {
     placeholders.push(tag);
-    return `\x00${placeholders.length - 1}\x00`;
+    return `\x02MDHTMLPH${placeholders.length - 1}MDHTMLPH\x03`;
   });
   text = escapeHtml(text);
-  text = text.replace(/\x00(\d+)\x00/g, (_, i: string) => placeholders[Number(i)]);
+  text = text.replace(/\x02MDHTMLPH(\d+)MDHTMLPH\x03/g, (_, i: string) => placeholders[Number(i)]);
 
   // Inline code — content is now HTML-escaped, just wrap it
   text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
