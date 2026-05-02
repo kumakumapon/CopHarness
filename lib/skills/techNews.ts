@@ -72,12 +72,25 @@ function extractAttr(xml: string, tag: string, attr: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Remove HTML tags in multiple passes to handle nested/malformed tags
+  // e.g. "<scr<b>ipt>" → "<script>" after first pass → "" after second pass
+  let text = html;
+  let prev = '';
+  while (prev !== text) {
+    prev = text;
+    text = text.replace(/<[^>]*>/g, '');
+  }
+  // Decode HTML entities (order matters: &amp; last to prevent double-decoding)
+  text = text
+    .replace(/&lt;/g, '\u003c')
+    .replace(/&gt;/g, '\u003e')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&amp;/g, '&');
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 /** Curated list of RSS feeds for tech news. */

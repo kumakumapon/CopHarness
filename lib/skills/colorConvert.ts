@@ -123,7 +123,7 @@ export const colorConvert: SkillDefinition = {
     let rgb: [number, number, number] | null = null;
 
     // Try HEX
-    if (/^#?[0-9a-fA-F]{3,6}$/.test(input.replace(/\s/g, ''))) {
+    if (/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(input.replace(/\s/g, ''))) {
       rgb = parseHex(input);
     }
     // Try RGB (contains commas or spaces between numbers, no % signs expected for all three)

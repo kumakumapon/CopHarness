@@ -117,8 +117,8 @@ ${body}
 }
 
 function inlineMarkdown(text: string): string {
-  // Inline code
-  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Inline code — escape content before wrapping to prevent XSS
+  text = text.replace(/`([^`]+)`/g, (_, code: string) => `<code>${escapeHtml(code)}</code>`);
   // Bold + italic
   text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   // Bold
@@ -129,10 +129,16 @@ function inlineMarkdown(text: string): string {
   text = text.replace(/_(.+?)_/g, '<em>$1</em>');
   // Strikethrough
   text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
-  // Links
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-  // Images
-  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">');
+  // Links — validate URL scheme and escape text/href
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText: string, href: string) => {
+    const safeHref = /^https?:\/\//i.test(href.trim()) ? escapeHtml(href.trim()) : '#';
+    return `<a href="${safeHref}">${escapeHtml(linkText)}</a>`;
+  });
+  // Images — escape alt and src, only allow http/https src
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => {
+    const safeSrc = /^https?:\/\//i.test(src.trim()) ? escapeHtml(src.trim()) : '';
+    return `<img alt="${escapeHtml(alt)}"${safeSrc ? ` src="${safeSrc}"` : ''}>`;
+  });
   return text;
 }
 
