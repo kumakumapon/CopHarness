@@ -29,6 +29,9 @@ describe('SkillDefinition metadata', () => {
       'runCommand', 'getSystemInfo', 'getEnvVariable',
       'memorySet', 'memoryGet', 'memoryList',
       'githubSearch', 'translateText', 'sendNotification',
+      'arXivSearch', 'techNews', 'githubRepo', 'youtubeInfo',
+      'noteCreate', 'noteRead', 'noteList', 'noteDelete',
+      'markdownToHtml', 'diffText', 'colorConvert',
     ];
     for (const name of expected) {
       expect(names).toContain(name);
@@ -634,5 +637,205 @@ describe('csvParse skill', () => {
   it('returns empty array for empty input', async () => {
     const result = await csvParse.handler({ csv: '' });
     expect(result.content).toBe('[]');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7: Extended skills
+// ---------------------------------------------------------------------------
+
+import { diffText } from '../../lib/skills/diffText';
+import { colorConvert } from '../../lib/skills/colorConvert';
+import { markdownToHtmlSkill } from '../../lib/skills/markdownToHtml';
+import { noteCreate, noteRead, noteList, noteDelete } from '../../lib/skills/notes';
+
+describe('diffText skill', () => {
+  it('reports identical texts', async () => {
+    const result = await diffText.handler({ oldText: 'hello', newText: 'hello' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('identical');
+  });
+
+  it('detects added lines', async () => {
+    const result = await diffText.handler({ oldText: 'line1', newText: 'line1\nline2' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('+');
+    expect(result.content).toContain('1 line(s) added');
+  });
+
+  it('detects removed lines', async () => {
+    const result = await diffText.handler({ oldText: 'line1\nline2', newText: 'line1' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('-');
+    expect(result.content).toContain('1 line(s) removed');
+  });
+
+  it('shows context lines around changes', async () => {
+    const old = 'a\nb\nc\nd\ne';
+    const newT = 'a\nb\nX\nd\ne';
+    const result = await diffText.handler({ oldText: old, newText: newT, contextLines: 1 });
+    expect(result.content).toContain('b');
+    expect(result.content).toContain('d');
+    expect(result.content).toContain('X');
+  });
+
+  it('returns error when oldText is missing', async () => {
+    const result = await diffText.handler({ newText: 'abc' });
+    // Should still run (empty old = all additions)
+    expect(result.isError).toBeFalsy();
+  });
+});
+
+describe('colorConvert skill', () => {
+  it('converts HEX to RGB and HSL', async () => {
+    const result = await colorConvert.handler({ color: '#ff6347' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('rgb(255, 99, 71)');
+    expect(result.content).toContain('hsl(');
+  });
+
+  it('converts 3-digit HEX', async () => {
+    const result = await colorConvert.handler({ color: '#fff' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('rgb(255, 255, 255)');
+  });
+
+  it('converts RGB input', async () => {
+    const result = await colorConvert.handler({ color: '255,0,0' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('#ff0000');
+    expect(result.content).toContain('hsl(0,');
+  });
+
+  it('converts HSL input', async () => {
+    const result = await colorConvert.handler({ color: 'hsl(0, 100%, 50%)' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('rgb(255, 0, 0)');
+  });
+
+  it('returns error for invalid color', async () => {
+    const result = await colorConvert.handler({ color: 'notacolor' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('returns error when color is empty', async () => {
+    const result = await colorConvert.handler({ color: '' });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('markdownToHtml skill', () => {
+  it('converts a heading', async () => {
+    const result = await markdownToHtmlSkill.handler({ markdown: '# Hello' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('<h1>Hello</h1>');
+  });
+
+  it('converts bold and italic', async () => {
+    const result = await markdownToHtmlSkill.handler({ markdown: '**bold** and *italic*' });
+    expect(result.content).toContain('<strong>bold</strong>');
+    expect(result.content).toContain('<em>italic</em>');
+  });
+
+  it('converts a fenced code block', async () => {
+    const result = await markdownToHtmlSkill.handler({ markdown: '```js\nconsole.log("hi");\n```' });
+    expect(result.content).toContain('<pre><code');
+    expect(result.content).toContain('console.log');
+  });
+
+  it('converts unordered list', async () => {
+    const result = await markdownToHtmlSkill.handler({ markdown: '- item1\n- item2' });
+    expect(result.content).toContain('<ul>');
+    expect(result.content).toContain('<li>item1</li>');
+  });
+
+  it('converts a link', async () => {
+    const result = await markdownToHtmlSkill.handler({ markdown: '[GitHub](https://github.com)' });
+    expect(result.content).toContain('<a href="https://github.com">GitHub</a>');
+  });
+
+  it('returns error for empty input', async () => {
+    const result = await markdownToHtmlSkill.handler({ markdown: '' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('wraps output in a full HTML document', async () => {
+    const result = await markdownToHtmlSkill.handler({ markdown: 'hello' });
+    expect(result.content).toContain('<!DOCTYPE html>');
+    expect(result.content).toContain('</html>');
+  });
+});
+
+describe('note skills (noteCreate / noteRead / noteList / noteDelete)', () => {
+  const origEnv = process.env.SKILL_NOTES_FILE;
+
+  beforeEach(() => {
+    // Use a temp path to avoid polluting real notes.json
+    process.env.SKILL_NOTES_FILE = `/tmp/test-notes-${Date.now()}.json`;
+  });
+
+  afterEach(() => {
+    if (origEnv === undefined) delete process.env.SKILL_NOTES_FILE;
+    else process.env.SKILL_NOTES_FILE = origEnv;
+  });
+
+  it('creates a note and lists it', async () => {
+    const created = await noteCreate.handler({ title: 'Test Note', content: 'Hello world', tags: 'test,unit' });
+    expect(created.isError).toBeFalsy();
+    expect(created.content).toContain('Test Note');
+
+    const listed = await noteList.handler({});
+    expect(listed.isError).toBeFalsy();
+    expect(listed.content).toContain('Test Note');
+  });
+
+  it('reads a note by keyword', async () => {
+    await noteCreate.handler({ title: 'Meeting Notes', content: 'Discussed quarterly goals.' });
+    const result = await noteRead.handler({ keyword: 'quarterly' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Discussed quarterly goals.');
+  });
+
+  it('reads a note by ID', async () => {
+    const created = await noteCreate.handler({ title: 'By ID', content: 'Content here' });
+    const idMatch = created.content.match(/ID:\s*([\w]+)/);
+    expect(idMatch).not.toBeNull();
+    const id = idMatch![1];
+    const result = await noteRead.handler({ id });
+    expect(result.content).toContain('Content here');
+  });
+
+  it('deletes a note', async () => {
+    const created = await noteCreate.handler({ title: 'Delete Me', content: 'temporary' });
+    const idMatch = created.content.match(/ID:\s*([\w]+)/);
+    const id = idMatch![1];
+    const deleted = await noteDelete.handler({ id });
+    expect(deleted.isError).toBeFalsy();
+    expect(deleted.content).toContain('Deleted');
+    const result = await noteRead.handler({ id });
+    expect(result.content).toContain('No note found');
+  });
+
+  it('filters noteList by tag', async () => {
+    await noteCreate.handler({ title: 'Work Note', content: 'Work content', tags: 'work' });
+    await noteCreate.handler({ title: 'Personal Note', content: 'Personal content', tags: 'personal' });
+    const result = await noteList.handler({ tag: 'work' });
+    expect(result.content).toContain('Work Note');
+    expect(result.content).not.toContain('Personal Note');
+  });
+
+  it('returns error for noteCreate without title', async () => {
+    const result = await noteCreate.handler({ content: 'no title' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('returns error for noteRead without id or keyword', async () => {
+    const result = await noteRead.handler({});
+    expect(result.isError).toBe(true);
+  });
+
+  it('returns error for noteDelete without id', async () => {
+    const result = await noteDelete.handler({});
+    expect(result.isError).toBe(true);
   });
 });
