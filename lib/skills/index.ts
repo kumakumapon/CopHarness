@@ -44,6 +44,16 @@ import { githubSearch } from './githubSearch';
 import { translateText } from './translateText';
 import { sendNotification } from './sendNotification';
 
+// Phase 7: extended skills (inspired by karaage0703/ai-assistant-workspace)
+import { arXivSearch } from './arXivSearch';
+import { techNews } from './techNews';
+import { githubRepo } from './githubRepo';
+import { youtubeInfo } from './youtubeInfo';
+import { noteCreate, noteRead, noteList, noteDelete } from './notes';
+import { markdownToHtmlSkill } from './markdownToHtml';
+import { diffText } from './diffText';
+import { colorConvert } from './colorConvert';
+
 const allSkills = [
   currentDateTime,
   calculator,
@@ -73,6 +83,17 @@ const allSkills = [
   githubSearch,
   translateText,
   sendNotification,
+  arXivSearch,
+  techNews,
+  githubRepo,
+  youtubeInfo,
+  noteCreate,
+  noteRead,
+  noteList,
+  noteDelete,
+  markdownToHtmlSkill,
+  diffText,
+  colorConvert,
 ];
 
 for (const skill of allSkills) {
@@ -108,4 +129,15 @@ export {
   githubSearch,
   translateText,
   sendNotification,
+  arXivSearch,
+  techNews,
+  githubRepo,
+  youtubeInfo,
+  noteCreate,
+  noteRead,
+  noteList,
+  noteDelete,
+  markdownToHtmlSkill,
+  diffText,
+  colorConvert,
 };

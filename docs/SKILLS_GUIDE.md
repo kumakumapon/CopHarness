@@ -19,6 +19,7 @@
    - [システム系](#34-システム系)
    - [メモリ系](#35-メモリ系)
    - [外部 API 連携系](#36-外部-api-連携系)
+   - [拡張スキル系（AI アシスタント向け）](#37-拡張スキル系ai-アシスタント向け)
 4. [特定のスキルだけ有効にする](#4-特定のスキルだけ有効にする)
 5. [スキルを自作して登録する](#5-スキルを自作して登録する)
 6. [HTTP API からスキルを使う](#6-http-api-からスキルを使う)
@@ -85,6 +86,17 @@ Assistant: sqrt(144) + 10 = 22 です。
 | **外部 API** | `githubSearch` | GitHub 検索 | `GITHUB_TOKEN`（任意） |
 | | `translateText` | DeepL 翻訳 | `DEEPL_API_KEY` |
 | | `sendNotification` | Slack/Discord 通知 | `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` |
+| **拡張（AI アシスタント）** | `arXivSearch` | arXiv 論文検索 | — |
+| | `techNews` | テックニュース取得（RSS） | — |
+| | `githubRepo` | GitHub リポジトリ詳細分析 | `GITHUB_TOKEN`（任意） |
+| | `youtubeInfo` | YouTube 動画情報取得 | — |
+| | `noteCreate` | ノート作成 | — |
+| | `noteRead` | ノート読み取り・検索 | — |
+| | `noteList` | ノート一覧 | — |
+| | `noteDelete` | ノート削除 | — |
+| | `markdownToHtml` | Markdown → HTML 変換 | — |
+| | `diffText` | テキスト差分比較 | — |
+| | `colorConvert` | カラーコード変換（HEX/RGB/HSL） | — |
 
 > **リスクレベルについて**  
 > - 🟢 低（low）: 読み取り専用・副作用なし  
@@ -654,6 +666,263 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxxxxxxxxx/xxxxxxxxxxxxxxxx
 
 ---
 
+### 3.7 拡張スキル系（AI アシスタント向け）
+
+[karaage0703/ai-assistant-workspace](https://github.com/karaage0703/ai-assistant-workspace) のスキルを参考に追加した拡張スキル群です。  
+すべて API キー不要（`githubRepo` のみ `GITHUB_TOKEN` 任意）で動作します。
+
+---
+
+#### `arXivSearch` — arXiv 論文検索 ★新規
+
+**できること:** arXiv Atom API を使って学術論文を検索します（無料・キー不要）。AI/ML・物理・数学・コンピュータサイエンスの最新論文を探せます。
+
+**パラメータ:**
+| 名前 | 型 | 説明 | デフォルト |
+|------|----|------|-----------|
+| `query` | string | 検索クエリ（arXiv 検索構文対応: `ti:`, `au:`, `cat:cs.AI` 等） | 必須 |
+| `maxResults` | number | 取得件数（1–10） | `5` |
+| `sortBy` | string | `relevance` / `lastUpdatedDate` / `submittedDate` | `relevance` |
+
+**チャットでの呼び出し例:**
+```
+LLM エージェントの最新論文を探して
+「transformer attention mechanism」で arXiv を検索して
+cat:cs.AI で最新 5 件の論文を教えて
+著者 Vaswani の論文を調べて: au:Vaswani
+この 1 週間の LLM トレンド論文を submittedDate 順で 10 件
+```
+
+**返答例:**
+```
+Found 5 paper(s) for "LLM agent":
+
+1. **Autonomous Agents with LLMs**
+   Authors: Smith, John; Doe, Jane
+   Published: 2025-04-28
+   arXiv ID: 2504.12345  →  https://arxiv.org/abs/2504.12345
+   Categories: cs.AI, cs.LG
+   Abstract: We propose a novel framework for autonomous LLM agents...
+```
+
+---
+
+#### `techNews` — テックニュース取得 ★新規
+
+**できること:** 公開 RSS フィードから最新のテック/AI ニュースを取得します（キー不要）。
+
+**パラメータ:**
+| 名前 | 型 | 説明 | デフォルト |
+|------|----|------|-----------|
+| `topic` | string | `ai`（AI/ML ニュース）/ `tech`（一般テック）/ `dev`（開発者・Hacker News） | `ai` |
+| `maxResults` | number | 取得件数（1–10） | `5` |
+
+**RSS ソース:**
+
+| トピック | ソース |
+|---------|--------|
+| `ai` | VentureBeat AI, AI News |
+| `tech` | Ars Technica, Wired |
+| `dev` | Hacker News, DEV Community |
+
+**チャットでの呼び出し例:**
+```
+今日のAIニュースを教えて
+テックニュースを5件見せて
+開発者向けニュース（Hacker News）を確認して
+Wired の最新記事を教えて（topic: tech）
+```
+
+---
+
+#### `githubRepo` — GitHub リポジトリ詳細分析 ★新規
+
+**できること:** GitHub リポジトリのメタデータ（スター数・フォーク数・トピック・ライセンス等）、最近のコミット、主要コントリビュータ、オープン Issue を一括取得します。
+
+**パラメータ:**
+| 名前 | 型 | 説明 |
+|------|----|------|
+| `repo` | string | `owner/repo` 形式または GitHub URL（必須） |
+
+**チャットでの呼び出し例:**
+```
+microsoft/vscode を分析して
+https://github.com/vercel/next.js を調べて
+このリポジトリ分析して: facebook/react
+openai/openai-python の最近のコミットを見て
+```
+
+**返答例:**
+```
+## microsoft/vscode
+**Code editing. Redefined.**
+
+🔗 https://github.com/microsoft/vscode
+⭐ Stars: 165,000  |  🍴 Forks: 29,000  |  👁 Watchers: 3,200
+💻 Primary Language: TypeScript
+📄 License: MIT License
+🏷️ Topics: editor, typescript, electron, vscode
+
+### Recent Commits
+- `a1b2c3d` fix: improve keyboard shortcut handling  (John, 2025-04-30)
+...
+```
+
+---
+
+#### `youtubeInfo` — YouTube 動画情報取得 ★新規
+
+**できること:** YouTube oEmbed API を使って動画のタイトル・チャンネル名・サムネイル URL を取得します（API キー不要）。
+
+**パラメータ:**
+| 名前 | 型 | 説明 |
+|------|----|------|
+| `url` | string | YouTube URL または動画 ID（必須） |
+
+**チャットでの呼び出し例:**
+```
+https://www.youtube.com/watch?v=dQw4w9WgXcQ の動画を教えて
+この動画のタイトルは？: youtu.be/dQw4w9WgXcQ
+動画 ID dQw4w9WgXcQ の情報を取得して
+```
+
+**返答例:**
+```
+🎬 **Never Gonna Give You Up**
+📺 Channel: Rick Astley  (https://www.youtube.com/@RickAstley)
+🔗 URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+🖼️ Thumbnail: https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg
+```
+
+---
+
+#### `noteCreate` / `noteRead` / `noteList` / `noteDelete` — ノート管理 ★新規
+
+**できること:** タイムスタンプ付きの構造化ノートを保存・検索・一覧・削除します。  
+データは `SKILL_NOTES_FILE`（デフォルト: `./notes.json`）に保存されます。  
+`memorySet`/`memoryGet` よりリッチな構造（タイトル・タグ・本文・日時）を持ちます。
+
+**`noteCreate` パラメータ:**
+| 名前 | 型 | 説明 |
+|------|----|------|
+| `title` | string | ノートのタイトル（必須） |
+| `content` | string | ノートの本文（必須） |
+| `tags` | string | コンマ区切りのタグ（任意） |
+
+**`noteRead` パラメータ:**
+| 名前 | 型 | 説明 |
+|------|----|------|
+| `id` | string | ノート ID（`noteList` 出力から取得） |
+| `keyword` | string | タイトル・本文をキーワード検索 |
+
+**`noteList` パラメータ:**
+| 名前 | 型 | 説明 | デフォルト |
+|------|----|------|-----------|
+| `tag` | string | タグでフィルタ | — |
+| `limit` | number | 表示件数（最新順） | `20` |
+
+**チャットでの呼び出し例:**
+```
+「今日の日記」というノートを作って: 今日は〇〇について勉強した。
+会議メモを保存して（タグ: work, meeting）
+「量子コンピュータ」のノートを作って（調査結果を本文に）
+ノートを一覧表示して
+workタグのノートを全部見せて
+「LLM」というキーワードでノートを検索して
+ノート abc123 の内容を読んで
+```
+
+**`SKILL_NOTES_FILE` のカスタマイズ:**
+```env
+SKILL_NOTES_FILE=./workspace/my-notes.json
+```
+
+---
+
+#### `markdownToHtml` — Markdown → HTML 変換 ★新規
+
+**できること:** Markdown テキストをスタイル付きの完全な HTML ドキュメントに変換します（外部ライブラリ不要）。
+
+**対応構文:**
+- 見出し（`#` `##` `###` 等）
+- 太字（`**bold**`）・イタリック（`*italic*`）・取り消し線（`~~text~~`）
+- インラインコード（`` `code` ``）・コードブロック（` ``` ` 言語名付き対応）
+- 順序なし / 順序付きリスト
+- リンク（`[text](url)`）・画像（`![alt](url)`）
+- 引用（`> blockquote`）・水平線（`---`）
+
+**チャットでの呼び出し例:**
+```
+このMarkdownをHTMLに変換して:
+# タイトル
+これは**太字**のテキストです。
+- リスト項目 1
+- リスト項目 2
+
+README.md の内容をHTMLに変換してブラウザ用にして
+```
+
+---
+
+#### `diffText` — テキスト差分比較 ★新規
+
+**できること:** 2 つのテキストを行単位で比較し、追加・削除・変更箇所を unified diff 形式で表示します（外部ライブラリ不要）。
+
+**パラメータ:**
+| 名前 | 型 | 説明 | デフォルト |
+|------|----|------|-----------|
+| `oldText` | string | 元のテキスト（必須） |
+| `newText` | string | 新しいテキスト（必須） |
+| `contextLines` | number | 変更箇所前後に表示する行数（0–10） | `3` |
+
+**チャットでの呼び出し例:**
+```
+この2つのコードの差分を見せて（oldText と newText を貼り付けて）
+バージョン1とバージョン2の違いを比較して
+この設定ファイルの変更点を差分で教えて（コンテキスト行数: 1）
+```
+
+**返答例:**
+```
+📊 Summary: +2 line(s) added, -1 line(s) removed
+
+```diff
+  def greet():
+-     print("Hello")
++     print("Hello, World!")
++     return True
+```
+```
+
+---
+
+#### `colorConvert` — カラーコード変換 ★新規
+
+**できること:** HEX・RGB・HSL のカラーコードを相互変換します（外部ライブラリ不要）。
+
+**入力フォーマット（すべて自動判定）:**
+- HEX: `#ff6347` または `#f63`（3桁短縮形）
+- RGB: `255, 99, 71` または `rgb(255, 99, 71)`
+- HSL: `9, 100%, 64%` または `hsl(9, 100%, 64%)`
+
+**チャットでの呼び出し例:**
+```
+#ff6347 を RGB と HSL に変換して
+255, 99, 71 を HEX に変換して
+hsl(9, 100%, 64%) の RGB 値は？
+この色コードを変換して: #3498db
+```
+
+**返答例:**
+```
+🎨 Color: #ff6347
+  HEX:  #ff6347
+  RGB:  rgb(255, 99, 71)
+  HSL:  hsl(9, 100%, 64%)
+```
+
+---
+
 ## 4. 特定のスキルだけ有効にする
 
 `ENABLED_SKILLS` 環境変数にカンマ区切りでスキル名を指定すると、そのスキルのみが有効になります。  
@@ -667,6 +936,9 @@ ENABLED_SKILLS=currentDateTime,calculator,randomNumber,uuidGenerate,getWeather,m
 
 # 翻訳・検索に特化した例
 ENABLED_SKILLS=webSearch,translateText,githubSearch,fetchUrl,getWeather
+
+# AI アシスタント系スキルを有効にする例
+ENABLED_SKILLS=arXivSearch,techNews,githubRepo,youtubeInfo,noteCreate,noteRead,noteList,noteDelete
 
 # 新しい解析スキルを追加した例
 ENABLED_SKILLS=currentDateTime,calculator,hashText,regexMatch,textStats,generatePassword,csvParse
@@ -801,15 +1073,19 @@ curl -X POST http://localhost:3000/api/copilot \
 | `translateText` | `DEEPL_API_KEY` が正しいか（無料プランは末尾 `:fx`） |
 | `sendNotification` | `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL` が有効か |
 | `githubSearch` | `GITHUB_TOKEN` は任意。設定しなくてもレート制限内なら動作 |
+| `githubRepo` | `GITHUB_TOKEN` は任意。Private リポジトリにはトークンが必要 |
+| `arXivSearch` | API キー不要。arXiv サーバーが一時的にダウンしている場合あり |
+| `techNews` | API キー不要。RSS フィードが一時的に取得できない場合あり |
 
 ### ファイル操作スキルのエラー
 
 - `SKILL_FILE_SANDBOX_DIR` で指定したディレクトリが存在するか確認してください（自動作成されますが、権限がない場合は手動作成）。
 - パスに `../` を含めないでください（セキュリティのため自動拒否）。
 
-### メモリスキルのエラー
+### メモリ・ノートスキルのエラー
 
 - `SKILL_MEMORY_FILE` で指定したファイルのディレクトリに書き込み権限があるか確認してください。
+- `SKILL_NOTES_FILE` で指定したファイルのディレクトリに書き込み権限があるか確認してください。
 
 ### ダッシュボードでスキル一覧を確認
 
