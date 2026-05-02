@@ -246,6 +246,8 @@ npm run schedule run
 
 スキルは LLM がリクエスト中にローカル関数を呼び出せるようにする仕組みです（OpenAI function calling / Anthropic tool use / Gemini function calling に対応）。
 
+> 📖 **詳しい使い方は [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md) を参照してください。**
+
 ### 組み込みスキル一覧
 
 #### ユーティリティ系（外部依存なし）
@@ -259,6 +261,11 @@ npm run schedule run
 | `base64Encode` | 文字列を Base64 にエンコード | 低 |
 | `base64Decode` | Base64 文字列をデコード | 低 |
 | `jsonFormat` | JSON 文字列を整形して返す | 低 |
+| `hashText` | テキストの暗号ハッシュを返す（sha256 / sha512 / sha1 / md5） | 低 |
+| `regexMatch` | 正規表現でテキストを検索し全マッチを返す | 低 |
+| `textStats` | テキストの文字数・単語数・行数・文数・平均単語長を集計 | 低 |
+| `generatePassword` | 暗号学的に安全なランダムパスワードを生成 | 低 |
+| `csvParse` | CSV 文字列を JSON 配列に変換（ヘッダー行対応） | 低 |
 
 #### ファイル操作系
 
@@ -311,7 +318,7 @@ npm run schedule run
 
 ```env
 # 例: 特定スキルのみ有効にする
-ENABLED_SKILLS=currentDateTime,calculator,getWeather,memorySet,memoryGet,memoryList
+ENABLED_SKILLS=currentDateTime,calculator,getWeather,memorySet,memoryGet,memoryList,hashText,regexMatch
 ```
 
 ### スキルのカスタム定義

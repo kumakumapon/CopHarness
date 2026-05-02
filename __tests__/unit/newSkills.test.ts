@@ -23,6 +23,7 @@ describe('SkillDefinition metadata', () => {
     const expected = [
       'currentDateTime',
       'calculator', 'randomNumber', 'uuidGenerate', 'base64Encode', 'base64Decode', 'jsonFormat',
+      'hashText', 'regexMatch', 'textStats', 'generatePassword', 'csvParse',
       'readFile', 'writeFile', 'listDirectory', 'searchInFiles',
       'fetchUrl', 'webSearch', 'getWeather',
       'runCommand', 'getSystemInfo', 'getEnvVariable',
@@ -465,5 +466,173 @@ describe('memory skills', () => {
     await memorySet.handler({ key: 'x', value: 'new' });
     const result = await memoryGet.handler({ key: 'x' });
     expect(result.content).toBe('new');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New utility skills
+// ---------------------------------------------------------------------------
+
+import { hashText } from '../../lib/skills/hashText';
+import { regexMatch } from '../../lib/skills/regexMatch';
+import { textStats } from '../../lib/skills/textStats';
+import { generatePassword } from '../../lib/skills/generatePassword';
+import { csvParse } from '../../lib/skills/csvParse';
+
+describe('hashText skill', () => {
+  it('computes sha256 hash of empty string', async () => {
+    const result = await hashText.handler({ text: '' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  });
+
+  it('computes sha256 hash of known input', async () => {
+    const result = await hashText.handler({ text: 'hello', algorithm: 'sha256' });
+    expect(result.content).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
+  });
+
+  it('computes md5 hash', async () => {
+    const result = await hashText.handler({ text: 'hello', algorithm: 'md5' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toBe('5d41402abc4b2a76b9719d911017c592');
+  });
+
+  it('defaults to sha256', async () => {
+    const withDefault = await hashText.handler({ text: 'test' });
+    const withExplicit = await hashText.handler({ text: 'test', algorithm: 'sha256' });
+    expect(withDefault.content).toBe(withExplicit.content);
+  });
+
+  it('returns error for unsupported algorithm', async () => {
+    const result = await hashText.handler({ text: 'x', algorithm: 'crc32' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/unsupported algorithm/i);
+  });
+});
+
+describe('regexMatch skill', () => {
+  it('finds all matches', async () => {
+    const result = await regexMatch.handler({ text: 'cat bat hat', pattern: '[a-z]at' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('3 match(es)');
+    expect(result.content).toContain('"cat"');
+    expect(result.content).toContain('"bat"');
+    expect(result.content).toContain('"hat"');
+  });
+
+  it('returns "No matches found." when nothing matches', async () => {
+    const result = await regexMatch.handler({ text: 'hello', pattern: '\\d+' });
+    expect(result.content).toBe('No matches found.');
+  });
+
+  it('supports case-insensitive flag', async () => {
+    const result = await regexMatch.handler({ text: 'Hello HELLO hello', pattern: 'hello', flags: 'gi' });
+    expect(result.content).toContain('3 match(es)');
+  });
+
+  it('returns error for invalid regex', async () => {
+    const result = await regexMatch.handler({ text: 'abc', pattern: '[invalid' });
+    expect(result.isError).toBe(true);
+  });
+
+  it('returns error when pattern is empty', async () => {
+    const result = await regexMatch.handler({ text: 'abc', pattern: '' });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('textStats skill', () => {
+  it('returns correct stats for a simple sentence', async () => {
+    const result = await textStats.handler({ text: 'Hello world! Foo bar.' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Words: 4');
+    expect(result.content).toContain('Sentences: 2');
+  });
+
+  it('handles empty string', async () => {
+    const result = await textStats.handler({ text: '' });
+    expect(result.content).toContain('Characters (with spaces): 0');
+    expect(result.content).toContain('Words: 0');
+    expect(result.content).toContain('Lines: 0');
+  });
+
+  it('counts lines correctly', async () => {
+    const result = await textStats.handler({ text: 'line1\nline2\nline3' });
+    expect(result.content).toContain('Lines: 3');
+  });
+});
+
+describe('generatePassword skill', () => {
+  it('generates a password of default length 16', async () => {
+    const result = await generatePassword.handler({});
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toHaveLength(16);
+  });
+
+  it('respects custom length', async () => {
+    const result = await generatePassword.handler({ length: 32 });
+    expect(result.content).toHaveLength(32);
+  });
+
+  it('clamps length to minimum 8', async () => {
+    const result = await generatePassword.handler({ length: 2 });
+    expect(result.content).toHaveLength(8);
+  });
+
+  it('clamps length to maximum 128', async () => {
+    const result = await generatePassword.handler({ length: 999 });
+    expect(result.content).toHaveLength(128);
+  });
+
+  it('generates only lowercase letters when all other classes are disabled', async () => {
+    const result = await generatePassword.handler({
+      length: 20,
+      includeUppercase: false,
+      includeDigits: false,
+      includeSymbols: false,
+    });
+    expect(result.content).toMatch(/^[a-z]+$/);
+  });
+
+  it('two calls produce different passwords', async () => {
+    const a = await generatePassword.handler({ length: 24 });
+    const b = await generatePassword.handler({ length: 24 });
+    // Extremely unlikely to collide
+    expect(a.content).not.toBe(b.content);
+  });
+});
+
+describe('csvParse skill', () => {
+  it('parses simple CSV with header', async () => {
+    const result = await csvParse.handler({ csv: 'name,age\nAlice,30\nBob,25' });
+    expect(result.isError).toBeFalsy();
+    const data = JSON.parse(result.content) as Array<Record<string, string>>;
+    expect(data).toHaveLength(2);
+    expect(data[0]).toEqual({ name: 'Alice', age: '30' });
+    expect(data[1]).toEqual({ name: 'Bob', age: '25' });
+  });
+
+  it('parses CSV without header into array of arrays', async () => {
+    const result = await csvParse.handler({ csv: 'a,b\nc,d', hasHeader: false });
+    const data = JSON.parse(result.content) as string[][];
+    expect(data[0]).toEqual(['a', 'b']);
+    expect(data[1]).toEqual(['c', 'd']);
+  });
+
+  it('handles quoted fields', async () => {
+    const result = await csvParse.handler({ csv: 'name,bio\nAlice,"Hello, world"' });
+    const data = JSON.parse(result.content) as Array<Record<string, string>>;
+    expect(data[0].bio).toBe('Hello, world');
+  });
+
+  it('handles custom delimiter', async () => {
+    const result = await csvParse.handler({ csv: 'x;y\n1;2', delimiter: ';' });
+    const data = JSON.parse(result.content) as Array<Record<string, string>>;
+    expect(data[0]).toEqual({ x: '1', y: '2' });
+  });
+
+  it('returns empty array for empty input', async () => {
+    const result = await csvParse.handler({ csv: '' });
+    expect(result.content).toBe('[]');
   });
 });
