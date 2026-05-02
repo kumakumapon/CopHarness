@@ -11,6 +11,8 @@ export interface ScheduledPrompt {
   runNow?: boolean;
   /** When true, daemon will abort any in-flight execution of this schedule. */
   stopRequested?: boolean;
+  /** Discord channel ID to post the result to after execution. */
+  discordChannelId?: string;
 }
 
 export interface ScheduleStore {
