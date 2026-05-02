@@ -4,6 +4,16 @@ import { createAdapter, resolveProvider } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 
+/**
+ * Optional callback invoked after a schedule successfully completes.
+ * Used by the Discord bot to post results back to a channel.
+ */
+export type ScheduleResultCallback = (
+  channelId: string,
+  scheduleName: string,
+  result: string,
+) => Promise<void>;
+
 /** Execute a single prompt against the configured LLM and return the response text. */
 export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Promise<string> {
   const provider = resolveProvider();
@@ -43,6 +53,9 @@ const activeRuns = new Map<string, AbortController>();
 
 /** Last minute boundary at which cron expressions were evaluated. */
 let lastCronMinute = -1;
+
+/** Callback to notify external consumers (e.g. Discord) of a completed schedule result. */
+let resultCallback: ScheduleResultCallback | undefined;
 
 /**
  * Poll tick: called every POLL_INTERVAL_MS.
@@ -125,6 +138,12 @@ async function tick(): Promise<void> {
         await updateLastRun(schedule.id, now);
         finishLog(await logId, 'success', result);
         console.log(`[${ts}] Response from "${schedule.name}":\n${result}\n`);
+        // Notify Discord channel if configured
+        if (resultCallback && schedule.discordChannelId) {
+          resultCallback(schedule.discordChannelId, schedule.name, result).catch((err: unknown) => {
+            console.error(`[${ts}] Failed to send Discord notification for "${schedule.name}":`, err);
+          });
+        }
       })
       .catch(async (err: unknown) => {
         const name = err instanceof Error ? err.name : '';
@@ -147,7 +166,8 @@ async function tick(): Promise<void> {
 const POLL_INTERVAL_MS = 5_000;
 
 /** Start the scheduler daemon. Returns a stop function that cleanly shuts down. */
-export function startScheduler(): void {
+export function startScheduler(onResult?: ScheduleResultCallback): void {
+  if (onResult) resultCallback = onResult;
   console.log('Scheduler daemon started (polling every 5 s). Press Ctrl+C to stop.');
 
   const interval = setInterval(() => {

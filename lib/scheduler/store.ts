@@ -23,7 +23,7 @@ export function listSchedules(): ScheduledPrompt[] {
 }
 
 export function addSchedule(
-  input: Pick<ScheduledPrompt, 'name' | 'cron' | 'prompt'>,
+  input: Pick<ScheduledPrompt, 'name' | 'cron' | 'prompt' | 'discordChannelId'>,
 ): ScheduledPrompt {
   const store = loadStore();
   const entry: ScheduledPrompt = {
