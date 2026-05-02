@@ -83,6 +83,7 @@ interface Skill {
   category: string;
   riskLevel: 'low' | 'medium' | 'high';
   requiresEnv: string[];
+  enabled: boolean;
 }
 
 interface SkillsData {
@@ -507,7 +508,7 @@ function SkillsPanel({ data }: { data: SkillsData | undefined }) {
         <Wrench className="w-4 h-4" /> スキル一覧
         {data && (
           <span className="ml-auto text-xs font-normal normal-case" style={{ color: 'var(--text-secondary)' }}>
-            {data.skills.length} 件
+            {data.skills.filter((s) => s.enabled).length} / {data.skills.length} 件有効
           </span>
         )}
       </h2>
@@ -525,12 +526,21 @@ function SkillsPanel({ data }: { data: SkillsData | undefined }) {
             const categoryLabel = CATEGORY_LABELS[skill.category] ?? skill.category;
             return (
               <div key={skill.name} className="rounded-xl p-4 flex flex-col gap-2"
-                style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
+                style={{
+                  background: 'var(--secondary-bg)',
+                  border: `1px solid ${skill.enabled ? '#bbf7d0' : 'var(--border-color)'}`,
+                  opacity: skill.enabled ? 1 : 0.6,
+                }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-mono font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{skill.name}</div>
-                  <span className={`shrink-0 inline-block px-1.5 py-0.5 rounded text-xs font-medium ${risk.bg} ${risk.text}`}>
-                    リスク: {risk.label}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${skill.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {skill.enabled ? '有効' : '無効'}
+                    </span>
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${risk.bg} ${risk.text}`}>
+                      リスク: {risk.label}
+                    </span>
+                  </div>
                 </div>
                 <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{skill.description}</div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-auto">
