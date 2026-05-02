@@ -223,21 +223,31 @@ function parseScheduleAdd(args: string): { cron: string; prompt: string; name: s
   const tokens: string[] = [];
   let i = 0;
   while (i < args.length) {
-    if (args[i] === ' ') { i++; continue; }
+    if (args[i] === ' ') {
+      i++;
+      continue;
+    }
     if (args[i] === '"' || args[i] === "'") {
       const q = args[i];
       i++;
       let tok = '';
       while (i < args.length && args[i] !== q) {
-        if (args[i] === '\\' && i + 1 < args.length) { i++; tok += args[i]; }
-        else tok += args[i];
+        if (args[i] === '\\' && i + 1 < args.length) {
+          i++;
+          tok += args[i];
+        } else {
+          tok += args[i];
+        }
         i++;
       }
       i++; // closing quote
       tokens.push(tok);
     } else {
       let tok = '';
-      while (i < args.length && args[i] !== ' ') { tok += args[i]; i++; }
+      while (i < args.length && args[i] !== ' ') {
+        tok += args[i];
+        i++;
+      }
       tokens.push(tok);
     }
   }
@@ -333,7 +343,8 @@ async function handleScheduleCommand(message: Message, args: string): Promise<vo
       const id = resolveScheduleId(prefix);
       if (!id) { await message.reply(`ID が見つかりません: ${prefix}`); return; }
       setRunNow(id, true);
-      const s = listSchedules().find((x) => x.id === id)!;
+      const s = listSchedules().find((x) => x.id === id);
+      if (!s) { await message.reply(`スケジュールが見つかりません: ${prefix}`); return; }
       await message.reply(`⚡ スケジュール「${s.name}」(\`${id.slice(0, 8)}\`) を即時実行キューに登録しました。5 秒以内に実行されます。`);
       return;
     }
@@ -344,7 +355,8 @@ async function handleScheduleCommand(message: Message, args: string): Promise<vo
       const id = resolveScheduleId(prefix);
       if (!id) { await message.reply(`ID が見つかりません: ${prefix}`); return; }
       setStopRequested(id, true);
-      const s = listSchedules().find((x) => x.id === id)!;
+      const s = listSchedules().find((x) => x.id === id);
+      if (!s) { await message.reply(`スケジュールが見つかりません: ${prefix}`); return; }
       await message.reply(`🛑 スケジュール「${s.name}」(\`${id.slice(0, 8)}\`) の中止を要求しました。`);
       return;
     }
