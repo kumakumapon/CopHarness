@@ -165,9 +165,10 @@ async function cmdAdd(args: string[]): Promise<void> {
   }
 
   const entry = addSchedule({ name, cron, prompt });
+  const interpretedNote = cron !== cronInput ? ` (interpreted from "${cronInput}")` : '';
   console.log(`Schedule added (ID: ${entry.id})`);
   console.log(`  Name:  ${entry.name}`);
-  console.log(`  Cron:  ${entry.cron}${cron !== cronInput ? ` (interpreted from "${cronInput}")` : ''}`);
+  console.log(`  Cron:  ${entry.cron}${interpretedNote}`);
   console.log(`  Prompt: ${entry.prompt}`);
 
   const next = nextRunDate(normalizeCron(cron), new Date());

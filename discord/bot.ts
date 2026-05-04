@@ -313,7 +313,10 @@ async function handleScheduleCommand(message: Message, args: string): Promise<vo
       });
       const next = nextRunDate(normalizeCron(resolvedCron), new Date());
       const nextStr = next ? next.toLocaleString('ja-JP') : '不明';
-      const cronNote = resolvedCron !== parsed.cron ? `\n（"${parsed.cron}" → \`${resolvedCron}\` に解釈しました）` : '';
+      const cronNote =
+        resolvedCron !== parsed.cron
+          ? `\n（"${parsed.cron}" → \`${resolvedCron}\` に解釈しました）`
+          : '';
       await message.reply(
         `✅ スケジュールを追加しました\n` +
         `ID: \`${entry.id.slice(0, 8)}\`\n` +

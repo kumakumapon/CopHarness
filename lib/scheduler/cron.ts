@@ -54,8 +54,12 @@ export function matchesCron(cron: string, date: Date): boolean {
  * Return true if the input is already a valid cron expression (5-field or HH:MM shorthand).
  */
 export function isValidCronInput(input: string): boolean {
-  const normalized = normalizeCron(input);
-  return normalized.trim().split(/\s+/).length === 5;
+  try {
+    const normalized = normalizeCron(input);
+    return normalized.trim().split(/\s+/).length === 5;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -120,24 +120,26 @@ export async function POST(req: NextRequest) {
     channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
   });
 
-  // Handle follow events: send a greeting without requiring LLM
+  // Process events: greet on follow (no LLM needed), handle message events with LLM
+  let hasMessageEvents = false;
   for (const event of body.events) {
-    if (event.type !== 'follow') continue;
-    const followEvent = event as LineFollowEvent;
-    const replyToken = followEvent.replyToken;
-    if (!replyToken) continue;
-    const greeting =
-      process.env.LINE_GREETING_MESSAGE ||
-      'こんにちは！CopHarness AIアシスタントです 🤖\n' +
-      'メッセージを送ると、AIがお答えします。お気軽にお話しください！';
-    await client.replyMessage({
-      replyToken,
-      messages: [{ type: 'text', text: greeting }],
-    });
+    if (event.type === 'follow') {
+      const followEvent = event as LineFollowEvent;
+      const replyToken = followEvent.replyToken;
+      if (!replyToken) continue;
+      const greeting =
+        process.env.LINE_GREETING_MESSAGE ||
+        'こんにちは！CopHarness AIアシスタントです 🤖\n' +
+        'メッセージを送ると、AIがお答えします。お気軽にお話しください！';
+      await client.replyMessage({
+        replyToken,
+        messages: [{ type: 'text', text: greeting }],
+      });
+    } else if (event.type === 'message') {
+      hasMessageEvents = true;
+    }
   }
 
-  // Check if there are any message events that need the LLM
-  const hasMessageEvents = body.events.some((e) => e.type === 'message');
   if (!hasMessageEvents) {
     return NextResponse.json({ ok: true });
   }
