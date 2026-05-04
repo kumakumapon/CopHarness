@@ -95,9 +95,8 @@ export const trendSearch: SkillDefinition = {
   category: 'web',
   riskLevel: 'low',
   handler: async (args) => {
-    const region = typeof args.region === 'string' && args.region.trim()
-      ? args.region.trim().toUpperCase().slice(0, 2)
-      : DEFAULT_REGION;
+    const rawRegion = typeof args.region === 'string' ? args.region.trim().toUpperCase() : '';
+    const region = /^[A-Z]{2}$/.test(rawRegion) ? rawRegion : DEFAULT_REGION;
     const maxResults = typeof args.maxResults === 'number'
       ? Math.min(25, Math.max(1, Math.floor(args.maxResults)))
       : 10;
