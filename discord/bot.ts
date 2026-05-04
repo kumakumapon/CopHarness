@@ -71,6 +71,7 @@ import {
 import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
 import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 import { loadHistory, saveHistory } from '../lib/history/store';
+import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';
@@ -140,14 +141,8 @@ async function persistChannelHistory(channelId: string, history: LLMMessage[]): 
 }
 
 function trimHistory(history: LLMMessage[]): void {
-  // Keep system message (if any) + last MAX_HISTORY user/assistant exchanges
-  const systemMessages = history.filter((m) => m.role === 'system');
-  const nonSystem = history.filter((m) => m.role !== 'system');
-  if (nonSystem.length > MAX_HISTORY * 2) {
-    const trimmed = nonSystem.slice(-MAX_HISTORY * 2);
-    history.length = 0;
-    history.push(...systemMessages, ...trimmed);
-  }
+  // Keep system message (if any) + messages within token budget + count ceiling
+  trimHistoryToTokenBudget(history, undefined, undefined, MAX_HISTORY * 2);
 }
 
 function splitLongMessage(text: string): string[] {

@@ -20,6 +20,7 @@ import { validateSignature, messagingApi } from '@line/bot-sdk';
 import { createAdapter, resolveProvider } from '../../../lib/adapterFactory';
 import { type LLMMessage } from '../../../lib/adapter';
 import { loadHistory, saveHistory } from '../../../lib/history/store';
+import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.LINE_MAX_HISTORY) || 20);
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
@@ -52,13 +53,7 @@ async function persistHistory(userId: string, history: LLMMessage[]): Promise<vo
 }
 
 function trimHistory(history: LLMMessage[]): void {
-  const systemMessages = history.filter((m) => m.role === 'system');
-  const nonSystem = history.filter((m) => m.role !== 'system');
-  if (nonSystem.length > MAX_HISTORY * 2) {
-    const trimmed = nonSystem.slice(-MAX_HISTORY * 2);
-    history.length = 0;
-    history.push(...systemMessages, ...trimmed);
-  }
+  trimHistoryToTokenBudget(history, undefined, undefined, MAX_HISTORY * 2);
 }
 
 function truncateMessage(text: string): string {
