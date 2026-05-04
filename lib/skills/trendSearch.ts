@@ -28,10 +28,14 @@ function extractNewsItems(block: string): string[] {
   for (const m of articleMatches) {
     const titleM = m[1].match(/<ht:news_item_title>([\s\S]*?)<\/ht:news_item_title>/i);
     if (titleM) {
-      const title = titleM[1]
-        .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-        .replace(/<[^>]+>/g, '')
-        .trim();
+      // Unwrap CDATA, then strip tags in multiple passes to handle nested/malformed tags
+      let text = titleM[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+      let prev = '';
+      while (prev !== text) {
+        prev = text;
+        text = text.replace(/<[^>]*>/g, '');
+      }
+      const title = text.trim();
       if (title) items.push(title);
     }
   }
