@@ -41,7 +41,7 @@ import {
   setStopRequested,
 } from '../lib/scheduler/store';
 import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
-import { startScheduler } from '../lib/scheduler/engine';
+import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ CopHarness Scheduler
 
 Commands:
   list                          List all scheduled prompts
-  add <cron> <prompt>           Add a new schedule
+  add <timing> <prompt>         Add a new schedule (cron, HH:MM, or natural language)
     --name <name>               Optional label (default: "Unnamed")
   remove <id>                   Remove a schedule by ID (prefix match)
   enable <id>                   Enable a schedule
@@ -65,14 +65,15 @@ Commands:
   stop <id>                     Abort the in-flight execution of a schedule
   run                           Start the scheduler daemon
 
-Cron format:
+Timing format (all of the following are accepted):
   "HH:MM"                       Daily at given time  e.g. "09:00"
   "min hour day month weekday"  Standard 5-field cron e.g. "0 9 * * *"
-  Supported: *, N, N-M, */N, N,M
+  Natural language              e.g. "毎日朝9時"  "毎週金曜18時"  "30分おき"
 
 Examples:
   npm run schedule add "09:00" "What should I focus on today?" --name "Morning"
-  npm run schedule add "0 18 * * 5" "Weekly summary?" --name "Friday recap"
+  npm run schedule add "毎週金曜18時" "今週の振り返りをして" --name "Friday recap"
+  npm run schedule add "毎日朝9時" "今日のタスクを提案して"
   npm run schedule add "*/30 * * * *" "Ping"
   npm run schedule list
   npm run schedule remove abc123
@@ -140,13 +141,13 @@ function cmdList(): void {
   console.log(`\nTotal: ${schedules.length}`);
 }
 
-function cmdAdd(args: string[]): void {
+async function cmdAdd(args: string[]): Promise<void> {
   if (args.length < 2) {
-    console.error('Usage: schedule add <cron> <prompt> [--name <name>]');
+    console.error('Usage: schedule add <timing> <prompt> [--name <name>]');
     process.exit(1);
   }
 
-  const [cron, prompt] = args;
+  const [cronInput, prompt] = args;
   let name = 'Unnamed';
 
   const nameIdx = args.indexOf('--name');
@@ -154,18 +155,19 @@ function cmdAdd(args: string[]): void {
     name = args[nameIdx + 1];
   }
 
-  // Validate cron
+  // Resolve cron: accepts HH:MM, 5-field cron, or natural language via LLM
+  let cron: string;
   try {
-    normalizeCron(cron);
-  } catch {
-    console.error(`Invalid cron expression: "${cron}"`);
+    cron = await resolveCronExpression(cronInput);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
 
   const entry = addSchedule({ name, cron, prompt });
   console.log(`Schedule added (ID: ${entry.id})`);
   console.log(`  Name:  ${entry.name}`);
-  console.log(`  Cron:  ${entry.cron}`);
+  console.log(`  Cron:  ${entry.cron}${cron !== cronInput ? ` (interpreted from "${cronInput}")` : ''}`);
   console.log(`  Prompt: ${entry.prompt}`);
 
   const next = nextRunDate(normalizeCron(cron), new Date());
@@ -240,7 +242,7 @@ function cmdStop(args: string[]): void {
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
-function main(): void {
+async function main(): Promise<void> {
   const [, , command, ...rest] = process.argv;
 
   switch (command) {
@@ -248,7 +250,7 @@ function main(): void {
       cmdList();
       break;
     case 'add':
-      cmdAdd(rest);
+      await cmdAdd(rest);
       break;
     case 'remove':
     case 'delete':
@@ -279,4 +281,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});

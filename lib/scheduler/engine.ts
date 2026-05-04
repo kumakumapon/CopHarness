@@ -1,5 +1,5 @@
 import { listSchedules, setRunNow, setStopRequested, updateLastRun } from './store';
-import { matchesCron, normalizeCron } from './cron';
+import { matchesCron, normalizeCron, isValidCronInput } from './cron';
 import { createAdapter, resolveProvider } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
@@ -50,6 +50,44 @@ export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Prom
 
 /** AbortControllers for currently in-flight schedule runs, keyed by schedule ID. */
 const activeRuns = new Map<string, AbortController>();
+
+/**
+ * Resolve a schedule timing string to a valid 5-field cron expression.
+ * If the input is already a valid cron or HH:MM shorthand, return it unchanged.
+ * Otherwise, call the LLM to interpret the natural language description.
+ *
+ * Examples:
+ *   "09:00"      → "0 9 * * *"  (HH:MM shorthand)
+ *   "0 9 * * *"  → "0 9 * * *"  (already valid)
+ *   "毎日朝9時"   → "0 9 * * *"  (via LLM)
+ *   "every friday at 18:00" → "0 18 * * 5"  (via LLM)
+ */
+export async function resolveCronExpression(input: string): Promise<string> {
+  if (isValidCronInput(input)) return input;
+
+  const prompt =
+    `You are a cron expression converter. Convert the following schedule description to a ` +
+    `standard 5-field cron expression (minute hour day month weekday). ` +
+    `Reply with ONLY the cron expression and nothing else.\n` +
+    `Examples:\n` +
+    `- "毎日朝9時" → 0 9 * * *\n` +
+    `- "毎週金曜18時" → 0 18 * * 5\n` +
+    `- "30分おき" → */30 * * * *\n` +
+    `- "every weekday at 8am" → 0 8 * * 1-5\n` +
+    `- "every 15 minutes" → */15 * * * *\n` +
+    `Schedule description: ${input}`;
+
+  const result = (await runPrompt(prompt)).trim();
+  // Strip any surrounding quotes or backticks the LLM might add
+  const cleaned = result.replace(/^["'`]|["'`]$/g, '').trim();
+
+  if (!isValidCronInput(cleaned)) {
+    throw new Error(
+      `"${input}" を有効なcron式に変換できませんでした (LLM応答: "${cleaned}")`,
+    );
+  }
+  return cleaned;
+}
 
 /** Last minute boundary at which cron expressions were evaluated. */
 let lastCronMinute = -1;
