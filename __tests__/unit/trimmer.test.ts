@@ -103,12 +103,29 @@ describe('trimHistoryToTokenBudget', () => {
     const history: LLMMessage[] = [
       { role: 'user', content: longContent },
     ];
-    // maxMessageTokens = 10 → maxChars = 10 * 4 = 40
+    // maxMessageTokens = 10 → binary search finds prefix with ≤10 tokens
     trimHistoryToTokenBudget(history, 4000, 10);
 
     expect(history).toHaveLength(1);
     expect(history[0].content.length).toBeLessThan(longContent.length);
     expect(history[0].content).toContain('…[省略]');
+    // Verify the truncated content itself is within the token limit
+    const truncatedText = history[0].content.replace('…[省略]', '');
+    const { estimateTokens: et } = require('../../lib/history/trimmer');
+    expect(et(truncatedText)).toBeLessThanOrEqual(10);
+  });
+
+  it('truncates non-ASCII messages accurately by token count', () => {
+    // Japanese text: each char ~1/1.5 ≈ 0.67 tokens
+    // 30 Japanese chars → ceil(30/1.5) = 20 tokens — should be truncated to 10
+    const japaneseContent = 'あ'.repeat(30);
+    const history: LLMMessage[] = [{ role: 'user', content: japaneseContent }];
+    trimHistoryToTokenBudget(history, 4000, 10);
+
+    expect(history[0].content).toContain('…[省略]');
+    const truncatedText = history[0].content.replace('…[省略]', '');
+    const { estimateTokens: et } = require('../../lib/history/trimmer');
+    expect(et(truncatedText)).toBeLessThanOrEqual(10);
   });
 
   it('respects maxMessages ceiling even when budget allows more', () => {

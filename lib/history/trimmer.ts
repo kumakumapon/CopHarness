@@ -97,11 +97,24 @@ export function trimHistoryToTokenBudget(
   const systemMessages = history.filter((m) => m.role === 'system');
   let nonSystem = history.filter((m) => m.role !== 'system');
 
-  // Step 1 – truncate individual messages that are too long
-  const maxChars = maxMsgTokens * ASCII_CHARS_PER_TOKEN; // conservative upper bound
+  // Step 1 – truncate individual messages that exceed maxMsgTokens.
+  // We binary-search for the longest prefix whose estimated token count is
+  // within the limit, which correctly handles mixed ASCII/non-ASCII content.
   nonSystem = nonSystem.map((m) => {
-    if (m.content.length <= maxChars) return m;
-    return { ...m, content: m.content.slice(0, maxChars) + TRUNCATION_SUFFIX };
+    if (estimateTokens(m.content) <= maxMsgTokens) return m;
+
+    // Find the longest prefix that fits within maxMsgTokens tokens.
+    let lo = 0;
+    let hi = m.content.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (estimateTokens(m.content.slice(0, mid)) <= maxMsgTokens) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return { ...m, content: m.content.slice(0, lo) + TRUNCATION_SUFFIX };
   });
 
   // Step 2 – keep messages from newest to oldest within the token budget
