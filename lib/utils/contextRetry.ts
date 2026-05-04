@@ -43,7 +43,7 @@ export function isContextLengthError(err: unknown): boolean {
 
 /**
  * Build a minimal fallback messages array that retains:
- *   1. All `system` messages (they are not counted towards context by most APIs)
+ *   1. All `system` messages (these are always required for correct model behaviour)
  *   2. The last `user` message only
  *
  * This is the xangi-inspired "nuke old history, keep latest prompt" strategy.
