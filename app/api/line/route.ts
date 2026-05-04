@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateSignature, messagingApi } from '@line/bot-sdk';
 import { createAdapter, resolveProvider } from '../../../lib/adapterFactory';
 import { type LLMMessage } from '../../../lib/adapter';
+import { loadHistory, saveHistory } from '../../../lib/history/store';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.LINE_MAX_HISTORY) || 20);
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
@@ -26,18 +27,28 @@ const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
 /** LINE text message character limit */
 const LINE_MESSAGE_MAX_LENGTH = 5000;
 
-/** Per-user conversation history (keyed by LINE userId) */
+/** In-memory write-through cache of conversation histories (keyed by LINE userId) */
 const userHistory = new Map<string, LLMMessage[]>();
 
 function getHistory(userId: string): LLMMessage[] {
   if (!userHistory.has(userId)) {
-    const history: LLMMessage[] = [];
-    if (SYSTEM_PROMPT) {
+    // Try to restore from disk; otherwise start a fresh history
+    const persisted = loadHistory(`line:${userId}`);
+    const history: LLMMessage[] = persisted.length > 0 ? persisted : [];
+    if (history.length === 0 && SYSTEM_PROMPT) {
       history.push({ role: 'system', content: SYSTEM_PROMPT });
     }
     userHistory.set(userId, history);
   }
   return userHistory.get(userId)!;
+}
+
+async function persistHistory(userId: string, history: LLMMessage[]): Promise<void> {
+  try {
+    await saveHistory(`line:${userId}`, history);
+  } catch (err) {
+    console.warn('[LINE Bot] Failed to persist conversation history:', err);
+  }
 }
 
 function trimHistory(history: LLMMessage[]): void {
@@ -195,6 +206,7 @@ export async function POST(req: NextRequest) {
 
       history.push({ role: 'assistant', content: replyText });
       trimHistory(history);
+      await persistHistory(userId, history);
 
       await client.replyMessage({
         replyToken,

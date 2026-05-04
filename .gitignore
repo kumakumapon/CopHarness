@@ -40,3 +40,6 @@ next-env.d.ts
 
 # scheduler data
 schedules.json
+
+# conversation history (persisted across restarts)
+conversation_history.json
