@@ -14,6 +14,7 @@ import {
   GEMINI_DEFAULT_TIMEOUT_MS,
   GEMINI_DEFAULT_RETRY_MAX,
 } from '../services/geminiClient';
+import { withContextFallback } from '../utils/contextRetry';
 
 /**
  * Maps internal conversation roles to Gemini roles.
@@ -43,6 +44,13 @@ export class GeminiAdapter implements LLMAdapter {
   }
 
   async complete(request: LLMRequest): Promise<LLMResponse> {
+    return withContextFallback(
+      (messages) => this._complete({ ...request, messages }),
+      request.messages,
+    );
+  }
+
+  private async _complete(request: LLMRequest): Promise<LLMResponse> {
     const model = request.model ?? this.model;
     const skills = request.skills ?? [];
 

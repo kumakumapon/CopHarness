@@ -20,15 +20,17 @@ import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { LLMMessage } from '../adapter';
+import { dataPath } from '../utils/dataDir';
 
 /** Maximum number of distinct sessions stored. */
 const MAX_SESSIONS = 1000;
 
 function historyFilePath(): string {
-  return path.resolve(
-    process.cwd(),
-    process.env.CONVERSATION_HISTORY_FILE ?? 'conversation_history.json',
-  );
+  // Explicit CONVERSATION_HISTORY_FILE always takes precedence (legacy compat).
+  const explicit = process.env.CONVERSATION_HISTORY_FILE;
+  if (explicit) return path.resolve(explicit);
+  // Otherwise place it under DATA_DIR (or cwd when DATA_DIR is unset).
+  return dataPath('conversation_history.json');
 }
 
 /** On-disk format: messages + last-updated timestamp for LRU eviction. */

@@ -2,20 +2,26 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ScheduledPrompt, ScheduleStore } from './types';
+import { dataPath } from '../utils/dataDir';
 
-const STORE_PATH = path.resolve(process.cwd(), 'schedules.json');
+function storePath(): string {
+  return process.env.SCHEDULES_FILE
+    ? path.resolve(process.env.SCHEDULES_FILE)
+    : dataPath('schedules.json');
+}
 
 export function loadStore(): ScheduleStore {
-  if (!fs.existsSync(STORE_PATH)) return { schedules: [] };
+  const p = storePath();
+  if (!fs.existsSync(p)) return { schedules: [] };
   try {
-    return JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8')) as ScheduleStore;
+    return JSON.parse(fs.readFileSync(p, 'utf-8')) as ScheduleStore;
   } catch {
     return { schedules: [] };
   }
 }
 
 function saveStore(store: ScheduleStore): void {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(storePath(), JSON.stringify(store, null, 2) + '\n', 'utf-8');
 }
 
 export function listSchedules(): ScheduledPrompt[] {

@@ -3,16 +3,22 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ExecutionLog, LogStatus, LogStore } from './types';
+import { dataPath } from '../utils/dataDir';
 
-const STORE_PATH = path.resolve(process.cwd(), 'logs.json');
+function storePath(): string {
+  return process.env.LOGS_FILE
+    ? path.resolve(process.env.LOGS_FILE)
+    : dataPath('logs.json');
+}
 
 /** Maximum number of log entries retained on disk. */
 const MAX_LOGS = 200;
 
 function loadStore(): LogStore {
-  if (!fs.existsSync(STORE_PATH)) return { logs: [] };
+  const p = storePath();
+  if (!fs.existsSync(p)) return { logs: [] };
   try {
-    return JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8')) as LogStore;
+    return JSON.parse(fs.readFileSync(p, 'utf-8')) as LogStore;
   } catch {
     return { logs: [] };
   }
@@ -23,7 +29,7 @@ async function saveStore(store: LogStore): Promise<void> {
   if (store.logs.length > MAX_LOGS) {
     store.logs = store.logs.slice(-MAX_LOGS);
   }
-  await fsp.writeFile(STORE_PATH, JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  await fsp.writeFile(storePath(), JSON.stringify(store, null, 2) + '\n', 'utf-8');
 }
 
 /** Start a new in-progress log entry and return its id. */

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { type LLMAdapter, type LLMRequest, type LLMResponse } from '../adapter';
 import { type SkillDefinition, MAX_SKILL_ITERATIONS } from '../skill';
 import { mergeAbortSignals } from '../utils/abort';
+import { withContextFallback } from '../utils/contextRetry';
 
 /** Convert a SkillDefinition to the OpenAI tool format. */
 function skillToOpenAITool(skill: SkillDefinition): OpenAI.Chat.ChatCompletionTool {
@@ -32,6 +33,13 @@ export class OpenAIAdapter implements LLMAdapter {
   }
 
   async complete(request: LLMRequest): Promise<LLMResponse> {
+    return withContextFallback(
+      (messages) => this._complete({ ...request, messages }),
+      request.messages,
+    );
+  }
+
+  private async _complete(request: LLMRequest): Promise<LLMResponse> {
     const model = request.model ?? this.model;
     const timeoutMs = request.timeoutMs ?? this.timeoutMs;
     const skills = request.skills ?? [];
