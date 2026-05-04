@@ -73,9 +73,15 @@ interface LineMessageEvent {
   message: LineTextMessage | { type: string };
 }
 
+interface LineFollowEvent {
+  type: 'follow';
+  replyToken: string;
+  source: LineSource;
+}
+
 interface LineWebhookBody {
   destination: string;
-  events: Array<LineMessageEvent | { type: string }>;
+  events: Array<LineMessageEvent | LineFollowEvent | { type: string }>;
 }
 
 export async function POST(req: NextRequest) {
@@ -109,6 +115,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // Create the LINE client early — needed for both greetings and message replies
+  const client = new messagingApi.MessagingApiClient({
+    channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+  });
+
+  // Process events: greet on follow (no LLM needed), handle message events with LLM
+  let hasMessageEvents = false;
+  for (const event of body.events) {
+    if (event.type === 'follow') {
+      const followEvent = event as LineFollowEvent;
+      const replyToken = followEvent.replyToken;
+      if (!replyToken) continue;
+      const greeting =
+        process.env.LINE_GREETING_MESSAGE ||
+        'こんにちは！CopHarness AIアシスタントです 🤖\n' +
+        'メッセージを送ると、AIがお答えします。お気軽にお話しください！';
+      await client.replyMessage({
+        replyToken,
+        messages: [{ type: 'text', text: greeting }],
+      });
+    } else if (event.type === 'message') {
+      hasMessageEvents = true;
+    }
+  }
+
+  if (!hasMessageEvents) {
+    return NextResponse.json({ ok: true });
+  }
+
   const provider = resolveProvider();
   const localProviders = ['lmstudio', 'lemonade'];
   const apiKey =
@@ -136,9 +171,6 @@ export async function POST(req: NextRequest) {
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
   const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
-  const client = new messagingApi.MessagingApiClient({
-    channelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
-  });
 
   for (const event of body.events) {
     if (event.type !== 'message') continue;

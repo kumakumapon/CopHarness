@@ -69,7 +69,7 @@ import {
   setStopRequested,
 } from '../lib/scheduler/store';
 import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
-import { startScheduler } from '../lib/scheduler/engine';
+import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';
@@ -163,7 +163,7 @@ function splitLongMessage(text: string): string[] {
 const SCHEDULE_HELP = `\`\`\`
 スケジュール管理コマンド:
   !schedule list                              スケジュール一覧を表示
-  !schedule add <cron|HH:MM> <プロンプト>       スケジュールを追加（このチャンネルへ結果を投稿）
+  !schedule add <時間指定> <プロンプト>          スケジュールを追加（このチャンネルへ結果を投稿）
     --name <名前>                             任意のラベル
   !schedule remove <id>                       スケジュールを削除（ID の先頭文字も可）
   !schedule enable <id>                       スケジュールを有効化
@@ -172,14 +172,16 @@ const SCHEDULE_HELP = `\`\`\`
   !schedule stop <id>                         実行中のスケジュールを中止
   !schedule help                              このヘルプを表示
 
-cron 形式:
+時間指定（自然言語・cron・HH:MM いずれも可）:
   "HH:MM"            例: "09:00"  → 毎日 09:00
   "分 時 日 月 曜日"  例: "0 9 * * *"
   "*/N ..."          例: "*/30 * * * *"  → 30分おき
+  自然言語           例: "毎日朝9時"  "毎週金曜18時"  "30分おき"
 
 例:
   !schedule add "09:00" "今日の作業内容を提案して" --name 朝のブリーフィング
-  !schedule add "0 18 * * 5" "今週の振り返りをして" --name 週次レビュー
+  !schedule add "毎週金曜18時" "今週の振り返りをして" --name 週次レビュー
+  !schedule add "毎日朝9時" "おはようございます。今日のタスクを提案して"
   !schedule list
   !schedule remove abc123
 \`\`\``;
@@ -253,11 +255,10 @@ function parseScheduleAdd(args: string): { cron: string; prompt: string; name: s
   }
 
   if (tokens.length < 2) {
-    return '使い方: `!schedule add <cron|HH:MM> <プロンプト> [--name <名前>]`';
+    return '使い方: `!schedule add <時間指定> <プロンプト> [--name <名前>]`';
   }
 
   const cron = tokens[0];
-  try { normalizeCron(cron); } catch { return `無効な cron 式: "${cron}"`; }
 
   // Prompt may be the second quoted token, or bare tokens until --name
   let prompt = tokens[1];
@@ -293,19 +294,34 @@ async function handleScheduleCommand(message: Message, args: string): Promise<vo
         await message.reply(`エラー: ${parsed}`);
         return;
       }
+
+      // Resolve cron: accepts HH:MM, 5-field cron, or natural language via LLM
+      let resolvedCron: string;
+      try {
+        resolvedCron = await resolveCronExpression(parsed.cron);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await message.reply(`エラー: ${errMsg}`);
+        return;
+      }
+
       const entry = addSchedule({
         name: parsed.name,
-        cron: parsed.cron,
+        cron: resolvedCron,
         prompt: parsed.prompt,
         discordChannelId: message.channelId,
       });
-      const next = nextRunDate(normalizeCron(parsed.cron), new Date());
+      const next = nextRunDate(normalizeCron(resolvedCron), new Date());
       const nextStr = next ? next.toLocaleString('ja-JP') : '不明';
+      const cronNote =
+        resolvedCron !== parsed.cron
+          ? `\n（"${parsed.cron}" → \`${resolvedCron}\` に解釈しました）`
+          : '';
       await message.reply(
         `✅ スケジュールを追加しました\n` +
         `ID: \`${entry.id.slice(0, 8)}\`\n` +
         `名前: ${entry.name}\n` +
-        `Cron: \`${entry.cron}\`\n` +
+        `Cron: \`${resolvedCron}\`${cronNote}\n` +
         `プロンプト: ${entry.prompt}\n` +
         `次回実行: ${nextStr}\n` +
         `結果はこのチャンネルに投稿されます。`,
@@ -512,6 +528,24 @@ async function main() {
         console.error(`[Discord Bot] Failed to post schedule result to channel ${targetId}:`, err);
       }
     });
+
+    // Send a startup greeting to the configured greeting or schedule channel
+    const greetingChannelId =
+      process.env.DISCORD_GREETING_CHANNEL || process.env.DISCORD_SCHEDULE_CHANNEL;
+    if (greetingChannelId) {
+      const greeting =
+        process.env.DISCORD_GREETING_MESSAGE ||
+        `こんにちは！CopHarness ボット（${c.user.tag}）が起動しました 🤖\n` +
+        `AI会話やスケジュール管理をお手伝いします。\`${DISCORD_PREFIX}schedule help\` でスケジュール機能を確認できます。`;
+      client.channels
+        .fetch(greetingChannelId)
+        .then((ch) => {
+          if (ch instanceof TextChannel) return ch.send(greeting);
+        })
+        .catch((err) => {
+          console.error('[Discord Bot] Failed to send startup greeting:', err);
+        });
+    }
   });
 
   client.on(Events.MessageCreate, async (message) => {

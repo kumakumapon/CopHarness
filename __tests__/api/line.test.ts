@@ -151,8 +151,23 @@ describe('POST /api/line', () => {
     expect(typeof callArgs.messages[0].text).toBe('string');
   });
 
-  it('ignores non-message events', async () => {
-    const body = { destination: 'U123', events: [{ type: 'follow', source: { type: 'user', userId: 'U1' } }] };
+  it('sends a greeting when a follow event is received', async () => {
+    const body = {
+      destination: 'U123',
+      events: [{ type: 'follow', replyToken: 'follow-reply-token', source: { type: 'user', userId: 'U1' } }],
+    };
+    const res = await POST(makeRequest(body));
+    expect(res.status).toBe(200);
+    expect(mockComplete).not.toHaveBeenCalled();
+    expect(mockReplyMessage).toHaveBeenCalledTimes(1);
+    const callArgs = mockReplyMessage.mock.calls[0][0];
+    expect(callArgs.replyToken).toBe('follow-reply-token');
+    expect(callArgs.messages[0].type).toBe('text');
+    expect(typeof callArgs.messages[0].text).toBe('string');
+  });
+
+  it('ignores non-message non-follow events (e.g. unfollow)', async () => {
+    const body = { destination: 'U123', events: [{ type: 'unfollow', source: { type: 'user', userId: 'U1' } }] };
     const res = await POST(makeRequest(body));
     expect(res.status).toBe(200);
     expect(mockComplete).not.toHaveBeenCalled();
