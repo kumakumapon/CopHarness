@@ -32,6 +32,7 @@ describe('SkillDefinition metadata', () => {
       'arXivSearch', 'techNews', 'githubRepo', 'youtubeInfo',
       'noteCreate', 'noteRead', 'noteList', 'noteDelete',
       'markdownToHtml', 'diffText', 'colorConvert',
+      'trendSearch', 'newsBrief',
     ];
     for (const name of expected) {
       expect(names).toContain(name);
@@ -837,5 +838,377 @@ describe('note skills (noteCreate / noteRead / noteList / noteDelete)', () => {
   it('returns error for noteDelete without id', async () => {
     const result = await noteDelete.handler({});
     expect(result.isError).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 8: Web news / trend skills
+// ---------------------------------------------------------------------------
+
+import { techNews, FEEDS, NEWS_TOPICS, fetchFeedItems } from '../../lib/skills/techNews';
+import { trendSearch } from '../../lib/skills/trendSearch';
+import { newsBrief } from '../../lib/skills/newsBrief';
+
+// Minimal RSS 2.0 XML helper
+function makeRss(items: Array<{ title: string; link: string; pubDate: string; description: string }>): string {
+  const itemXml = items
+    .map(
+      (it) =>
+        `<item><title>${it.title}</title><link>${it.link}</link>` +
+        `<pubDate>${it.pubDate}</pubDate><description>${it.description}</description></item>`,
+    )
+    .join('');
+  return `<?xml version="1.0"?><rss version="2.0"><channel>${itemXml}</channel></rss>`;
+}
+
+// Minimal Google Trends RSS helper
+function makeTrendsRss(trends: Array<{ keyword: string; traffic: string; newsTitle: string }>): string {
+  const items = trends
+    .map(
+      (t) =>
+        `<item><title>${t.keyword}</title>` +
+        `<ht:approx_traffic>${t.traffic}</ht:approx_traffic>` +
+        `<ht:news_item><ht:news_item_title>${t.newsTitle}</ht:news_item_title></ht:news_item>` +
+        `<link>https://trends.google.com/trends/explore?q=${encodeURIComponent(t.keyword)}</link></item>`,
+    )
+    .join('');
+  return `<?xml version="1.0"?><rss version="2.0" xmlns:ht="https://trends.google.com/trends/trendingsearches/daily"><channel>${items}</channel></rss>`;
+}
+
+// ---------------------------------------------------------------------------
+// FEEDS & NEWS_TOPICS exports
+// ---------------------------------------------------------------------------
+
+describe('FEEDS and NEWS_TOPICS exports', () => {
+  it('NEWS_TOPICS contains original three topics', () => {
+    expect(NEWS_TOPICS).toContain('ai');
+    expect(NEWS_TOPICS).toContain('tech');
+    expect(NEWS_TOPICS).toContain('dev');
+  });
+
+  it('NEWS_TOPICS contains the four new topics', () => {
+    expect(NEWS_TOPICS).toContain('world');
+    expect(NEWS_TOPICS).toContain('finance');
+    expect(NEWS_TOPICS).toContain('science');
+    expect(NEWS_TOPICS).toContain('japan');
+  });
+
+  it('every topic in NEWS_TOPICS has at least one feed in FEEDS', () => {
+    for (const topic of NEWS_TOPICS) {
+      expect(FEEDS[topic]).toBeDefined();
+      expect(FEEDS[topic].length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchFeedItems helper
+// ---------------------------------------------------------------------------
+
+describe('fetchFeedItems helper', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('sorts items newest-first by pubDate', async () => {
+    const older = makeRss([
+      { title: 'Old', link: 'https://a.com', pubDate: 'Mon, 01 Jan 2024 00:00:00 +0000', description: '' },
+    ]);
+    const newer = makeRss([
+      { title: 'New', link: 'https://b.com', pubDate: 'Tue, 01 Jan 2025 00:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response(older, { status: 200 }))
+      .mockResolvedValueOnce(new Response(newer, { status: 200 }));
+
+    const items = await fetchFeedItems([
+      { url: 'https://a.com/feed', name: 'Source A' },
+      { url: 'https://b.com/feed', name: 'Source B' },
+    ]);
+    expect(items[0].title).toBe('New');
+    expect(items[1].title).toBe('Old');
+  });
+
+  it('silently skips failed feeds', async () => {
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('network error'));
+    const items = await fetchFeedItems([{ url: 'https://fail.example', name: 'Fail' }]);
+    expect(items).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// techNews skill — metadata & handler
+// ---------------------------------------------------------------------------
+
+describe('techNews skill metadata', () => {
+  it('has correct name', () => {
+    expect(techNews.name).toBe('techNews');
+  });
+
+  it('has category "web" and riskLevel "low"', () => {
+    expect(techNews.category).toBe('web');
+    expect(techNews.riskLevel).toBe('low');
+  });
+
+  it('description mentions all seven topics', () => {
+    const desc = techNews.description;
+    for (const topic of ['ai', 'tech', 'dev', 'world', 'finance', 'science', 'japan']) {
+      expect(desc).toContain(`"${topic}"`);
+    }
+  });
+
+  it('parameter enum includes all NEWS_TOPICS', () => {
+    const topicProp = techNews.parameters.properties['topic'];
+    expect(topicProp).toBeDefined();
+    expect(topicProp!.enum).toEqual(expect.arrayContaining(NEWS_TOPICS));
+  });
+});
+
+describe('techNews skill handler', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('returns formatted news items', async () => {
+    const rss = makeRss([
+      { title: 'AI Breakthrough', link: 'https://example.com/1', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: 'Details here.' },
+      { title: 'Another Story', link: 'https://example.com/2', pubDate: 'Mon, 01 Jan 2025 09:00:00 +0000', description: 'More details.' },
+    ]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValue(new Response(rss, { status: 200 }));
+
+    const result = await techNews.handler({ topic: 'ai', maxResults: 2 });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('AI Breakthrough');
+    expect(result.content).toContain('AI');
+  });
+
+  it('defaults to topic "ai" for unknown topic', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response(makeRss([{ title: 'AI News', link: 'https://a.com', pubDate: '', description: '' }]), { status: 200 }),
+    );
+    const result = await techNews.handler({ topic: 'unknown' });
+    expect(result.isError).toBeFalsy();
+  });
+
+  it('returns no-items message when feeds are unavailable', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('timeout'));
+    const result = await techNews.handler({ topic: 'world' });
+    expect(result.content).toMatch(/No news items found/);
+    expect(result.isError).toBeFalsy();
+  });
+
+  it('handles new topic "japan"', async () => {
+    const rss = makeRss([
+      { title: 'Japan News', link: 'https://nhk.example', pubDate: 'Mon, 01 Jan 2025 08:00:00 +0000', description: 'News from Japan.' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await techNews.handler({ topic: 'japan', maxResults: 1 });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('JAPAN');
+    expect(result.content).toContain('Japan News');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// trendSearch skill
+// ---------------------------------------------------------------------------
+
+describe('trendSearch skill metadata', () => {
+  it('has correct name, category, and riskLevel', () => {
+    expect(trendSearch.name).toBe('trendSearch');
+    expect(trendSearch.category).toBe('web');
+    expect(trendSearch.riskLevel).toBe('low');
+  });
+
+  it('has no required parameters', () => {
+    expect(trendSearch.parameters.required ?? []).toHaveLength(0);
+  });
+});
+
+describe('trendSearch skill handler', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('returns trending topics from Google Trends RSS', async () => {
+    const xml = makeTrendsRss([
+      { keyword: 'TypeScript', traffic: '200K+', newsTitle: 'TypeScript 6 Released' },
+      { keyword: 'AI regulation', traffic: '100K+', newsTitle: 'EU AI Act Update' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValueOnce(new Response(xml, { status: 200 }));
+
+    const result = await trendSearch.handler({ region: 'JP', maxResults: 5 });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('🔥');
+    expect(result.content).toContain('TypeScript');
+    expect(result.content).toContain('200K+');
+    expect(result.content).toContain('TypeScript 6 Released');
+  });
+
+  it('defaults to region JP when region is not provided', async () => {
+    const xml = makeTrendsRss([{ keyword: 'Sakura', traffic: '50K+', newsTitle: 'Cherry blossoms bloom' }]);
+    (global.fetch as jest.Mock).mockResolvedValueOnce(new Response(xml, { status: 200 }));
+
+    const result = await trendSearch.handler({});
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('JP');
+  });
+
+  it('uppercases and truncates region to 2 chars', async () => {
+    const xml = makeTrendsRss([{ keyword: 'Foo', traffic: '1K+', newsTitle: 'Foo news' }]);
+    (global.fetch as jest.Mock).mockResolvedValueOnce(new Response(xml, { status: 200 }));
+
+    const result = await trendSearch.handler({ region: 'us' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('US');
+  });
+
+  it('returns error when API returns non-200', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(new Response('', { status: 429, statusText: 'Too Many Requests' }));
+    const result = await trendSearch.handler({ region: 'US' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('429');
+  });
+
+  it('returns error on network failure', async () => {
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('fetch failed'));
+    const result = await trendSearch.handler({ region: 'JP' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('fetch failed');
+  });
+
+  it('returns no-trends message when RSS is empty', async () => {
+    const emptyRss = `<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>`;
+    (global.fetch as jest.Mock).mockResolvedValueOnce(new Response(emptyRss, { status: 200 }));
+    const result = await trendSearch.handler({ region: 'XX' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toMatch(/No trending topics|not available/i);
+  });
+
+  it('respects maxResults limit', async () => {
+    const xml = makeTrendsRss(
+      Array.from({ length: 20 }, (_, i) => ({ keyword: `Trend${i}`, traffic: '1K+', newsTitle: `News ${i}` })),
+    );
+    (global.fetch as jest.Mock).mockResolvedValueOnce(new Response(xml, { status: 200 }));
+    const result = await trendSearch.handler({ maxResults: 3 });
+    // Should contain exactly 3 numbered items
+    const matches = result.content.match(/^\d+\./gm);
+    expect(matches).toHaveLength(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// newsBrief skill
+// ---------------------------------------------------------------------------
+
+describe('newsBrief skill metadata', () => {
+  it('has correct name, category, and riskLevel', () => {
+    expect(newsBrief.name).toBe('newsBrief');
+    expect(newsBrief.category).toBe('web');
+    expect(newsBrief.riskLevel).toBe('low');
+  });
+
+  it('description mentions all topics', () => {
+    for (const topic of NEWS_TOPICS) {
+      expect(newsBrief.description).toContain(`"${topic}"`);
+    }
+  });
+
+  it('has no required parameters', () => {
+    expect(newsBrief.parameters.required ?? []).toHaveLength(0);
+  });
+});
+
+describe('newsBrief skill handler', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('returns digest for multiple topics', async () => {
+    const aiRss = makeRss([
+      { title: 'AI Story', link: 'https://ai.example', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: 'AI news.' },
+    ]);
+    const techRss = makeRss([
+      { title: 'Tech Story', link: 'https://tech.example', pubDate: 'Mon, 01 Jan 2025 09:00:00 +0000', description: 'Tech news.' },
+    ]);
+    // ai topic has 2 feeds, tech topic has 2 feeds → 4 fetch calls
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response(aiRss, { status: 200 }))
+      .mockResolvedValueOnce(new Response(aiRss, { status: 200 }))
+      .mockResolvedValueOnce(new Response(techRss, { status: 200 }))
+      .mockResolvedValueOnce(new Response(techRss, { status: 200 }));
+
+    const result = await newsBrief.handler({ topics: ['ai', 'tech'], maxPerTopic: 1 });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('📋');
+    expect(result.content).toContain('AI');
+    expect(result.content).toContain('TECH');
+    expect(result.content).toContain('AI Story');
+    expect(result.content).toContain('Tech Story');
+  });
+
+  it('defaults to ["ai", "tech"] when topics is not provided', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response(makeRss([{ title: 'Item', link: 'https://x.com', pubDate: '', description: '' }]), { status: 200 }),
+    );
+    const result = await newsBrief.handler({});
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('AI');
+    expect(result.content).toContain('TECH');
+  });
+
+  it('ignores invalid topic names', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response(makeRss([{ title: 'Item', link: 'https://x.com', pubDate: '', description: '' }]), { status: 200 }),
+    );
+    const result = await newsBrief.handler({ topics: ['invalid_topic', 'ai'] });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('AI');
+    expect(result.content).not.toContain('INVALID_TOPIC');
+  });
+
+  it('shows "(No items available)" for a topic where feeds fail', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('network error'));
+    const result = await newsBrief.handler({ topics: ['world'], maxPerTopic: 2 });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('No items available');
+  });
+
+  it('respects maxPerTopic limit', async () => {
+    const rss = makeRss(
+      Array.from({ length: 10 }, (_, i) => ({
+        title: `Story ${i}`,
+        link: `https://x.com/${i}`,
+        pubDate: `Mon, 0${(i % 9) + 1} Jan 2025 00:00:00 +0000`,
+        description: '',
+      })),
+    );
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await newsBrief.handler({ topics: ['dev'], maxPerTopic: 2 });
+    // dev has 2 feeds; each returns 10 items; we cap at 2 per topic
+    const storyMatches = result.content.match(/Story \d/g) ?? [];
+    expect(storyMatches.length).toBeLessThanOrEqual(2);
+  });
+
+  it('total items count in header matches actual items', async () => {
+    const rss = makeRss([
+      { title: 'Item A', link: 'https://a.com', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await newsBrief.handler({ topics: ['ai'], maxPerTopic: 1 });
+    expect(result.content).toMatch(/\d+ items total/);
   });
 });

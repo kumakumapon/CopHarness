@@ -5,16 +5,17 @@ import { type SkillDefinition } from '../skill';
  * Inspired by the tech-news-curation skill in karaage0703/ai-assistant-workspace.
  */
 
-interface RssItem {
+export interface RssItem {
   title: string;
   link: string;
+  /** Full publication date string (used for sorting). */
   pubDate: string;
   description: string;
   source: string;
 }
 
 /** Parse a minimal RSS 2.0 / Atom feed and extract items. */
-function parseRss(xml: string, sourceName: string): RssItem[] {
+export function parseRss(xml: string, sourceName: string): RssItem[] {
   const items: RssItem[] = [];
 
   // Try RSS 2.0 <item> elements first
@@ -29,7 +30,7 @@ function parseRss(xml: string, sourceName: string): RssItem[] {
       items.push({
         title: stripHtml(title),
         link: link.trim(),
-        pubDate: pubDate.trim().slice(0, 16),
+        pubDate: pubDate.trim(),
         description: stripHtml(description).slice(0, 200),
         source: sourceName,
       });
@@ -49,7 +50,7 @@ function parseRss(xml: string, sourceName: string): RssItem[] {
         items.push({
           title: stripHtml(title),
           link: link.trim(),
-          pubDate: pubDate.trim().slice(0, 16),
+          pubDate: pubDate.trim(),
           description: stripHtml(description).slice(0, 200),
           source: sourceName,
         });
@@ -94,7 +95,7 @@ function stripHtml(html: string): string {
 }
 
 /** Curated list of RSS feeds for tech news. */
-const FEEDS: Record<string, { url: string; name: string }[]> = {
+export const FEEDS: Record<string, { url: string; name: string }[]> = {
   ai: [
     { url: 'https://feeds.feedburner.com/venturebeat/SRLB', name: 'VentureBeat AI' },
     { url: 'https://www.artificialintelligence-news.com/feed/', name: 'AI News' },
@@ -107,21 +108,98 @@ const FEEDS: Record<string, { url: string; name: string }[]> = {
     { url: 'https://hnrss.org/frontpage', name: 'Hacker News' },
     { url: 'https://dev.to/feed', name: 'DEV Community' },
   ],
+  world: [
+    { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', name: 'BBC World' },
+    { url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml', name: 'NYT World' },
+  ],
+  finance: [
+    { url: 'https://feeds.reuters.com/reuters/businessNews', name: 'Reuters Business' },
+    { url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories', name: 'MarketWatch' },
+  ],
+  science: [
+    { url: 'https://www.nasa.gov/rss/dyn/breaking_news.rss', name: 'NASA News' },
+    { url: 'https://www.sciencedaily.com/rss/all.xml', name: 'ScienceDaily' },
+  ],
+  japan: [
+    { url: 'https://www3.nhk.or.jp/nhkworld/en/news/feeds/', name: 'NHK World' },
+    { url: 'https://japantoday.com/feed', name: 'Japan Today' },
+  ],
 };
+
+/** All valid topic names for techNews / newsBrief. */
+export const NEWS_TOPICS = Object.keys(FEEDS) as (keyof typeof FEEDS)[];
+
+/**
+ * Fetch and parse all RSS items for the given feeds list.
+ * Returns items sorted newest-first (items without a parseable date sort last).
+ */
+export async function fetchFeedItems(feeds: { url: string; name: string }[]): Promise<RssItem[]> {
+  const allItems: RssItem[] = [];
+
+  await Promise.all(
+    feeds.map(async ({ url, name }) => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10_000);
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'CopHarness/1.0 (RSS reader)' },
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+        if (!response.ok) return;
+        const text = await response.text();
+        const items = parseRss(text, name);
+        allItems.push(...items);
+      } catch {
+        // Silently skip failed feeds
+      }
+    }),
+  );
+
+  // Sort newest-first; items with an unparseable date go to the end
+  allItems.sort((a, b) => {
+    const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+    const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0;
+    if (isNaN(ta) && isNaN(tb)) return 0;
+    if (isNaN(ta)) return 1;
+    if (isNaN(tb)) return -1;
+    return tb - ta;
+  });
+
+  return allItems;
+}
+
+/** Format an RssItem for display (0-indexed position). */
+function formatItem(item: RssItem, index: number): string {
+  const displayDate = item.pubDate ? item.pubDate.slice(0, 16) : '';
+  const parts = [
+    `${index + 1}. **${item.title}**`,
+    `   Source: ${item.source}${displayDate ? `  |  ${displayDate}` : ''}`,
+  ];
+  if (item.description) parts.push(`   ${item.description}`);
+  if (item.link) parts.push(`   ${item.link}`);
+  return parts.join('\n');
+}
 
 export const techNews: SkillDefinition = {
   name: 'techNews',
   description:
-    'Fetches the latest technology news headlines from public RSS feeds (no API key required). ' +
-    'Topics: "ai" (AI/ML news), "tech" (general tech), "dev" (developer news/Hacker News). ' +
-    'Returns titles, links, and brief descriptions.',
+    'Fetches the latest news headlines from public RSS feeds (no API key required). ' +
+    'Topics: "ai" (AI/ML), "tech" (general tech), "dev" (developer/Hacker News), ' +
+    '"world" (international news), "finance" (business/markets), ' +
+    '"science" (NASA/ScienceDaily), "japan" (NHK World/Japan Today). ' +
+    'Returns titles, links, and brief descriptions sorted newest-first.',
   parameters: {
     type: 'object',
     properties: {
       topic: {
         type: 'string',
-        description: 'News topic: "ai", "tech", or "dev". Defaults to "ai".',
-        enum: ['ai', 'tech', 'dev'],
+        description: 'News topic. One of: "ai", "tech", "dev", "world", "finance", "science", "japan". Defaults to "ai".',
+        enum: NEWS_TOPICS,
       },
       maxResults: {
         type: 'number',
@@ -135,52 +213,22 @@ export const techNews: SkillDefinition = {
   category: 'web',
   riskLevel: 'low',
   handler: async (args) => {
-    const topic = ['ai', 'tech', 'dev'].includes(String(args.topic ?? '')) ? String(args.topic) : 'ai';
+    const topic = NEWS_TOPICS.includes(String(args.topic ?? '') as keyof typeof FEEDS)
+      ? String(args.topic)
+      : 'ai';
     const maxResults = typeof args.maxResults === 'number'
       ? Math.min(10, Math.max(1, Math.floor(args.maxResults)))
       : 5;
 
     const feeds = FEEDS[topic];
-    const allItems: RssItem[] = [];
-
-    await Promise.all(
-      feeds.map(async ({ url, name }) => {
-        try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 10_000);
-          let response: Response;
-          try {
-            response = await fetch(url, {
-              signal: controller.signal,
-              headers: { 'User-Agent': 'CopHarness/1.0 (RSS reader)' },
-            });
-          } finally {
-            clearTimeout(timer);
-          }
-          if (!response.ok) return;
-          const text = await response.text();
-          const items = parseRss(text, name);
-          allItems.push(...items);
-        } catch {
-          // Silently skip failed feeds
-        }
-      }),
-    );
+    const allItems = await fetchFeedItems(feeds);
 
     if (allItems.length === 0) {
       return { content: `No news items found for topic "${topic}". The RSS feeds may be temporarily unavailable.` };
     }
 
     const topItems = allItems.slice(0, maxResults);
-    const lines = topItems.map((item, i) => {
-      const parts = [
-        `${i + 1}. **${item.title}**`,
-        `   Source: ${item.source}${item.pubDate ? `  |  ${item.pubDate}` : ''}`,
-      ];
-      if (item.description) parts.push(`   ${item.description}`);
-      if (item.link) parts.push(`   ${item.link}`);
-      return parts.join('\n');
-    });
+    const lines = topItems.map((item, i) => formatItem(item, i));
 
     return {
       content: `📰 Latest ${topic.toUpperCase()} news (${topItems.length} items):\n\n${lines.join('\n\n')}`,
