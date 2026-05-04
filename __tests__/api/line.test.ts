@@ -13,6 +13,12 @@ jest.mock('@line/bot-sdk', () => ({
   },
 }));
 
+jest.mock('../../lib/history/store', () => ({
+  loadHistory: jest.fn().mockReturnValue([]),
+  saveHistory: jest.fn().mockResolvedValue(undefined),
+  clearHistory: jest.fn().mockResolvedValue(undefined),
+}));
+
 import * as lineBot from '@line/bot-sdk';
 import { POST } from '../../app/api/line/route';
 import { NextRequest } from 'next/server';

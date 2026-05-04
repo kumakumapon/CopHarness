@@ -70,6 +70,8 @@ import {
 } from '../lib/scheduler/store';
 import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
 import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
+import { loadHistory, saveHistory } from '../lib/history/store';
+import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';
@@ -84,7 +86,7 @@ if (!DISCORD_BOT_TOKEN) {
   process.exit(1);
 }
 
-// Per-channel conversation history
+// Per-channel conversation history (write-through in-memory cache)
 const channelHistory = new Map<string, LLMMessage[]>();
 
 /**
@@ -119,8 +121,10 @@ async function fetchImageAttachment(
 
 function getHistory(channelId: string): LLMMessage[] {
   if (!channelHistory.has(channelId)) {
-    const history: LLMMessage[] = [];
-    if (SYSTEM_PROMPT) {
+    // Try to restore from disk; otherwise start a fresh history
+    const persisted = loadHistory(`discord:${channelId}`);
+    const history: LLMMessage[] = persisted.length > 0 ? persisted : [];
+    if (history.length === 0 && SYSTEM_PROMPT) {
       history.push({ role: 'system', content: SYSTEM_PROMPT });
     }
     channelHistory.set(channelId, history);
@@ -128,15 +132,17 @@ function getHistory(channelId: string): LLMMessage[] {
   return channelHistory.get(channelId)!;
 }
 
-function trimHistory(history: LLMMessage[]): void {
-  // Keep system message (if any) + last MAX_HISTORY user/assistant exchanges
-  const systemMessages = history.filter((m) => m.role === 'system');
-  const nonSystem = history.filter((m) => m.role !== 'system');
-  if (nonSystem.length > MAX_HISTORY * 2) {
-    const trimmed = nonSystem.slice(-MAX_HISTORY * 2);
-    history.length = 0;
-    history.push(...systemMessages, ...trimmed);
+async function persistChannelHistory(channelId: string, history: LLMMessage[]): Promise<void> {
+  try {
+    await saveHistory(`discord:${channelId}`, history);
+  } catch (err) {
+    console.warn('[Discord Bot] Failed to persist conversation history:', err);
   }
+}
+
+function trimHistory(history: LLMMessage[]): void {
+  // Keep system message (if any) + messages within token budget + count ceiling
+  trimHistoryToTokenBudget(history, undefined, undefined, MAX_HISTORY * 2);
 }
 
 function splitLongMessage(text: string): string[] {
@@ -449,6 +455,7 @@ async function handleMessage(
 
     history.push({ role: 'assistant', content: replyText });
     trimHistory(history);
+    await persistChannelHistory(channelId, history);
 
     // Send reply, splitting if necessary
     const chunks = splitLongMessage(replyText);
