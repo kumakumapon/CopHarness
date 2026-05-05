@@ -29,7 +29,7 @@ describe('SkillDefinition metadata', () => {
       'runCommand', 'getSystemInfo', 'getEnvVariable',
       'memorySet', 'memoryGet', 'memoryList',
       'githubSearch', 'translateText', 'sendNotification',
-      'arXivSearch', 'deepResearch', 'techNews', 'githubRepo', 'youtubeInfo',
+      'arXivSearch', 'deepResearch', 'freeResearch', 'techNews', 'githubRepo', 'youtubeInfo',
       'noteCreate', 'noteRead', 'noteList', 'noteDelete',
       'markdownToHtml', 'diffText', 'colorConvert',
       'trendSearch', 'newsBrief',
@@ -1366,5 +1366,210 @@ describe('deepResearch skill handler', () => {
     const highIdx = result.content.indexOf('High Score');
     const lowIdx = result.content.indexOf('Low Score');
     expect(highIdx).toBeLessThan(lowIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// freeResearch skill
+// ---------------------------------------------------------------------------
+
+import { freeResearch } from '../../lib/skills/freeResearch';
+
+describe('freeResearch skill metadata', () => {
+  it('has correct name, category, and riskLevel', () => {
+    expect(freeResearch.name).toBe('freeResearch');
+    expect(freeResearch.category).toBe('web');
+    expect(freeResearch.riskLevel).toBe('low');
+  });
+
+  it('has no requiresEnv', () => {
+    expect(freeResearch.requiresEnv ?? []).toHaveLength(0);
+  });
+
+  it('query parameter is required', () => {
+    expect(freeResearch.parameters.required).toContain('query');
+  });
+
+  it('language parameter has an enum', () => {
+    const langProp = freeResearch.parameters.properties['language'];
+    expect(langProp).toBeDefined();
+    expect(langProp!.enum).toContain('en');
+    expect(langProp!.enum).toContain('ja');
+  });
+});
+
+describe('freeResearch skill handler', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  function makeDdgResponse(overrides: Record<string, unknown> = {}) {
+    const base = {
+      Abstract: 'TypeScript is a typed superset of JavaScript.',
+      AbstractURL: 'https://en.wikipedia.org/wiki/TypeScript',
+      AbstractSource: 'Wikipedia',
+      Answer: '',
+      Definition: '',
+      RelatedTopics: [
+        { Text: 'TypeScript 5.0 released', FirstURL: 'https://ddg.gg/?q=TypeScript+5.0' },
+        { Text: 'TypeScript vs JavaScript', FirstURL: 'https://ddg.gg/?q=ts+vs+js' },
+      ],
+      Results: [],
+      Type: 'A',
+    };
+    return new Response(JSON.stringify({ ...base, ...overrides }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  function makeWikiSearch(titles: string[]) {
+    const search = titles.map((t, i) => ({ title: t, snippet: `Snippet for ${t}`, pageid: i + 1 }));
+    return new Response(
+      JSON.stringify({ query: { search } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  function makeWikiSummary(title: string, extract: string, pageUrl: string) {
+    return new Response(
+      JSON.stringify({ title, extract, content_urls: { desktop: { page: pageUrl } } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  it('returns error when query is empty', async () => {
+    const result = await freeResearch.handler({ query: '' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/query is required/);
+  });
+
+  it('returns structured report with DuckDuckGo + Wikipedia content', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())                                       // DDG
+      .mockResolvedValueOnce(makeWikiSearch(['TypeScript']))                           // Wikipedia search
+      .mockResolvedValueOnce(makeWikiSummary('TypeScript', 'TS is great.', 'https://en.wikipedia.org/wiki/TypeScript'));  // Wiki summary
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('# Free Research: TypeScript');
+    expect(result.content).toContain('DuckDuckGo');
+    expect(result.content).toContain('TypeScript is a typed superset of JavaScript.');
+    expect(result.content).toContain('Wikipedia');
+    expect(result.content).toContain('TS is great.');
+  });
+
+  it('includes DuckDuckGo instant answer when present', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse({ Answer: '42', AnswerType: 'calc' }))
+      .mockResolvedValueOnce(makeWikiSearch([]))
+    ;
+
+    const result = await freeResearch.handler({ query: '6 * 7' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('42');
+  });
+
+  it('includes DuckDuckGo related topics', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())
+      .mockResolvedValueOnce(makeWikiSearch([]));
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Related Topics');
+    expect(result.content).toContain('TypeScript 5.0 released');
+  });
+
+  it('uses the specified language for Wikipedia', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())
+      .mockResolvedValueOnce(makeWikiSearch(['TypeScript']))
+      .mockResolvedValueOnce(makeWikiSummary('TypeScript', 'TSはJavaScriptのスーパーセット。', 'https://ja.wikipedia.org/wiki/TypeScript'));
+
+    const result = await freeResearch.handler({ query: 'TypeScript', language: 'ja' });
+    expect(result.isError).toBeFalsy();
+    // The Wikipedia API URL should have used ja.wikipedia.org
+    const calls = (global.fetch as jest.Mock).mock.calls as [string, ...unknown[]][];
+    const wikiCall = calls.find(([url]) => typeof url === 'string' && url.includes('ja.wikipedia.org'));
+    expect(wikiCall).toBeDefined();
+    expect(result.content).toContain('TSはJavaScriptのスーパーセット。');
+  });
+
+  it('continues gracefully when DuckDuckGo fails', async () => {
+    (global.fetch as jest.Mock)
+      .mockRejectedValueOnce(new Error('DDG network error'))                          // DDG fails
+      .mockResolvedValueOnce(makeWikiSearch(['TypeScript']))                           // Wikipedia search
+      .mockResolvedValueOnce(makeWikiSummary('TypeScript', 'TS summary.', 'https://en.wikipedia.org/wiki/TypeScript'));
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('TS summary.');
+  });
+
+  it('continues gracefully when Wikipedia search fails', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())
+      .mockRejectedValueOnce(new Error('Wikipedia network error'));
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('TypeScript is a typed superset of JavaScript.');
+  });
+
+  it('returns no-info message when all sources fail', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('network error'));
+
+    const result = await freeResearch.handler({ query: 'obscure topic xyz' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toMatch(/No information found/);
+  });
+
+  it('respects maxWikiResults limit', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse({ Abstract: '', RelatedTopics: [] }))
+      .mockResolvedValueOnce(makeWikiSearch(['Page A', 'Page B', 'Page C']))
+      .mockResolvedValueOnce(makeWikiSummary('Page A', 'Extract A.', 'https://en.wikipedia.org/wiki/Page_A'))
+      .mockResolvedValueOnce(makeWikiSummary('Page B', 'Extract B.', 'https://en.wikipedia.org/wiki/Page_B'));
+    // maxWikiResults=2, so only 2 summary fetches happen
+
+    const result = await freeResearch.handler({ query: 'test', maxWikiResults: 2 });
+    expect(result.isError).toBeFalsy();
+    // Verify only 2 summary calls were made (1 DDG + 1 wiki search + 2 summaries = 4 total)
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(4);
+    expect(result.content).toContain('Extract A.');
+    expect(result.content).toContain('Extract B.');
+    expect(result.content).not.toContain('Extract C.');
+  });
+
+  it('handles nested RelatedTopics with Topics sub-array', async () => {
+    const ddg = {
+      Abstract: 'Test abstract.',
+      AbstractURL: 'https://ddg.gg',
+      AbstractSource: 'Test',
+      Answer: '',
+      Definition: '',
+      RelatedTopics: [
+        {
+          Topics: [
+            { Text: 'Nested topic A', FirstURL: 'https://ddg.gg/a' },
+            { Text: 'Nested topic B', FirstURL: 'https://ddg.gg/b' },
+          ],
+        },
+      ],
+      Results: [],
+      Type: 'C',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response(JSON.stringify(ddg), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(makeWikiSearch([]));
+
+    const result = await freeResearch.handler({ query: 'nested test' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Nested topic A');
+    expect(result.content).toContain('Nested topic B');
   });
 });
