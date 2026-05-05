@@ -19,14 +19,19 @@ interface TavilyResponse {
   answer?: string;
 }
 
+/** Maximum character length for source content snippets in the report. */
+const MAX_SNIPPET_LENGTH = 400;
+
 /** Perform a single Tavily advanced search and return the parsed response. */
 async function tavilyAdvancedSearch(
   apiKey: string,
   query: string,
   maxResults: number,
+  signal: AbortSignal,
 ): Promise<TavilyResponse> {
   const response = await fetch('https://api.tavily.com/search', {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
@@ -109,12 +114,7 @@ export const deepResearch: SkillDefinition = {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 20_000);
       try {
-        const data = await Promise.race([
-          tavilyAdvancedSearch(apiKey, q, maxResults),
-          new Promise<never>((_, reject) =>
-            controller.signal.addEventListener('abort', () => reject(new Error('Request timed out'))),
-          ),
-        ]);
+        const data = await tavilyAdvancedSearch(apiKey, q, maxResults, controller.signal);
         clearTimeout(timer);
         if (data.answer) {
           answers.push(`**${q}**\n${data.answer}`);
@@ -148,7 +148,7 @@ export const deepResearch: SkillDefinition = {
       // Sort by score descending (if available), then by insertion order
       const sorted = [...allSources].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       for (const [i, src] of sorted.entries()) {
-        const snippet = src.content.length > 400 ? src.content.slice(0, 400) + '...' : src.content;
+        const snippet = src.content.length > MAX_SNIPPET_LENGTH ? src.content.slice(0, MAX_SNIPPET_LENGTH) + '...' : src.content;
         parts.push(`${i + 1}. **${src.title}**\n   URL: ${src.url}\n   ${snippet}`);
       }
     }
