@@ -46,6 +46,7 @@ import { sendNotification } from './sendNotification';
 
 // Phase 7: extended skills (inspired by karaage0703/ai-assistant-workspace)
 import { arXivSearch } from './arXivSearch';
+import { deepResearch } from './deepResearch';
 import { techNews } from './techNews';
 import { trendSearch } from './trendSearch';
 import { newsBrief } from './newsBrief';
@@ -86,6 +87,7 @@ const allSkills = [
   translateText,
   sendNotification,
   arXivSearch,
+  deepResearch,
   techNews,
   trendSearch,
   newsBrief,
@@ -134,6 +136,7 @@ export {
   translateText,
   sendNotification,
   arXivSearch,
+  deepResearch,
   techNews,
   trendSearch,
   newsBrief,

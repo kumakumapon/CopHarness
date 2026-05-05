@@ -29,7 +29,7 @@ describe('SkillDefinition metadata', () => {
       'runCommand', 'getSystemInfo', 'getEnvVariable',
       'memorySet', 'memoryGet', 'memoryList',
       'githubSearch', 'translateText', 'sendNotification',
-      'arXivSearch', 'techNews', 'githubRepo', 'youtubeInfo',
+      'arXivSearch', 'deepResearch', 'techNews', 'githubRepo', 'youtubeInfo',
       'noteCreate', 'noteRead', 'noteList', 'noteDelete',
       'markdownToHtml', 'diffText', 'colorConvert',
       'trendSearch', 'newsBrief',
@@ -54,6 +54,7 @@ describe('SkillDefinition metadata', () => {
   it('skills requiring an API key have requiresEnv set', () => {
     const withEnv: Record<string, string[]> = {
       webSearch: ['TAVILY_API_KEY'],
+      deepResearch: ['TAVILY_API_KEY'],
       translateText: ['DEEPL_API_KEY'],
       sendNotification: ['SLACK_WEBHOOK_URL', 'DISCORD_WEBHOOK_URL'],
     };
@@ -1210,5 +1211,160 @@ describe('newsBrief skill handler', () => {
     (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
     const result = await newsBrief.handler({ topics: ['ai'], maxPerTopic: 1 });
     expect(result.content).toMatch(/\d+ items total/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deepResearch skill
+// ---------------------------------------------------------------------------
+
+import { deepResearch } from '../../lib/skills/deepResearch';
+
+describe('deepResearch skill metadata', () => {
+  it('has correct name, category, and riskLevel', () => {
+    expect(deepResearch.name).toBe('deepResearch');
+    expect(deepResearch.category).toBe('web');
+    expect(deepResearch.riskLevel).toBe('medium');
+  });
+
+  it('requiresEnv includes TAVILY_API_KEY', () => {
+    expect(deepResearch.requiresEnv).toContain('TAVILY_API_KEY');
+  });
+
+  it('query parameter is required', () => {
+    expect(deepResearch.parameters.required).toContain('query');
+  });
+});
+
+describe('deepResearch skill handler', () => {
+  const savedApiKey = process.env.TAVILY_API_KEY;
+
+  beforeEach(() => {
+    global.fetch = jest.fn();
+    process.env.TAVILY_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+    if (savedApiKey === undefined) delete process.env.TAVILY_API_KEY;
+    else process.env.TAVILY_API_KEY = savedApiKey;
+  });
+
+  function makeTavilyResponse(answer: string, results: Array<{ title: string; url: string; content: string; score?: number }>) {
+    return new Response(JSON.stringify({ answer, results }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  it('returns error when TAVILY_API_KEY is not set', async () => {
+    delete process.env.TAVILY_API_KEY;
+    const result = await deepResearch.handler({ query: 'test' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/TAVILY_API_KEY/);
+  });
+
+  it('returns error when query is empty', async () => {
+    const result = await deepResearch.handler({ query: '' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/query is required/);
+  });
+
+  it('returns structured report for a single query', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Deep answer about TypeScript.', [
+        { title: 'TypeScript Guide', url: 'https://typescriptlang.org', content: 'TypeScript is a typed superset of JavaScript.' },
+      ]),
+    );
+
+    const result = await deepResearch.handler({ query: 'TypeScript overview' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('# Deep Research: TypeScript overview');
+    expect(result.content).toContain('Deep answer about TypeScript.');
+    expect(result.content).toContain('TypeScript Guide');
+    expect(result.content).toContain('https://typescriptlang.org');
+  });
+
+  it('runs sub-queries and deduplicates sources', async () => {
+    const sharedResult = { title: 'Shared Source', url: 'https://shared.example', content: 'Shared content.' };
+    const uniqueResult = { title: 'Unique Source', url: 'https://unique.example', content: 'Unique content.' };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeTavilyResponse('Main answer.', [sharedResult]))
+      .mockResolvedValueOnce(makeTavilyResponse('Sub answer.', [sharedResult, uniqueResult]));
+
+    const result = await deepResearch.handler({ query: 'main topic', subQueries: 'sub angle' });
+    expect(result.isError).toBeFalsy();
+    // Shared source should appear only once
+    const urlMatches = (result.content.match(/https:\/\/shared\.example/g) ?? []).length;
+    expect(urlMatches).toBe(1);
+    // Both answers present
+    expect(result.content).toContain('Main answer.');
+    expect(result.content).toContain('Sub answer.');
+    // Unique source present
+    expect(result.content).toContain('https://unique.example');
+  });
+
+  it('caps sub-queries at 3', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      makeTavilyResponse('Answer.', [{ title: 'T', url: 'https://t.example', content: 'c' }]),
+    );
+
+    await deepResearch.handler({
+      query: 'main',
+      subQueries: 'q1, q2, q3, q4, q5',
+    });
+    // main + max 3 sub-queries = 4 fetch calls total
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(4);
+  });
+
+  it('uses advanced search_depth in Tavily request', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Answer.', []),
+    );
+
+    await deepResearch.handler({ query: 'test query' });
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body as string);
+    expect(body.search_depth).toBe('advanced');
+  });
+
+  it('includes sections header in output', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Summary answer.', [
+        { title: 'Source A', url: 'https://a.example', content: 'Content A', score: 0.9 },
+        { title: 'Source B', url: 'https://b.example', content: 'Content B', score: 0.7 },
+      ]),
+    );
+
+    const result = await deepResearch.handler({ query: 'test' });
+    expect(result.content).toContain('## Summaries');
+    expect(result.content).toContain('## Sources');
+  });
+
+  it('handles API error gracefully and continues other queries', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response('', { status: 500, statusText: 'Internal Server Error' }))
+      .mockResolvedValueOnce(
+        makeTavilyResponse('Fallback answer.', [{ title: 'Good Source', url: 'https://good.example', content: 'Good content.' }]),
+      );
+
+    const result = await deepResearch.handler({ query: 'main', subQueries: 'fallback query' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Fallback answer.');
+    expect(result.content).toContain('Good Source');
+  });
+
+  it('sorts sources by score descending', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Answer.', [
+        { title: 'Low Score', url: 'https://low.example', content: 'Low', score: 0.3 },
+        { title: 'High Score', url: 'https://high.example', content: 'High', score: 0.95 },
+      ]),
+    );
+
+    const result = await deepResearch.handler({ query: 'score test' });
+    const highIdx = result.content.indexOf('High Score');
+    const lowIdx = result.content.indexOf('Low Score');
+    expect(highIdx).toBeLessThan(lowIdx);
   });
 });
