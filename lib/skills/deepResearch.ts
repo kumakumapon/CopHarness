@@ -148,7 +148,11 @@ export const deepResearch: SkillDefinition = {
       // Sort by score descending (if available), then by insertion order
       const sorted = [...allSources].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       for (const [i, src] of sorted.entries()) {
-        const snippet = src.content.length > MAX_SNIPPET_LENGTH ? src.content.slice(0, MAX_SNIPPET_LENGTH) + '...' : src.content;
+        const snippet = src.content.length > MAX_SNIPPET_LENGTH
+          ? (src.content.slice(0, MAX_SNIPPET_LENGTH).lastIndexOf(' ') > 0
+              ? src.content.slice(0, src.content.slice(0, MAX_SNIPPET_LENGTH).lastIndexOf(' '))
+              : src.content.slice(0, MAX_SNIPPET_LENGTH)) + '...'
+          : src.content;
         parts.push(`${i + 1}. **${src.title}**\n   URL: ${src.url}\n   ${snippet}`);
       }
     }

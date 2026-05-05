@@ -128,14 +128,23 @@ async function fetchWikiSummary(
   return response.json() as Promise<WikiSummary>;
 }
 
-/** Strip basic HTML tags from a string. Removes all complete tags, then removes any remaining
- * bare '<' characters to prevent partial-tag injection. */
+/** Strip basic HTML tags from a string and decode common HTML entities.
+ * Uses a single-pass regex that removes both complete tags (<foo>) and
+ * partial/unclosed tags (<script without a closing >) to prevent injection. */
 function stripHtml(text: string): string {
-  // First pass: remove complete tags (e.g., <b>, <script src="...">)
-  let result = text.replace(/<[^>]*>/g, '');
-  // Second pass: remove any stray '<' that survived (e.g., unclosed or malformed tags)
-  result = result.replace(/</g, '');
-  return result.trim();
+  return text
+    // Single pass: remove complete tags AND partial tags (closing '>' is optional)
+    .replace(/<[^>]*>?/g, ' ')
+    // Decode common HTML entities
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    // Collapse whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +288,9 @@ export const freeResearch: SkillDefinition = {
             const summary = await fetchWikiSummary(result.title, lang, signal);
             if (summary) {
               const extract = summary.extract.length > MAX_WIKI_EXTRACT
-                ? summary.extract.slice(0, MAX_WIKI_EXTRACT) + '...'
+                ? (summary.extract.slice(0, MAX_WIKI_EXTRACT).lastIndexOf(' ') > 0
+                    ? summary.extract.slice(0, summary.extract.slice(0, MAX_WIKI_EXTRACT).lastIndexOf(' '))
+                    : summary.extract.slice(0, MAX_WIKI_EXTRACT)) + '...'
                 : summary.extract;
               const pageUrl = summary.content_urls?.desktop?.page
                 ?? `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(result.title)}`;
