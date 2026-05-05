@@ -29,7 +29,7 @@ describe('SkillDefinition metadata', () => {
       'runCommand', 'getSystemInfo', 'getEnvVariable',
       'memorySet', 'memoryGet', 'memoryList',
       'githubSearch', 'translateText', 'sendNotification',
-      'arXivSearch', 'techNews', 'githubRepo', 'youtubeInfo',
+      'arXivSearch', 'deepResearch', 'freeResearch', 'techNews', 'githubRepo', 'youtubeInfo',
       'noteCreate', 'noteRead', 'noteList', 'noteDelete',
       'markdownToHtml', 'diffText', 'colorConvert',
       'trendSearch', 'newsBrief',
@@ -54,6 +54,7 @@ describe('SkillDefinition metadata', () => {
   it('skills requiring an API key have requiresEnv set', () => {
     const withEnv: Record<string, string[]> = {
       webSearch: ['TAVILY_API_KEY'],
+      deepResearch: ['TAVILY_API_KEY'],
       translateText: ['DEEPL_API_KEY'],
       sendNotification: ['SLACK_WEBHOOK_URL', 'DISCORD_WEBHOOK_URL'],
     };
@@ -1210,5 +1211,367 @@ describe('newsBrief skill handler', () => {
     (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
     const result = await newsBrief.handler({ topics: ['ai'], maxPerTopic: 1 });
     expect(result.content).toMatch(/\d+ items total/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deepResearch skill
+// ---------------------------------------------------------------------------
+
+import { deepResearch } from '../../lib/skills/deepResearch';
+
+describe('deepResearch skill metadata', () => {
+  it('has correct name, category, and riskLevel', () => {
+    expect(deepResearch.name).toBe('deepResearch');
+    expect(deepResearch.category).toBe('web');
+    expect(deepResearch.riskLevel).toBe('medium');
+  });
+
+  it('requiresEnv includes TAVILY_API_KEY', () => {
+    expect(deepResearch.requiresEnv).toContain('TAVILY_API_KEY');
+  });
+
+  it('query parameter is required', () => {
+    expect(deepResearch.parameters.required).toContain('query');
+  });
+});
+
+describe('deepResearch skill handler', () => {
+  const savedApiKey = process.env.TAVILY_API_KEY;
+
+  beforeEach(() => {
+    global.fetch = jest.fn();
+    process.env.TAVILY_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+    if (savedApiKey === undefined) delete process.env.TAVILY_API_KEY;
+    else process.env.TAVILY_API_KEY = savedApiKey;
+  });
+
+  function makeTavilyResponse(answer: string, results: Array<{ title: string; url: string; content: string; score?: number }>) {
+    return new Response(JSON.stringify({ answer, results }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  it('returns error when TAVILY_API_KEY is not set', async () => {
+    delete process.env.TAVILY_API_KEY;
+    const result = await deepResearch.handler({ query: 'test' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/TAVILY_API_KEY/);
+  });
+
+  it('returns error when query is empty', async () => {
+    const result = await deepResearch.handler({ query: '' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/query is required/);
+  });
+
+  it('returns structured report for a single query', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Deep answer about TypeScript.', [
+        { title: 'TypeScript Guide', url: 'https://typescriptlang.org', content: 'TypeScript is a typed superset of JavaScript.' },
+      ]),
+    );
+
+    const result = await deepResearch.handler({ query: 'TypeScript overview' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('# Deep Research: TypeScript overview');
+    expect(result.content).toContain('Deep answer about TypeScript.');
+    expect(result.content).toContain('TypeScript Guide');
+    expect(result.content).toContain('https://typescriptlang.org');
+  });
+
+  it('runs sub-queries and deduplicates sources', async () => {
+    const sharedResult = { title: 'Shared Source', url: 'https://shared.example', content: 'Shared content.' };
+    const uniqueResult = { title: 'Unique Source', url: 'https://unique.example', content: 'Unique content.' };
+
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeTavilyResponse('Main answer.', [sharedResult]))
+      .mockResolvedValueOnce(makeTavilyResponse('Sub answer.', [sharedResult, uniqueResult]));
+
+    const result = await deepResearch.handler({ query: 'main topic', subQueries: 'sub angle' });
+    expect(result.isError).toBeFalsy();
+    // Shared source should appear only once
+    const urlMatches = (result.content.match(/https:\/\/shared\.example/g) ?? []).length;
+    expect(urlMatches).toBe(1);
+    // Both answers present
+    expect(result.content).toContain('Main answer.');
+    expect(result.content).toContain('Sub answer.');
+    // Unique source present
+    expect(result.content).toContain('https://unique.example');
+  });
+
+  it('caps sub-queries at 3', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      makeTavilyResponse('Answer.', [{ title: 'T', url: 'https://t.example', content: 'c' }]),
+    );
+
+    await deepResearch.handler({
+      query: 'main',
+      subQueries: 'q1, q2, q3, q4, q5',
+    });
+    // main + max 3 sub-queries = 4 fetch calls total
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(4);
+  });
+
+  it('uses advanced search_depth in Tavily request', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Answer.', []),
+    );
+
+    await deepResearch.handler({ query: 'test query' });
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body as string);
+    expect(body.search_depth).toBe('advanced');
+  });
+
+  it('includes sections header in output', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Summary answer.', [
+        { title: 'Source A', url: 'https://a.example', content: 'Content A', score: 0.9 },
+        { title: 'Source B', url: 'https://b.example', content: 'Content B', score: 0.7 },
+      ]),
+    );
+
+    const result = await deepResearch.handler({ query: 'test' });
+    expect(result.content).toContain('## Summaries');
+    expect(result.content).toContain('## Sources');
+  });
+
+  it('handles API error gracefully and continues other queries', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response('', { status: 500, statusText: 'Internal Server Error' }))
+      .mockResolvedValueOnce(
+        makeTavilyResponse('Fallback answer.', [{ title: 'Good Source', url: 'https://good.example', content: 'Good content.' }]),
+      );
+
+    const result = await deepResearch.handler({ query: 'main', subQueries: 'fallback query' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Fallback answer.');
+    expect(result.content).toContain('Good Source');
+  });
+
+  it('sorts sources by score descending', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      makeTavilyResponse('Answer.', [
+        { title: 'Low Score', url: 'https://low.example', content: 'Low', score: 0.3 },
+        { title: 'High Score', url: 'https://high.example', content: 'High', score: 0.95 },
+      ]),
+    );
+
+    const result = await deepResearch.handler({ query: 'score test' });
+    const highIdx = result.content.indexOf('High Score');
+    const lowIdx = result.content.indexOf('Low Score');
+    expect(highIdx).toBeLessThan(lowIdx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// freeResearch skill
+// ---------------------------------------------------------------------------
+
+import { freeResearch } from '../../lib/skills/freeResearch';
+
+describe('freeResearch skill metadata', () => {
+  it('has correct name, category, and riskLevel', () => {
+    expect(freeResearch.name).toBe('freeResearch');
+    expect(freeResearch.category).toBe('web');
+    expect(freeResearch.riskLevel).toBe('low');
+  });
+
+  it('has no requiresEnv', () => {
+    expect(freeResearch.requiresEnv ?? []).toHaveLength(0);
+  });
+
+  it('query parameter is required', () => {
+    expect(freeResearch.parameters.required).toContain('query');
+  });
+
+  it('language parameter has an enum', () => {
+    const langProp = freeResearch.parameters.properties['language'];
+    expect(langProp).toBeDefined();
+    expect(langProp!.enum).toContain('en');
+    expect(langProp!.enum).toContain('ja');
+  });
+});
+
+describe('freeResearch skill handler', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  function makeDdgResponse(overrides: Record<string, unknown> = {}) {
+    const base = {
+      Abstract: 'TypeScript is a typed superset of JavaScript.',
+      AbstractURL: 'https://en.wikipedia.org/wiki/TypeScript',
+      AbstractSource: 'Wikipedia',
+      Answer: '',
+      Definition: '',
+      RelatedTopics: [
+        { Text: 'TypeScript 5.0 released', FirstURL: 'https://ddg.gg/?q=TypeScript+5.0' },
+        { Text: 'TypeScript vs JavaScript', FirstURL: 'https://ddg.gg/?q=ts+vs+js' },
+      ],
+      Results: [],
+      Type: 'A',
+    };
+    return new Response(JSON.stringify({ ...base, ...overrides }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  function makeWikiSearch(titles: string[]) {
+    const search = titles.map((t, i) => ({ title: t, snippet: `Snippet for ${t}`, pageid: i + 1 }));
+    return new Response(
+      JSON.stringify({ query: { search } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  function makeWikiSummary(title: string, extract: string, pageUrl: string) {
+    return new Response(
+      JSON.stringify({ title, extract, content_urls: { desktop: { page: pageUrl } } }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  it('returns error when query is empty', async () => {
+    const result = await freeResearch.handler({ query: '' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/query is required/);
+  });
+
+  it('returns structured report with DuckDuckGo + Wikipedia content', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())                                       // DDG
+      .mockResolvedValueOnce(makeWikiSearch(['TypeScript']))                           // Wikipedia search
+      .mockResolvedValueOnce(makeWikiSummary('TypeScript', 'TS is great.', 'https://en.wikipedia.org/wiki/TypeScript'));  // Wiki summary
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('# Free Research: TypeScript');
+    expect(result.content).toContain('DuckDuckGo');
+    expect(result.content).toContain('TypeScript is a typed superset of JavaScript.');
+    expect(result.content).toContain('Wikipedia');
+    expect(result.content).toContain('TS is great.');
+  });
+
+  it('includes DuckDuckGo instant answer when present', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse({ Answer: '42', AnswerType: 'calc' }))
+      .mockResolvedValueOnce(makeWikiSearch([]))
+    ;
+
+    const result = await freeResearch.handler({ query: '6 * 7' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('42');
+  });
+
+  it('includes DuckDuckGo related topics', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())
+      .mockResolvedValueOnce(makeWikiSearch([]));
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Related Topics');
+    expect(result.content).toContain('TypeScript 5.0 released');
+  });
+
+  it('uses the specified language for Wikipedia', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())
+      .mockResolvedValueOnce(makeWikiSearch(['TypeScript']))
+      .mockResolvedValueOnce(makeWikiSummary('TypeScript', 'TSはJavaScriptのスーパーセット。', 'https://ja.wikipedia.org/wiki/TypeScript'));
+
+    const result = await freeResearch.handler({ query: 'TypeScript', language: 'ja' });
+    expect(result.isError).toBeFalsy();
+    // The Wikipedia API URL should have used ja.wikipedia.org
+    const calls = (global.fetch as jest.Mock).mock.calls as [string, ...unknown[]][];
+    const wikiCall = calls.find(([url]) => {
+      try { return new URL(String(url)).hostname === 'ja.wikipedia.org'; } catch { return false; }
+    });
+    expect(wikiCall).toBeDefined();
+    expect(result.content).toContain('TSはJavaScriptのスーパーセット。');
+  });
+
+  it('continues gracefully when DuckDuckGo fails', async () => {
+    (global.fetch as jest.Mock)
+      .mockRejectedValueOnce(new Error('DDG network error'))                          // DDG fails
+      .mockResolvedValueOnce(makeWikiSearch(['TypeScript']))                           // Wikipedia search
+      .mockResolvedValueOnce(makeWikiSummary('TypeScript', 'TS summary.', 'https://en.wikipedia.org/wiki/TypeScript'));
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('TS summary.');
+  });
+
+  it('continues gracefully when Wikipedia search fails', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse())
+      .mockRejectedValueOnce(new Error('Wikipedia network error'));
+
+    const result = await freeResearch.handler({ query: 'TypeScript' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('TypeScript is a typed superset of JavaScript.');
+  });
+
+  it('returns no-info message when all sources fail', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('network error'));
+
+    const result = await freeResearch.handler({ query: 'obscure topic xyz' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toMatch(/No information found/);
+  });
+
+  it('respects maxWikiResults limit', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeDdgResponse({ Abstract: '', RelatedTopics: [] }))
+      .mockResolvedValueOnce(makeWikiSearch(['Page A', 'Page B', 'Page C']))
+      .mockResolvedValueOnce(makeWikiSummary('Page A', 'Extract A.', 'https://en.wikipedia.org/wiki/Page_A'))
+      .mockResolvedValueOnce(makeWikiSummary('Page B', 'Extract B.', 'https://en.wikipedia.org/wiki/Page_B'));
+    // maxWikiResults=2, so only 2 summary fetches happen
+
+    const result = await freeResearch.handler({ query: 'test', maxWikiResults: 2 });
+    expect(result.isError).toBeFalsy();
+    // Verify only 2 summary calls were made (1 DDG + 1 wiki search + 2 summaries = 4 total)
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(4);
+    expect(result.content).toContain('Extract A.');
+    expect(result.content).toContain('Extract B.');
+    expect(result.content).not.toContain('Extract C.');
+  });
+
+  it('handles nested RelatedTopics with Topics sub-array', async () => {
+    const ddg = {
+      Abstract: 'Test abstract.',
+      AbstractURL: 'https://ddg.gg',
+      AbstractSource: 'Test',
+      Answer: '',
+      Definition: '',
+      RelatedTopics: [
+        {
+          Topics: [
+            { Text: 'Nested topic A', FirstURL: 'https://ddg.gg/a' },
+            { Text: 'Nested topic B', FirstURL: 'https://ddg.gg/b' },
+          ],
+        },
+      ],
+      Results: [],
+      Type: 'C',
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response(JSON.stringify(ddg), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(makeWikiSearch([]));
+
+    const result = await freeResearch.handler({ query: 'nested test' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Nested topic A');
+    expect(result.content).toContain('Nested topic B');
   });
 });
