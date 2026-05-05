@@ -1494,7 +1494,9 @@ describe('freeResearch skill handler', () => {
     expect(result.isError).toBeFalsy();
     // The Wikipedia API URL should have used ja.wikipedia.org
     const calls = (global.fetch as jest.Mock).mock.calls as [string, ...unknown[]][];
-    const wikiCall = calls.find(([url]) => typeof url === 'string' && url.includes('ja.wikipedia.org'));
+    const wikiCall = calls.find(([url]) => {
+      try { return new URL(String(url)).hostname === 'ja.wikipedia.org'; } catch { return false; }
+    });
     expect(wikiCall).toBeDefined();
     expect(result.content).toContain('TSはJavaScriptのスーパーセット。');
   });

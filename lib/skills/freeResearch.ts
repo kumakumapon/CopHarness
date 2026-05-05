@@ -128,9 +128,14 @@ async function fetchWikiSummary(
   return response.json() as Promise<WikiSummary>;
 }
 
-/** Strip basic HTML tags from a string. */
+/** Strip basic HTML tags from a string. Removes all complete tags, then removes any remaining
+ * bare '<' characters to prevent partial-tag injection. */
 function stripHtml(text: string): string {
-  return text.replace(/<[^>]+>/g, '').trim();
+  // First pass: remove complete tags (e.g., <b>, <script src="...">)
+  let result = text.replace(/<[^>]*>/g, '');
+  // Second pass: remove any stray '<' that survived (e.g., unclosed or malformed tags)
+  result = result.replace(/</g, '');
+  return result.trim();
 }
 
 // ---------------------------------------------------------------------------
