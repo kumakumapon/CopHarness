@@ -287,10 +287,9 @@ export const freeResearch: SkillDefinition = {
           try {
             const summary = await fetchWikiSummary(result.title, lang, signal);
             if (summary) {
+              const boundary = summary.extract.slice(0, MAX_WIKI_EXTRACT).lastIndexOf(' ');
               const extract = summary.extract.length > MAX_WIKI_EXTRACT
-                ? (summary.extract.slice(0, MAX_WIKI_EXTRACT).lastIndexOf(' ') > 0
-                    ? summary.extract.slice(0, summary.extract.slice(0, MAX_WIKI_EXTRACT).lastIndexOf(' '))
-                    : summary.extract.slice(0, MAX_WIKI_EXTRACT)) + '...'
+                ? (boundary > 0 ? summary.extract.slice(0, boundary) : summary.extract.slice(0, MAX_WIKI_EXTRACT)) + '...'
                 : summary.extract;
               const pageUrl = summary.content_urls?.desktop?.page
                 ?? `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(result.title)}`;
