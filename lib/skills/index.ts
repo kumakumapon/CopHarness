@@ -45,6 +45,7 @@ import { translateText } from './translateText';
 import { sendNotification } from './sendNotification';
 
 // Phase 7: extended skills (inspired by karaage0703/ai-assistant-workspace)
+import { rssFeed } from './rssFeed';
 import { arXivSearch } from './arXivSearch';
 import { deepResearch } from './deepResearch';
 import { freeResearch } from './freeResearch';
@@ -102,6 +103,7 @@ const allSkills = [
   markdownToHtmlSkill,
   diffText,
   colorConvert,
+  rssFeed,
 ];
 
 for (const skill of allSkills) {
@@ -152,4 +154,5 @@ export {
   markdownToHtmlSkill,
   diffText,
   colorConvert,
+  rssFeed,
 };
