@@ -33,6 +33,7 @@ describe('SkillDefinition metadata', () => {
       'noteCreate', 'noteRead', 'noteList', 'noteDelete',
       'markdownToHtml', 'diffText', 'colorConvert',
       'trendSearch', 'newsBrief',
+      'rssFeed',
     ];
     for (const name of expected) {
       expect(names).toContain(name);
@@ -1573,5 +1574,185 @@ describe('freeResearch skill handler', () => {
     expect(result.isError).toBeFalsy();
     expect(result.content).toContain('Nested topic A');
     expect(result.content).toContain('Nested topic B');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rssFeed skill
+// ---------------------------------------------------------------------------
+
+import { rssFeed } from '../../lib/skills/rssFeed';
+
+describe('rssFeed skill metadata', () => {
+  it('has correct name, category, and riskLevel', () => {
+    expect(rssFeed.name).toBe('rssFeed');
+    expect(rssFeed.category).toBe('web');
+    expect(rssFeed.riskLevel).toBe('low');
+  });
+
+  it('url parameter is required', () => {
+    expect(rssFeed.parameters.required).toContain('url');
+  });
+
+  it('description mentions RSS and scheduling', () => {
+    expect(rssFeed.description).toMatch(/RSS/i);
+    expect(rssFeed.description).toMatch(/schedul/i);
+  });
+
+  it('has maxItems and summarize parameters', () => {
+    expect(rssFeed.parameters.properties['maxItems']).toBeDefined();
+    expect(rssFeed.parameters.properties['summarize']).toBeDefined();
+  });
+});
+
+describe('rssFeed skill handler', () => {
+  const savedApiKey = process.env.OPENAI_API_KEY;
+
+  beforeEach(() => {
+    global.fetch = jest.fn();
+    delete process.env.OPENAI_API_KEY;
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+    if (savedApiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = savedApiKey;
+  });
+
+  it('returns error when url is missing', async () => {
+    const result = await rssFeed.handler({});
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('url is required');
+  });
+
+  it('returns error for non-http URLs', async () => {
+    const result = await rssFeed.handler({ url: 'ftp://example.com/feed' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('only http');
+  });
+
+  it('returns error when fetch fails', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('network error'));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('Error fetching feed');
+  });
+
+  it('returns error message when HTTP response is not ok', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(new Response('Not Found', { status: 404 }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('Error fetching feed');
+    expect(result.content).toContain('404');
+  });
+
+  it('returns "No items found" for empty feed', async () => {
+    const emptyFeed = `<?xml version="1.0"?><rss version="2.0"><channel></channel></rss>`;
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(emptyFeed, { status: 200 }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('No items found');
+  });
+
+  it('returns formatted feed items with title and link', async () => {
+    const rss = makeRss([
+      { title: 'Hello World', link: 'https://example.com/1', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: 'A test post' },
+      { title: 'Second Post', link: 'https://example.com/2', pubDate: 'Sun, 31 Dec 2024 10:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('Hello World');
+    expect(result.content).toContain('Second Post');
+    expect(result.content).toContain('https://example.com/1');
+    expect(result.content).toContain('A test post');
+  });
+
+  it('includes feed hostname in header', async () => {
+    const rss = makeRss([
+      { title: 'Item', link: 'https://blog.example.com/1', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await rssFeed.handler({ url: 'https://blog.example.com/feed.rss' });
+    expect(result.content).toContain('blog.example.com');
+  });
+
+  it('respects maxItems limit', async () => {
+    const items = Array.from({ length: 10 }, (_, i) => ({
+      title: `Post ${i + 1}`,
+      link: `https://example.com/${i + 1}`,
+      pubDate: `Mon, 0${(i % 9) + 1} Jan 2025 00:00:00 +0000`,
+      description: '',
+    }));
+    const rss = makeRss(items);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss', maxItems: 3 });
+    expect(result.isError).toBeFalsy();
+    const matches = result.content.match(/Post \d+/g) ?? [];
+    expect(matches.length).toBeLessThanOrEqual(3);
+  });
+
+  it('sorts items newest-first', async () => {
+    const rss = makeRss([
+      { title: 'Older', link: 'https://example.com/1', pubDate: 'Mon, 01 Jan 2024 00:00:00 +0000', description: '' },
+      { title: 'Newer', link: 'https://example.com/2', pubDate: 'Mon, 01 Jan 2025 00:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss' });
+    const newerPos = result.content.indexOf('Newer');
+    const olderPos = result.content.indexOf('Older');
+    expect(newerPos).toBeLessThan(olderPos);
+  });
+
+  it('appends unavailable note when summarize=true and no API key', async () => {
+    const rss = makeRss([
+      { title: 'Test', link: 'https://example.com/1', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss', summarize: 'true' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('AI summary unavailable');
+  });
+
+  it('includes AI summary when summarize=true and API key is set', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    const rss = makeRss([
+      { title: 'AI Post', link: 'https://example.com/1', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: 'About AI' },
+    ]);
+    const openaiResponse = {
+      choices: [{ message: { content: 'This feed covers AI topics.' } }],
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response(rss, { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(openaiResponse), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss', summarize: 'true' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('AI Summary');
+    expect(result.content).toContain('This feed covers AI topics.');
+  });
+
+  it('shows unavailable note when OpenAI API call fails', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    const rss = makeRss([
+      { title: 'Post', link: 'https://example.com/1', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response(rss, { status: 200 }))
+      .mockRejectedValueOnce(new Error('API error'));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss', summarize: 'true' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toContain('AI summary unavailable');
+  });
+
+  it('does not call OpenAI when summarize is not set', async () => {
+    process.env.OPENAI_API_KEY = 'test-key';
+    const rss = makeRss([
+      { title: 'Post', link: 'https://example.com/1', pubDate: 'Mon, 01 Jan 2025 10:00:00 +0000', description: '' },
+    ]);
+    (global.fetch as jest.Mock).mockResolvedValue(new Response(rss, { status: 200 }));
+    const result = await rssFeed.handler({ url: 'https://example.com/feed.rss' });
+    expect(result.isError).toBeFalsy();
+    // fetch called exactly once (for the feed only, not for OpenAI)
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1);
   });
 });
