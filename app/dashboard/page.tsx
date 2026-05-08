@@ -1,7 +1,7 @@
 'use client';
 
 import useSWR, { mutate } from 'swr';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   CheckCircle,
   XCircle,
@@ -14,6 +14,7 @@ import {
   Wrench,
   Activity,
   ChevronRight,
+  ArrowDown,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -154,8 +155,14 @@ function SummaryBanner({
   onRefresh: () => void;
 }) {
   return (
-    <div className="rounded-2xl p-5 mb-6 flex flex-wrap items-center gap-4"
-      style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
+    <div
+      className="rounded-2xl p-5 mb-6 flex flex-wrap items-center gap-4"
+      style={{
+        background: 'linear-gradient(135deg, var(--secondary-bg) 0%, var(--accent-peachy) 100%)',
+        border: '1px solid var(--border-color)',
+        boxShadow: '0 2px 12px var(--shadow-light)',
+      }}
+    >
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--text-secondary)' }}>
           CopHarness ダッシュボード
@@ -182,10 +189,11 @@ function SummaryBanner({
       <div className="flex items-center gap-2">
         <button
           onClick={onToggleAutoRefresh}
-          className="flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg transition-colors"
+          className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg font-medium transition-all hover:opacity-90 active:scale-95"
           style={{
             background: autoRefresh ? 'var(--accent-orange)' : 'var(--accent-warm)',
             color: 'var(--text-primary)',
+            border: '1px solid var(--border-color)',
           }}
         >
           {autoRefresh ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
@@ -193,8 +201,12 @@ function SummaryBanner({
         </button>
         <button
           onClick={onRefresh}
-          className="p-2 rounded-lg transition-colors hover:opacity-80"
-          style={{ background: 'var(--accent-warm)', color: 'var(--text-primary)' }}
+          className="p-2 rounded-lg transition-all hover:opacity-80 active:scale-95"
+          style={{
+            background: 'var(--accent-warm)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border-color)',
+          }}
           title="今すぐ更新"
         >
           <RefreshCw className="w-4 h-4" />
@@ -230,16 +242,17 @@ function StatusCards({ data }: { data: StatusData | undefined }) {
         {all.map((c) => (
           <div
             key={c.name}
-            className="rounded-xl p-4 flex items-start gap-3 transition-shadow"
+            className="rounded-xl p-4 flex items-start gap-3 transition-all duration-200 hover:shadow-md"
             style={{
               background: 'var(--secondary-bg)',
               border: `1px solid ${c.configured ? '#bbf7d0' : 'var(--border-color)'}`,
+              boxShadow: c.configured ? '0 1px 4px rgba(134,239,172,0.15)' : undefined,
             }}
           >
             <StatusBadge configured={c.configured} />
             <div className="min-w-0">
               <div className="font-medium text-sm truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</div>
-              <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              <div className="text-xs mt-0.5 font-medium" style={{ color: c.configured ? '#16a34a' : 'var(--text-secondary)' }}>
                 {c.configured ? '設定済み' : '未設定'}
               </div>
             </div>
@@ -397,8 +410,32 @@ function SchedulerPanel({ data, onMutate }: { data: SchedulesData | undefined; o
 // Section: Activity Log Feed
 // ---------------------------------------------------------------------------
 
+const LOG_SCROLL_HEIGHT = 480;
+
 function LogFeed({ data }: { data: LogsData | undefined }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowScrollTop(el.scrollTop > 80);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  // Scroll to top (newest) when fresh data arrives
+  useEffect(() => {
+    if (data && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [data?.logs.length]);
 
   return (
     <section className="mb-6">
@@ -423,58 +460,88 @@ function LogFeed({ data }: { data: LogsData | undefined }) {
           実行ログがありません。スケジューラーを起動してください。
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-color)' }}>
-          {data.logs.map((log, i) => (
-            <div key={log.id}
-              style={{
-                background: i % 2 === 0 ? 'var(--primary-bg)' : 'var(--secondary-bg)',
-                borderBottom: i < data.logs.length - 1 ? '1px solid var(--border-color)' : undefined,
-              }}
-            >
-              <button
-                className="w-full text-left px-4 py-3 flex items-center gap-3"
-                onClick={() => setExpanded(expanded === log.id ? null : log.id)}
+        <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-color)' }}>
+          <div
+            ref={scrollRef}
+            className="log-scroll-area overflow-y-auto"
+            style={{ maxHeight: LOG_SCROLL_HEIGHT }}
+          >
+            {data.logs.map((log, i) => (
+              <div key={log.id}
+                style={{
+                  background: i % 2 === 0 ? 'var(--primary-bg)' : 'var(--secondary-bg)',
+                  borderBottom: i < data.logs.length - 1 ? '1px solid var(--border-color)' : undefined,
+                }}
               >
-                <LogStatusBadge status={log.status} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm truncate" style={{ color: 'var(--text-primary)' }}>
-                      {log.scheduleName}
-                    </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--accent-warm)', color: 'var(--text-secondary)' }}>
-                      {log.reason}
-                    </span>
-                  </div>
-                  <div className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>
-                    {fmtDate(log.startedAt)}
-                    {log.finishedAt && ` → ${fmtDate(log.finishedAt)}`}
-                  </div>
-                </div>
-                <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${expanded === log.id ? 'rotate-90' : ''}`}
-                  style={{ color: 'var(--text-secondary)' }} />
-              </button>
-              {expanded === log.id && (
-                <div className="px-4 pb-4 text-xs space-y-2" style={{ color: 'var(--text-secondary)' }}>
-                  <div>
-                    <span className="font-semibold">プロンプト: </span>
-                    <span>{log.prompt}</span>
-                  </div>
-                  {log.result && (
-                    <div>
-                      <span className="font-semibold">結果: </span>
-                      <span className="whitespace-pre-wrap">{log.result.slice(0, MAX_RESULT_DISPLAY_LENGTH)}{log.result.length > MAX_RESULT_DISPLAY_LENGTH ? '…' : ''}</span>
+                <button
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:brightness-95 transition-all"
+                  onClick={() => setExpanded(expanded === log.id ? null : log.id)}
+                >
+                  <LogStatusBadge status={log.status} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
+                        {log.scheduleName}
+                      </span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full shrink-0"
+                        style={{ background: 'var(--accent-warm)', color: 'var(--text-secondary)' }}>
+                        {log.reason}
+                      </span>
                     </div>
-                  )}
-                  {log.error && (
-                    <div className="text-red-600">
-                      <span className="font-semibold">エラー: </span>
-                      <span>{log.error}</span>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {fmtDate(log.startedAt)}
+                      {log.finishedAt && (
+                        <span> → {fmtDate(log.finishedAt)}</span>
+                      )}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+                  </div>
+                  <ChevronRight
+                    className={`w-4 h-4 shrink-0 transition-transform duration-200 ${expanded === log.id ? 'rotate-90' : ''}`}
+                    style={{ color: 'var(--text-secondary)' }}
+                  />
+                </button>
+
+                {expanded === log.id && (
+                  <div className="px-4 pb-4 space-y-2 border-t"
+                    style={{ borderColor: 'var(--border-color)', background: 'var(--secondary-bg)' }}>
+                    <div className="pt-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>プロンプト: </span>
+                      {log.prompt}
+                    </div>
+                    {log.result && (
+                      <div className="text-xs rounded-lg p-3"
+                        style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)' }}>
+                        <div className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>結果</div>
+                        <pre className="whitespace-pre-wrap font-sans leading-relaxed"
+                          style={{ color: 'var(--text-secondary)' }}>
+                          {log.result.slice(0, MAX_RESULT_DISPLAY_LENGTH)}
+                          {log.result.length > MAX_RESULT_DISPLAY_LENGTH ? '…' : ''}
+                        </pre>
+                      </div>
+                    )}
+                    {log.error && (
+                      <div className="text-xs rounded-lg p-3 bg-red-50 border border-red-200">
+                        <div className="font-semibold mb-1 text-red-700">エラー</div>
+                        <span className="text-red-600">{log.error}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Scroll-to-top button */}
+          {showScrollTop && (
+            <button
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="absolute bottom-3 right-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full shadow-md transition-all hover:opacity-90"
+              style={{ background: 'var(--accent-orange)', color: 'var(--text-primary)' }}
+            >
+              <ArrowDown className="w-3 h-3 rotate-180" />
+              最新へ
+            </button>
+          )}
         </div>
       )}
     </section>
