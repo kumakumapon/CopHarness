@@ -6,6 +6,16 @@ import '../../../lib/skills/index';
 
 
 export async function POST(req: NextRequest) {
+  // Optional cross-service API key authentication (e.g. from CopChat)
+  const expectedApiKey = process.env.COPHARNESS_API_KEY;
+  if (expectedApiKey) {
+    const authHeader = req.headers.get('Authorization');
+    const provided = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (provided !== expectedApiKey) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   // プロバイダ自動判定
   const provider = resolveProvider();
   // Copilot, OpenAI, Anthropic などで環境変数名が異なるため柔軟に取得
