@@ -59,6 +59,9 @@ import { markdownToHtmlSkill } from './markdownToHtml';
 import { diffText } from './diffText';
 import { colorConvert } from './colorConvert';
 
+// Prompt wizard
+import { listPromptTemplates, buildPromptFromTemplate } from './promptWizard';
+
 const allSkills = [
   currentDateTime,
   calculator,
@@ -104,6 +107,8 @@ const allSkills = [
   diffText,
   colorConvert,
   rssFeed,
+  listPromptTemplates,
+  buildPromptFromTemplate,
 ];
 
 for (const skill of allSkills) {
@@ -155,4 +160,6 @@ export {
   diffText,
   colorConvert,
   rssFeed,
+  listPromptTemplates,
+  buildPromptFromTemplate,
 };

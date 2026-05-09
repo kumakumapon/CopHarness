@@ -33,24 +33,6 @@ export default function Home() {
             スケジューラー・ログ・スキル一覧
           </div>
         </a>
-
-        <a
-          href="/prompt-wizard"
-          style={{
-            display: 'block',
-            padding: '16px 20px',
-            borderRadius: '12px',
-            background: '#f5f5f5',
-            textDecoration: 'none',
-            color: '#111',
-            border: '1px solid #e0e0e0',
-          }}
-        >
-          <div style={{ fontWeight: '600', marginBottom: '4px' }}>🪄 AIプロンプトウィザード</div>
-          <div style={{ fontSize: '0.875rem', color: '#666' }}>
-            AIとの対話でプロンプトを自動生成 → LLM に実行
-          </div>
-        </a>
       </div>
 
       <p style={{ marginTop: '32px', fontSize: '0.8rem', color: '#aaa' }}>
