@@ -172,6 +172,34 @@ function splitLongMessage(text: string): string[] {
   return chunks;
 }
 
+function formatScheduleNotification(
+  scheduleName: string,
+  payload: { status: 'success' | 'failed' | 'aborted'; message: string },
+): { header: string; body: string } {
+  switch (payload.status) {
+    case 'success':
+      return {
+        header: `📅 **スケジュール実行完了: ${scheduleName}**\n`,
+        body: payload.message,
+      };
+    case 'failed':
+      return {
+        header: `❌ **スケジュール実行失敗: ${scheduleName}**\n`,
+        body: `エラー: ${payload.message}`,
+      };
+    case 'aborted':
+      return {
+        header: `⏹️ **スケジュール実行中断: ${scheduleName}**\n`,
+        body: `中断: ${payload.message}`,
+      };
+    default:
+      return {
+        header: `📅 **スケジュール実行通知: ${scheduleName}**\n`,
+        body: payload.message,
+      };
+  }
+}
+
 async function sendInChunks(message: Message, text: string): Promise<void> {
   const chunks = splitLongMessage(text);
   for (let i = 0; i < chunks.length; i++) {
@@ -640,13 +668,13 @@ async function main() {
     console.log(`Provider: ${provider}, Model: ${model}`);
 
     const defaultNotifyChannel = process.env.DISCORD_SCHEDULE_CHANNEL;
-    startScheduler(async (channelId, scheduleName, result) => {
+    startScheduler(async (channelId, scheduleName, payload) => {
       const targetId = defaultNotifyChannel ?? channelId;
       try {
         const ch = await client.channels.fetch(targetId);
         if (ch && ch instanceof TextChannel) {
-          const header = `📅 **スケジュール実行完了: ${scheduleName}**\n`;
-          const chunks = splitLongMessage(header + result);
+          const { header, body } = formatScheduleNotification(scheduleName, payload);
+          const chunks = splitLongMessage(header + body);
           for (const chunk of chunks) await ch.send(chunk);
         }
       } catch (err) {
