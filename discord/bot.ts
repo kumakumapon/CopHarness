@@ -645,16 +645,18 @@ async function main() {
       try {
         const ch = await client.channels.fetch(targetId);
         if (ch && ch instanceof TextChannel) {
-          const header =
-            payload.status === 'failed'
-              ? `❌ **スケジュール実行失敗: ${scheduleName}**\n`
-              : payload.status === 'aborted'
-                ? `⏹️ **スケジュール実行中断: ${scheduleName}**\n`
-                : `📅 **スケジュール実行完了: ${scheduleName}**\n`;
-          const body =
-            payload.status === 'failed'
-              ? `エラー: ${payload.message}`
-              : payload.message;
+          let header = `📅 **スケジュール実行完了: ${scheduleName}**\n`;
+          let body = payload.message;
+          switch (payload.status) {
+            case 'failed':
+              header = `❌ **スケジュール実行失敗: ${scheduleName}**\n`;
+              body = `エラー: ${payload.message}`;
+              break;
+            case 'aborted':
+              header = `⏹️ **スケジュール実行中断: ${scheduleName}**\n`;
+              body = `中断: ${payload.message}`;
+              break;
+          }
           const chunks = splitLongMessage(header + body);
           for (const chunk of chunks) await ch.send(chunk);
         }
