@@ -11,7 +11,7 @@ import { startLog, finishLog } from '../logs/store';
 export type ScheduleResultCallback = (
   channelId: string,
   scheduleName: string,
-  result: string,
+  payload: { status: 'success' | 'failed' | 'aborted'; message: string },
 ) => Promise<void>;
 
 /** Execute a single prompt against the configured LLM and return the response text. */
@@ -178,7 +178,10 @@ async function tick(): Promise<void> {
         console.log(`[${ts}] Response from "${schedule.name}":\n${result}\n`);
         // Notify Discord channel if configured
         if (resultCallback && schedule.discordChannelId) {
-          resultCallback(schedule.discordChannelId, schedule.name, result).catch((err: unknown) => {
+          resultCallback(schedule.discordChannelId, schedule.name, {
+            status: 'success',
+            message: result,
+          }).catch((err: unknown) => {
             console.error(`[${ts}] Failed to send Discord notification for "${schedule.name}":`, err);
           });
         }
@@ -192,6 +195,14 @@ async function tick(): Promise<void> {
           const msg = err instanceof Error ? err.message : String(err);
           finishLog(await logId, 'failed', msg);
           console.error(`[${ts}] Schedule "${schedule.name}" failed: ${msg}`);
+          if (resultCallback && schedule.discordChannelId) {
+            resultCallback(schedule.discordChannelId, schedule.name, {
+              status: 'failed',
+              message: msg,
+            }).catch((notifyErr: unknown) => {
+              console.error(`[${ts}] Failed to send Discord notification for "${schedule.name}":`, notifyErr);
+            });
+          }
         }
       })
       .finally(() => {

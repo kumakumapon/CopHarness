@@ -640,13 +640,22 @@ async function main() {
     console.log(`Provider: ${provider}, Model: ${model}`);
 
     const defaultNotifyChannel = process.env.DISCORD_SCHEDULE_CHANNEL;
-    startScheduler(async (channelId, scheduleName, result) => {
+    startScheduler(async (channelId, scheduleName, payload) => {
       const targetId = defaultNotifyChannel ?? channelId;
       try {
         const ch = await client.channels.fetch(targetId);
         if (ch && ch instanceof TextChannel) {
-          const header = `📅 **スケジュール実行完了: ${scheduleName}**\n`;
-          const chunks = splitLongMessage(header + result);
+          const header =
+            payload.status === 'failed'
+              ? `❌ **スケジュール実行失敗: ${scheduleName}**\n`
+              : payload.status === 'aborted'
+                ? `⏹️ **スケジュール実行中断: ${scheduleName}**\n`
+                : `📅 **スケジュール実行完了: ${scheduleName}**\n`;
+          const body =
+            payload.status === 'failed'
+              ? `エラー: ${payload.message}`
+              : payload.message;
+          const chunks = splitLongMessage(header + body);
           for (const chunk of chunks) await ch.send(chunk);
         }
       } catch (err) {
