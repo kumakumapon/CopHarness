@@ -28,6 +28,15 @@
  *   !schedule fire <id>
  *   !schedule stop <id>
  *   !schedule help
+ *
+ * Prompt Wizard commands (DM or @mention):
+ *   !wizard            – Show template list
+ *   !wizard <number>   – Select template and start wizard
+ *   !wizard cancel     – Cancel current wizard session
+ *   !run               – Execute the generated prompt with the LLM
+ *   During wizard: reply normally to answer questions
+ *   "キャンセル" or "cancel" – Cancel wizard at any step
+ *   "実行" / "はい" / "yes" / "run" – Execute when prompt is ready
  */
 
 import * as fs from 'fs';
@@ -72,13 +81,20 @@ import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
 import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 import { loadHistory, saveHistory } from '../lib/history/store';
 import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
+import {
+  getSession as getWizardSession,
+  clearSession as clearWizardSession,
+  enterSelectingMode,
+  selectTemplate as wizSelectTemplate,
+  continueWizard as wizContinue,
+  promptTemplates,
+} from '../lib/promptWizardSession';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
 const MAX_HISTORY = Math.max(1, Number(process.env.DISCORD_MAX_HISTORY) || 20);
-const DISCORD_RESPONSE_MAX_LENGTH = 2000; // Discord message character limit
-// Maximum size (bytes) for a single image attachment to download (default: 8 MB)
+const DISCORD_RESPONSE_MAX_LENGTH = 2000;
 const MAX_IMAGE_BYTES = Number(process.env.DISCORD_MAX_IMAGE_BYTES) || 8 * 1024 * 1024;
 
 if (!DISCORD_BOT_TOKEN) {
@@ -86,13 +102,8 @@ if (!DISCORD_BOT_TOKEN) {
   process.exit(1);
 }
 
-// Per-channel conversation history (write-through in-memory cache)
 const channelHistory = new Map<string, LLMMessage[]>();
 
-/**
- * Download an image URL and return it as a base64-encoded LLMAttachment.
- * Returns null if the content type is not an image or the file exceeds MAX_IMAGE_BYTES.
- */
 async function fetchImageAttachment(
   url: string,
   contentType: string | null,
@@ -121,7 +132,6 @@ async function fetchImageAttachment(
 
 function getHistory(channelId: string): LLMMessage[] {
   if (!channelHistory.has(channelId)) {
-    // Try to restore from disk; otherwise start a fresh history
     const persisted = loadHistory(`discord:${channelId}`);
     const history: LLMMessage[] = persisted.length > 0 ? persisted : [];
     if (history.length === 0 && SYSTEM_PROMPT) {
@@ -141,7 +151,6 @@ async function persistChannelHistory(channelId: string, history: LLMMessage[]): 
 }
 
 function trimHistory(history: LLMMessage[]): void {
-  // Keep system message (if any) + messages within token budget + count ceiling
   trimHistoryToTokenBudget(history, undefined, undefined, MAX_HISTORY * 2);
 }
 
@@ -154,7 +163,6 @@ function splitLongMessage(text: string): string[] {
       chunks.push(remaining);
       break;
     }
-    // Try to split at a newline boundary within the limit
     const slice = remaining.slice(0, DISCORD_RESPONSE_MAX_LENGTH);
     const lastNewline = slice.lastIndexOf('\n');
     const splitAt = lastNewline > DISCORD_RESPONSE_MAX_LENGTH / 2 ? lastNewline : DISCORD_RESPONSE_MAX_LENGTH;
@@ -164,7 +172,18 @@ function splitLongMessage(text: string): string[] {
   return chunks;
 }
 
-// ── Schedule command helpers ──────────────────────────────────────────────────
+async function sendInChunks(message: Message, text: string): Promise<void> {
+  const chunks = splitLongMessage(text);
+  for (let i = 0; i < chunks.length; i++) {
+    if (i === 0) {
+      await message.reply(chunks[i]);
+    } else if ('send' in message.channel && typeof message.channel.send === 'function') {
+      await (message.channel as { send: (t: string) => Promise<unknown> }).send(chunks[i]);
+    }
+  }
+}
+
+// ── Schedule command helpers ───────────────────────────────────────────────────────────
 
 const SCHEDULE_HELP = `\`\`\`
 スケジュール管理コマンド:
@@ -187,7 +206,6 @@ const SCHEDULE_HELP = `\`\`\`
 例:
   !schedule add "09:00" "今日の作業内容を提案して" --name 朝のブリーフィング
   !schedule add "毎週金曜18時" "今週の振り返りをして" --name 週次レビュー
-  !schedule add "毎日朝9時" "おはようございます。今日のタスクを提案して"
   !schedule list
   !schedule remove abc123
 \`\`\``;
@@ -210,10 +228,7 @@ function formatScheduleList(): string {
     const next = s.enabled ? nextRunDate(normalizeCron(s.cron), now) : null;
     const status = s.enabled ? '✓' : '✗';
     const nextStr = next ? next.toLocaleString('ja-JP') : '-';
-    const channelStr = s.discordChannelId ? ` → <#${s.discordChannelId}>` : '';
-    lines.push(
-      `[${status}] ${s.id.slice(0, 8)} | ${s.name} | ${s.cron}${channelStr}`,
-    );
+    lines.push(`[${status}] ${s.id.slice(0, 8)} | ${s.name} | ${s.cron}`);
     lines.push(`       次回: ${nextStr}`);
     lines.push(`       プロンプト: ${s.prompt.length > 60 ? s.prompt.slice(0, 57) + '...' : s.prompt}`);
   }
@@ -221,59 +236,35 @@ function formatScheduleList(): string {
   return lines.join('\n');
 }
 
-/**
- * Parse a schedule add command string into { cron, prompt, name }.
- * The cron token may be quoted (single or double), and the prompt may also be quoted.
- * Remaining arguments after cron + prompt are parsed for --name.
- */
 function parseScheduleAdd(args: string): { cron: string; prompt: string; name: string } | string {
-  // Tokenise: handle single/double quoted strings and bare words
   const tokens: string[] = [];
   let i = 0;
   while (i < args.length) {
-    if (args[i] === ' ') {
-      i++;
-      continue;
-    }
+    if (args[i] === ' ') { i++; continue; }
     if (args[i] === '"' || args[i] === "'") {
-      const q = args[i];
-      i++;
+      const q = args[i]; i++;
       let tok = '';
       while (i < args.length && args[i] !== q) {
-        if (args[i] === '\\' && i + 1 < args.length) {
-          i++;
-          tok += args[i];
-        } else {
-          tok += args[i];
-        }
+        if (args[i] === '\\' && i + 1 < args.length) { i++; tok += args[i]; }
+        else { tok += args[i]; }
         i++;
       }
-      i++; // closing quote
+      i++;
       tokens.push(tok);
     } else {
       let tok = '';
-      while (i < args.length && args[i] !== ' ') {
-        tok += args[i];
-        i++;
-      }
+      while (i < args.length && args[i] !== ' ') { tok += args[i]; i++; }
       tokens.push(tok);
     }
   }
 
-  if (tokens.length < 2) {
-    return '使い方: `!schedule add <時間指定> <プロンプト> [--name <名前>]`';
-  }
+  if (tokens.length < 2) return '使い方: `!schedule add <時間指定> <プロンプト> [--name <名前>]`';
 
   const cron = tokens[0];
-
-  // Prompt may be the second quoted token, or bare tokens until --name
   let prompt = tokens[1];
   let name = 'Unnamed';
-
   const nameIdx = tokens.indexOf('--name');
-  if (nameIdx !== -1 && tokens[nameIdx + 1]) {
-    name = tokens[nameIdx + 1];
-  }
+  if (nameIdx !== -1 && tokens[nameIdx + 1]) name = tokens[nameIdx + 1];
 
   return { cron, prompt, name };
 }
@@ -294,21 +285,15 @@ async function handleScheduleCommand(message: Message, args: string): Promise<vo
       return;
 
     case 'add': {
-      const rest = args.trim().slice(3).trim(); // strip "add"
+      const rest = args.trim().slice(3).trim();
       const parsed = parseScheduleAdd(rest);
-      if (typeof parsed === 'string') {
-        await message.reply(`エラー: ${parsed}`);
-        return;
-      }
+      if (typeof parsed === 'string') { await message.reply(`エラー: ${parsed}`); return; }
 
-      // Resolve cron: accepts HH:MM, 5-field cron, or natural language via LLM
       let resolvedCron: string;
       try {
         resolvedCron = await resolveCronExpression(parsed.cron);
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        await message.reply(`エラー: ${errMsg}`);
-        return;
+        await message.reply(`エラー: ${err instanceof Error ? err.message : String(err)}`); return;
       }
 
       const entry = addSchedule({
@@ -319,10 +304,9 @@ async function handleScheduleCommand(message: Message, args: string): Promise<vo
       });
       const next = nextRunDate(normalizeCron(resolvedCron), new Date());
       const nextStr = next ? next.toLocaleString('ja-JP') : '不明';
-      const cronNote =
-        resolvedCron !== parsed.cron
-          ? `\n（"${parsed.cron}" → \`${resolvedCron}\` に解釈しました）`
-          : '';
+      const cronNote = resolvedCron !== parsed.cron
+        ? `\n（"${parsed.cron}" → \`${resolvedCron}\` に解釈しました）`
+        : '';
       await message.reply(
         `✅ スケジュールを追加しました\n` +
         `ID: \`${entry.id.slice(0, 8)}\`\n` +
@@ -388,28 +372,112 @@ async function handleScheduleCommand(message: Message, args: string): Promise<vo
   }
 }
 
-// ── Message handling ──────────────────────────────────────────────────────────
+// ── Prompt Wizard command helpers ──────────────────────────────────────────────
+
+async function handleWizardCommand(
+  message: Message,
+  args: string,
+  channelKey: string,
+  adapter: LLMAdapter,
+): Promise<void> {
+  const sub = args.trim().split(/\s+/)[0]?.toLowerCase();
+
+  if (sub === 'cancel') {
+    clearWizardSession(channelKey);
+    await message.reply('ウィザードをキャンセルしました。');
+    return;
+  }
+
+  if (!sub || sub === 'list') {
+    await message.reply(enterSelectingMode(channelKey));
+    return;
+  }
+
+  const num = parseInt(sub, 10);
+  if (!isNaN(num) && num >= 1) {
+    if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
+    const reply = await wizSelectTemplate(channelKey, num, adapter);
+    await sendInChunks(message, reply);
+    return;
+  }
+
+  // Search by Japanese name
+  const idx = promptTemplates.findIndex(
+    (t) => t.nameJa.includes(args.trim()) || t.id.toLowerCase().includes(args.trim().toLowerCase()),
+  );
+  if (idx !== -1) {
+    if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
+    const reply = await wizSelectTemplate(channelKey, idx + 1, adapter);
+    await sendInChunks(message, reply);
+    return;
+  }
+
+  await message.reply(
+    '```\n' +
+    'プロンプトウィザード コマンド:\n' +
+    '  !wizard          – テンプレート一覧を表示\n' +
+    '  !wizard <番号>   – テンプレートを選択して開始\n' +
+    '  !wizard cancel   – ウィザードをキャンセル\n' +
+    '  !run             – 生成したプロンプトを LLM に実行\n' +
+    '```',
+  );
+}
+
+async function sendWizardComplete(
+  message: Message,
+  wizardText: string,
+  generatedPrompt: string,
+): Promise<void> {
+  const promptPreview =
+    generatedPrompt.length > 1400
+      ? generatedPrompt.slice(0, 1400) + '\n...(以下省略)'
+      : generatedPrompt;
+  const fullText =
+    `${wizardText}\n\n` +
+    `📋 **生成されたプロンプト:**\n\`\`\`\n${promptPreview}\n\`\`\`\n\n` +
+    `▶️ \`!run\` で実行｜「キャンセル」でキャンセル`;
+  await sendInChunks(message, fullText);
+}
+
+async function executeWizardPrompt(
+  message: Message,
+  channelKey: string,
+  generatedPrompt: string,
+  adapter: LLMAdapter,
+): Promise<void> {
+  clearWizardSession(channelKey);
+  if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
+  try {
+    const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
+    const resp = await adapter.complete({
+      messages: [{ role: 'user', content: generatedPrompt }],
+      timeoutMs,
+    });
+    await sendInChunks(message, resp.content || '（応答がありませんでした）');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await message.reply(`実行エラー: ${msg.slice(0, 200)}`);
+  }
+}
+
+// ── Message handling ──────────────────────────────────────────────────────────────────
 
 async function handleMessage(
   message: Message,
   adapter: LLMAdapter,
   botUserId: string,
 ): Promise<void> {
-  // Ignore messages from bots
   if (message.author.bot) return;
 
   const isDM = !message.guild;
   const isMention = message.mentions.has(botUserId);
-
-  // Respond to DMs and @mentions
   if (!isDM && !isMention) return;
 
-  // Strip the bot mention from the content
   let userText = message.content
     .replace(new RegExp(`<@!?${botUserId}>`, 'g'), '')
     .trim();
 
-  // Intercept schedule management commands
+  // ── !schedule commands (existing) ──
   const scheduleCmd = `${DISCORD_PREFIX}schedule`;
   if (userText.startsWith(scheduleCmd)) {
     const args = userText.slice(scheduleCmd.length).trim();
@@ -417,7 +485,30 @@ async function handleMessage(
     return;
   }
 
-  // Collect image attachments from the message
+  // ── !wizard commands ──
+  const wizardCmd = `${DISCORD_PREFIX}wizard`;
+  const channelKey = `discord:${message.channelId}`;
+
+  if (userText.startsWith(wizardCmd)) {
+    const args = userText.slice(wizardCmd.length).trim();
+    await handleWizardCommand(message, args, channelKey, adapter);
+    return;
+  }
+
+  // ── !run — execute wizard-generated prompt ──
+  if (userText === `${DISCORD_PREFIX}run`) {
+    const wizSess = getWizardSession(channelKey);
+    if (wizSess?.stage === 'ready' && wizSess.generatedPrompt) {
+      await executeWizardPrompt(message, channelKey, wizSess.generatedPrompt, adapter);
+    } else {
+      await message.reply(
+        '実行できるプロンプトがありません。先に `!wizard` でプロンプトを生成してください。',
+      );
+    }
+    return;
+  }
+
+  // Collect image attachments
   const attachments: LLMAttachment[] = [];
   for (const attachment of message.attachments.values()) {
     if (!attachment.contentType?.startsWith('image/')) continue;
@@ -432,22 +523,62 @@ async function handleMessage(
     await message.reply('何かご用件はありますか？');
     return;
   }
+  if (!userText) userText = '画像について教えてください。';
 
-  // When only images are sent (no text), use a default prompt
-  if (!userText) {
-    userText = '画像について教えてください。';
+  // ── Route to wizard session if active (text-only; skip when images attached) ──
+  const wizSess = getWizardSession(channelKey);
+  if (wizSess && attachments.length === 0) {
+    const lowerText = userText.toLowerCase();
+
+    if (lowerText === 'キャンセル' || lowerText === 'cancel') {
+      clearWizardSession(channelKey);
+      await message.reply('ウィザードをキャンセルしました。');
+      return;
+    }
+
+    if (wizSess.stage === 'selecting') {
+      const num = parseInt(userText.trim(), 10);
+      if (!isNaN(num) && num >= 1) {
+        if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
+        const reply = await wizSelectTemplate(channelKey, num, adapter);
+        await sendInChunks(message, reply);
+      } else {
+        await message.reply('番号を入力してテンプレートを選択してください。');
+      }
+      return;
+    }
+
+    if (wizSess.stage === 'collecting') {
+      if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
+      const result = await wizContinue(channelKey, userText, adapter);
+      if (result.type === 'complete') {
+        await sendWizardComplete(message, result.text, result.generatedPrompt);
+      } else {
+        await sendInChunks(message, result.text);
+      }
+      return;
+    }
+
+    if (wizSess.stage === 'ready' && wizSess.generatedPrompt) {
+      if (lowerText === '実行' || lowerText === 'はい' || lowerText === 'yes' || lowerText === 'run') {
+        await executeWizardPrompt(message, channelKey, wizSess.generatedPrompt, adapter);
+      } else {
+        await message.reply(
+          '`!run` または「実行」でプロンプトを実行。「キャンセル」でキャンセル。',
+        );
+      }
+      return;
+    }
   }
 
+  // ── Normal LLM chat (existing) ──
   const channelId = message.channelId;
   const history = getHistory(channelId);
   history.push({ role: 'user', content: userText });
   trimHistory(history);
 
   try {
-    // Show typing indicator while waiting for LLM
-    if ('sendTyping' in message.channel) {
-      await (message.channel as any).sendTyping();
-    }
+    if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
 
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     const resp = await adapter.complete({ messages: [...history], attachments, timeoutMs });
@@ -457,19 +588,10 @@ async function handleMessage(
     trimHistory(history);
     await persistChannelHistory(channelId, history);
 
-    // Send reply, splitting if necessary
-    const chunks = splitLongMessage(replyText);
-    for (let i = 0; i < chunks.length; i++) {
-      if (i === 0) {
-        await message.reply(chunks[i]);
-      } else if ('send' in message.channel && typeof message.channel.send === 'function') {
-        await (message.channel as { send: (text: string) => Promise<unknown> }).send(chunks[i]);
-      }
-    }
+    await sendInChunks(message, replyText);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Discord Bot] LLM error:`, err);
-    // Remove the user message that failed so history stays clean
+    console.error('[Discord Bot] LLM error:', err);
     const idx = history.lastIndexOf(history.find((m) => m.role === 'user' && m.content === userText)!);
     if (idx !== -1) history.splice(idx, 1);
     await message.reply(`エラーが発生しました: ${msg.slice(0, 200)}`);
@@ -517,8 +639,6 @@ async function main() {
     console.log(`CopHarness Discord Bot ready — logged in as ${c.user.tag}`);
     console.log(`Provider: ${provider}, Model: ${model}`);
 
-    // Start the embedded scheduler daemon.
-    // When a scheduled prompt finishes, post the result to the stored Discord channel.
     const defaultNotifyChannel = process.env.DISCORD_SCHEDULE_CHANNEL;
     startScheduler(async (channelId, scheduleName, result) => {
       const targetId = defaultNotifyChannel ?? channelId;
@@ -527,31 +647,24 @@ async function main() {
         if (ch && ch instanceof TextChannel) {
           const header = `📅 **スケジュール実行完了: ${scheduleName}**\n`;
           const chunks = splitLongMessage(header + result);
-          for (const chunk of chunks) {
-            await ch.send(chunk);
-          }
+          for (const chunk of chunks) await ch.send(chunk);
         }
       } catch (err) {
         console.error(`[Discord Bot] Failed to post schedule result to channel ${targetId}:`, err);
       }
     });
 
-    // Send a startup greeting to the configured greeting or schedule channel
     const greetingChannelId =
       process.env.DISCORD_GREETING_CHANNEL || process.env.DISCORD_SCHEDULE_CHANNEL;
     if (greetingChannelId) {
       const greeting =
         process.env.DISCORD_GREETING_MESSAGE ||
         `こんにちは！CopHarness ボット（${c.user.tag}）が起動しました 🤖\n` +
-        `AI会話やスケジュール管理をお手伝いします。\`${DISCORD_PREFIX}schedule help\` でスケジュール機能を確認できます。`;
+        `AI会話やスケジュール管理をお手伝いします。\`${DISCORD_PREFIX}schedule help\` でスケジュール機能、\`${DISCORD_PREFIX}wizard\` でプロンプトウィザードをご確認できます。`;
       client.channels
         .fetch(greetingChannelId)
-        .then((ch) => {
-          if (ch instanceof TextChannel) return ch.send(greeting);
-        })
-        .catch((err) => {
-          console.error('[Discord Bot] Failed to send startup greeting:', err);
-        });
+        .then((ch) => { if (ch instanceof TextChannel) return ch.send(greeting); })
+        .catch((err) => { console.error('[Discord Bot] Failed to send startup greeting:', err); });
     }
   });
 
