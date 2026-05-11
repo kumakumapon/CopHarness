@@ -18,6 +18,13 @@ const MAX_SNIPPET_LENGTH = 400;
 /** Request timeout per query in milliseconds. */
 const TIMEOUT_MS = 20_000;
 
+/** Truncate text to maxLength characters at a word boundary. */
+function truncateSnippet(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  const boundary = text.slice(0, maxLength).lastIndexOf(' ');
+  return (boundary > 0 ? text.slice(0, boundary) : text.slice(0, maxLength)) + '...';
+}
+
 interface DdgResponse {
   Abstract?: string;
   Answer?: string;
@@ -151,13 +158,7 @@ export const deepResearch: SkillDefinition = {
                 });
                 if (summaryResponse.ok) {
                   const summary = await summaryResponse.json() as WikiSummary;
-                  const boundary = summary.extract.slice(0, MAX_SNIPPET_LENGTH).lastIndexOf(' ');
-                  const extract =
-                    summary.extract.length > MAX_SNIPPET_LENGTH
-                      ? (boundary > 0
-                          ? summary.extract.slice(0, boundary)
-                          : summary.extract.slice(0, MAX_SNIPPET_LENGTH)) + '...'
-                      : summary.extract;
+                  const extract = truncateSnippet(summary.extract, MAX_SNIPPET_LENGTH);
                   const pageUrl =
                     summary.content_urls?.desktop?.page ??
                     `https://en.wikipedia.org/wiki/${encodeURIComponent(result.title)}`;

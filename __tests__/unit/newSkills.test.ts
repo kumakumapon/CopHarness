@@ -1329,7 +1329,7 @@ describe('deepResearch skill handler', () => {
     });
     // Count DuckDuckGo calls: should be 4 (main + max 3 sub-queries)
     const ddgCalls = (global.fetch as jest.Mock).mock.calls.filter(
-      ([url]: [string]) => String(url).includes('api.duckduckgo.com'),
+      ([url]: [string]) => String(url).startsWith('https://api.duckduckgo.com/'),
     );
     expect(ddgCalls.length).toBe(4);
   });
