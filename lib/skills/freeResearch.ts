@@ -158,7 +158,7 @@ export const freeResearch: SkillDefinition = {
     'Queries the DuckDuckGo Instant Answer API for a quick summary and related topics, ' +
     'then searches Wikipedia for in-depth articles. ' +
     'Returns a structured research report. ' +
-    'Use this as a free alternative to deepResearch when TAVILY_API_KEY is unavailable.',
+    'Use this for a language-specific research report (supports multiple Wikipedia language editions).',
   parameters: {
     type: 'object',
     properties: {

@@ -75,7 +75,7 @@ Assistant: sqrt(144) + 10 = 22 です。
 | | `listDirectory` | ディレクトリ一覧 | — |
 | | `searchInFiles` | ファイル内検索 | — |
 | **Web** | `fetchUrl` | URL コンテンツ取得 | — |
-| | `webSearch` | Web 検索（Tavily） | `TAVILY_API_KEY` |
+| | `webSearch` | Web 検索（DuckDuckGo） | — |
 | | `getWeather` | 天気情報取得 | — |
 | **システム** | `runCommand` | コマンド実行（ホワイトリスト制限） | — |
 | | `getSystemInfo` | システム情報取得 | — |
@@ -84,7 +84,7 @@ Assistant: sqrt(144) + 10 = 22 です。
 | | `memoryGet` | メモ取得 | — |
 | | `memoryList` | メモ一覧 | — |
 | **外部 API** | `githubSearch` | GitHub 検索 | `GITHUB_TOKEN`（任意） |
-| | `translateText` | DeepL 翻訳 | `DEEPL_API_KEY` |
+| | `translateText` | LLM 翻訳 | — |
 | | `sendNotification` | Slack/Discord 通知 | `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` |
 | **拡張（AI アシスタント）** | `arXivSearch` | arXiv 論文検索 | — |
 | | `techNews` | テックニュース取得（RSS） | — |
@@ -446,7 +446,7 @@ https://example.com の内容を取得して
 
 ---
 
-#### `webSearch` — Web 検索（要: `TAVILY_API_KEY`）
+#### `webSearch` — Web 検索（APIキー不要）
 
 **パラメータ:**
 | 名前 | 型 | 説明 | デフォルト |
@@ -454,11 +454,7 @@ https://example.com の内容を取得して
 | `query` | string | 検索クエリ | 必須 |
 | `maxResults` | number | 結果数（1–10） | `5` |
 
-**セットアップ:**
-```bash
-# https://tavily.com で無料アカウントを作成してキーを取得
-TAVILY_API_KEY=tvly-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+DuckDuckGo Instant Answer API を使用（無料・キー不要）。
 
 **チャットでの呼び出し例:**
 ```
@@ -622,15 +618,11 @@ language:go stars:>1000 のリポジトリを探して
 
 ---
 
-#### `translateText` — 翻訳（要: `DEEPL_API_KEY`）
+#### `translateText` — 翻訳（APIキー不要）
 
-**セットアップ:**
-```bash
-# https://www.deepl.com/pro-api で無料アカウントを作成
-DEEPL_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx  # 無料プランは末尾 :fx
-```
+設定済みの LLM プロバイダーを使用して翻訳します。DeepL 等の外部翻訳 API キーは不要です。
 
-**対応言語（ターゲット）:** JA, EN-US, EN-GB, ZH, KO, DE, FR, ES, IT, PT-BR, RU, 他多数
+**対応言語:** LLM が理解できるあらゆる言語ペアをサポート
 
 **チャットでの呼び出し例:**
 ```
@@ -1069,8 +1061,8 @@ curl -X POST http://localhost:3000/api/copilot \
 
 | スキル | 確認すること |
 |--------|------------|
-| `webSearch` | `TAVILY_API_KEY` が `.env.local` に設定されているか |
-| `translateText` | `DEEPL_API_KEY` が正しいか（無料プランは末尾 `:fx`） |
+| `webSearch` | API キー不要。DuckDuckGo Instant Answer API を使用 |
+| `translateText` | API キー不要。設定済みの LLM プロバイダーを使用 |
 | `sendNotification` | `SLACK_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL` が有効か |
 | `githubSearch` | `GITHUB_TOKEN` は任意。設定しなくてもレート制限内なら動作 |
 | `githubRepo` | `GITHUB_TOKEN` は任意。Private リポジトリにはトークンが必要 |

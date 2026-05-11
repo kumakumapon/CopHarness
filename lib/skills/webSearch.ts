@@ -1,28 +1,32 @@
 import { type SkillDefinition } from '../skill';
 
 /**
- * Web search skill using the Tavily Search API.
- * Requires TAVILY_API_KEY environment variable.
- * Sign up for a free key at https://tavily.com
+ * Web search skill using the DuckDuckGo Instant Answer API.
+ * No API key required.
  */
 
-interface TavilyResult {
-  title: string;
-  url: string;
-  content: string;
-  score?: number;
+interface DdgRelatedTopic {
+  Text?: string;
+  FirstURL?: string;
+  Topics?: DdgRelatedTopic[];
 }
 
-interface TavilyResponse {
-  results?: TavilyResult[];
-  answer?: string;
+interface DdgResponse {
+  Abstract?: string;
+  AbstractURL?: string;
+  AbstractSource?: string;
+  Answer?: string;
+  Definition?: string;
+  DefinitionSource?: string;
+  RelatedTopics?: DdgRelatedTopic[];
+  Results?: DdgRelatedTopic[];
 }
 
 export const webSearch: SkillDefinition = {
   name: 'webSearch',
   description:
-    'Searches the web for up-to-date information using the Tavily Search API. ' +
-    'Requires the TAVILY_API_KEY environment variable.',
+    'Searches the web for up-to-date information using the DuckDuckGo Instant Answer API. ' +
+    'No API key required.',
   parameters: {
     type: 'object',
     properties: {
@@ -40,49 +44,83 @@ export const webSearch: SkillDefinition = {
     required: ['query'],
   },
   category: 'web',
-  riskLevel: 'medium',
-  requiresEnv: ['TAVILY_API_KEY'],
+  riskLevel: 'low',
   handler: async (args) => {
-    const apiKey = process.env.TAVILY_API_KEY;
-    if (!apiKey) {
-      return { content: 'Error: TAVILY_API_KEY environment variable is not set.', isError: true };
-    }
     const query = String(args.query ?? '').trim();
     if (!query) return { content: 'Error: query is required', isError: true };
     const maxResults = typeof args.maxResults === 'number'
       ? Math.min(10, Math.max(1, Math.floor(args.maxResults)))
       : 5;
 
+    const url =
+      'https://api.duckduckgo.com/?' +
+      new URLSearchParams({
+        q: query,
+        format: 'json',
+        no_html: '1',
+        skip_disambig: '1',
+        no_redirect: '1',
+      }).toString();
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+
     try {
-      const response = await fetch('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          query,
-          max_results: maxResults,
-          include_answer: true,
-          search_depth: 'basic',
-        }),
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'CopHarness/1.0 (webSearch skill)' },
       });
+      clearTimeout(timer);
       if (!response.ok) {
-        return { content: `Error: Tavily API returned ${response.status} ${response.statusText}`, isError: true };
+        return { content: `Error: DuckDuckGo API returned ${response.status} ${response.statusText}`, isError: true };
       }
-      const data = await response.json() as TavilyResponse;
+      const data = await response.json() as DdgResponse;
       const parts: string[] = [];
-      if (data.answer) {
-        parts.push(`**Summary:** ${data.answer}\n`);
+
+      if (data.Answer) {
+        parts.push(`**Instant Answer:** ${data.Answer}`);
       }
-      if (data.results && data.results.length > 0) {
-        parts.push('**Results:**');
-        for (const r of data.results) {
-          parts.push(`\n- **${r.title}**\n  URL: ${r.url}\n  ${r.content}`);
+      if (data.Abstract) {
+        const source = data.AbstractSource ? ` (${data.AbstractSource})` : '';
+        parts.push(`**Summary${source}:** ${data.Abstract}`);
+        if (data.AbstractURL) {
+          parts.push(`**Source:** ${data.AbstractURL}`);
         }
       }
+      if (data.Definition) {
+        const src = data.DefinitionSource ? ` (${data.DefinitionSource})` : '';
+        parts.push(`**Definition${src}:** ${data.Definition}`);
+      }
+
+      // Prefer direct Results, fall back to RelatedTopics
+      const directResults = (data.Results ?? []).filter((r) => r.Text && r.FirstURL).slice(0, maxResults);
+      if (directResults.length > 0) {
+        parts.push('\n**Results:**');
+        for (const r of directResults) {
+          parts.push(`- ${r.Text}\n  ${r.FirstURL}`);
+        }
+      } else {
+        // Flatten nested RelatedTopics
+        const allTopics: DdgRelatedTopic[] = [];
+        for (const t of data.RelatedTopics ?? []) {
+          if (t.Topics) {
+            allTopics.push(...t.Topics);
+          } else {
+            allTopics.push(t);
+          }
+        }
+        const relatedTopics = allTopics.filter((t) => t.Text && t.FirstURL).slice(0, maxResults);
+        if (relatedTopics.length > 0) {
+          parts.push('\n**Related Topics:**');
+          for (const t of relatedTopics) {
+            parts.push(`- ${t.Text}\n  ${t.FirstURL}`);
+          }
+        }
+      }
+
       return { content: parts.join('\n') || 'No results found.' };
     } catch (err) {
+      clearTimeout(timer);
       return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
     }
   },
