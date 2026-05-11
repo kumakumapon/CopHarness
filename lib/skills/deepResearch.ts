@@ -1,63 +1,48 @@
 import { type SkillDefinition } from '../skill';
 
 /**
- * Deep research skill using the Tavily Search API with advanced search depth.
+ * Deep research skill using the DuckDuckGo Instant Answer API and Wikipedia.
  * Performs multi-angle research by running a main query plus optional sub-queries,
- * deduplicates sources, and returns a comprehensive structured report.
- * Requires TAVILY_API_KEY environment variable.
+ * deduplicates Wikipedia articles by title, and returns a comprehensive structured report.
+ * No API key required.
+ *
+ * Sources used:
+ *   - DuckDuckGo Instant Answer API: https://api.duckduckgo.com/
+ *   - Wikipedia REST summary:        https://en.wikipedia.org/api/rest_v1/page/summary/
+ *   - Wikipedia full-text search:    https://en.wikipedia.org/w/api.php
  */
 
-interface TavilyResult {
-  title: string;
-  url: string;
-  content: string;
-  score?: number;
-}
-
-interface TavilyResponse {
-  results?: TavilyResult[];
-  answer?: string;
-}
-
-/** Maximum character length for source content snippets in the report. */
+/** Maximum characters kept from a Wikipedia extract snippet. */
 const MAX_SNIPPET_LENGTH = 400;
 
-/** Perform a single Tavily advanced search and return the parsed response. */
-async function tavilyAdvancedSearch(
-  apiKey: string,
-  query: string,
-  maxResults: number,
-  signal: AbortSignal,
-): Promise<TavilyResponse> {
-  const response = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      query,
-      max_results: maxResults,
-      include_answer: true,
-      search_depth: 'advanced',
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`Tavily API returned ${response.status} ${response.statusText}`);
-  }
-  return response.json() as Promise<TavilyResponse>;
+/** Request timeout per query in milliseconds. */
+const TIMEOUT_MS = 20_000;
+
+interface DdgResponse {
+  Abstract?: string;
+  Answer?: string;
+  Definition?: string;
+}
+
+interface WikiSearchResult {
+  title: string;
+  snippet: string;
+}
+
+interface WikiSummary {
+  title: string;
+  extract: string;
+  content_urls?: { desktop?: { page?: string } };
 }
 
 export const deepResearch: SkillDefinition = {
   name: 'deepResearch',
   description:
-    'Performs deep, multi-angle web research on a topic using the Tavily Search API with ' +
-    'advanced search depth. Runs the main query plus optional sub-queries, deduplicates ' +
-    'sources, and returns a comprehensive structured research report. ' +
+    'Performs deep, multi-angle web research on a topic using the DuckDuckGo Instant Answer API ' +
+    'and Wikipedia. Runs the main query plus optional sub-queries, deduplicates sources, ' +
+    'and returns a comprehensive structured research report. ' +
     'More thorough than webSearch — best for complex questions that benefit from multiple ' +
-    'perspectives or follow-up angles. ' +
-    'Requires the TAVILY_API_KEY environment variable.',
+    'perspectives or follow-up angles. No API key required.',
   parameters: {
     type: 'object',
     properties: {
@@ -73,28 +58,22 @@ export const deepResearch: SkillDefinition = {
       },
       maxResults: {
         type: 'number',
-        description: 'Maximum results per query (1–10). Defaults to 5.',
+        description: 'Maximum Wikipedia articles per query (1–5). Defaults to 3.',
         minimum: 1,
-        maximum: 10,
+        maximum: 5,
       },
     },
     required: ['query'],
   },
   category: 'web',
-  riskLevel: 'medium',
-  requiresEnv: ['TAVILY_API_KEY'],
+  riskLevel: 'low',
   handler: async (args) => {
-    const apiKey = process.env.TAVILY_API_KEY;
-    if (!apiKey) {
-      return { content: 'Error: TAVILY_API_KEY environment variable is not set.', isError: true };
-    }
-
     const query = String(args.query ?? '').trim();
     if (!query) return { content: 'Error: query is required', isError: true };
 
     const maxResults = typeof args.maxResults === 'number'
-      ? Math.min(10, Math.max(1, Math.floor(args.maxResults)))
-      : 5;
+      ? Math.min(5, Math.max(1, Math.floor(args.maxResults)))
+      : 3;
 
     // Parse sub-queries (up to 3)
     const rawSubQueries = typeof args.subQueries === 'string' ? args.subQueries : '';
@@ -105,54 +84,114 @@ export const deepResearch: SkillDefinition = {
       .slice(0, 3);
 
     const allQueries = [query, ...subQueries];
-    const answers: string[] = [];
-    const seenUrls = new Set<string>();
-    const allSources: TavilyResult[] = [];
+    const summaries: string[] = [];
+    const seenTitles = new Set<string>();
+    const allSources: { title: string; extract: string; url: string }[] = [];
 
-    // Run all queries with a 20-second timeout each
     for (const q of allQueries) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 20_000);
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const { signal } = controller;
+
       try {
-        const data = await tavilyAdvancedSearch(apiKey, q, maxResults, controller.signal);
-        clearTimeout(timer);
-        if (data.answer) {
-          answers.push(`**${q}**\n${data.answer}`);
-        }
-        for (const result of data.results ?? []) {
-          if (!seenUrls.has(result.url)) {
-            seenUrls.add(result.url);
-            allSources.push(result);
+        // DuckDuckGo Instant Answer
+        try {
+          const ddgUrl =
+            'https://api.duckduckgo.com/?' +
+            new URLSearchParams({
+              q,
+              format: 'json',
+              no_html: '1',
+              skip_disambig: '1',
+              no_redirect: '1',
+            }).toString();
+          const ddgResponse = await fetch(ddgUrl, {
+            signal,
+            headers: { 'User-Agent': 'CopHarness/1.0 (deepResearch skill)' },
+          });
+          if (ddgResponse.ok) {
+            const ddgData = await ddgResponse.json() as DdgResponse;
+            const ddgSummary = ddgData.Answer ?? ddgData.Abstract ?? ddgData.Definition ?? '';
+            if (ddgSummary) {
+              summaries.push(`**${q}**\n${ddgSummary}`);
+            }
           }
+        } catch {
+          // Non-fatal — continue with Wikipedia
         }
-      } catch (err) {
+
+        // Wikipedia search
+        try {
+          const wikiSearchUrl =
+            'https://en.wikipedia.org/w/api.php?' +
+            new URLSearchParams({
+              action: 'query',
+              list: 'search',
+              srsearch: q,
+              format: 'json',
+              utf8: '1',
+              srlimit: String(maxResults),
+              srprop: 'snippet',
+            }).toString();
+          const wikiSearchResponse = await fetch(wikiSearchUrl, {
+            signal,
+            headers: { 'User-Agent': 'CopHarness/1.0 (deepResearch skill)' },
+          });
+          if (wikiSearchResponse.ok) {
+            const wikiData = await wikiSearchResponse.json() as { query?: { search?: WikiSearchResult[] } };
+            const results = (wikiData.query?.search ?? []).slice(0, maxResults);
+            for (const result of results) {
+              if (seenTitles.has(result.title)) continue;
+              seenTitles.add(result.title);
+              try {
+                const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(result.title)}`;
+                const summaryResponse = await fetch(summaryUrl, {
+                  signal,
+                  headers: { 'User-Agent': 'CopHarness/1.0 (deepResearch skill)' },
+                });
+                if (summaryResponse.ok) {
+                  const summary = await summaryResponse.json() as WikiSummary;
+                  const boundary = summary.extract.slice(0, MAX_SNIPPET_LENGTH).lastIndexOf(' ');
+                  const extract =
+                    summary.extract.length > MAX_SNIPPET_LENGTH
+                      ? (boundary > 0
+                          ? summary.extract.slice(0, boundary)
+                          : summary.extract.slice(0, MAX_SNIPPET_LENGTH)) + '...'
+                      : summary.extract;
+                  const pageUrl =
+                    summary.content_urls?.desktop?.page ??
+                    `https://en.wikipedia.org/wiki/${encodeURIComponent(result.title)}`;
+                  allSources.push({ title: summary.title, extract, url: pageUrl });
+                }
+              } catch {
+                // Skip pages that fail to load
+              }
+            }
+          }
+        } catch {
+          // Non-fatal
+        }
+      } finally {
         clearTimeout(timer);
-        answers.push(`**${q}**\n(Search failed: ${err instanceof Error ? err.message : String(err)})`);
       }
     }
 
-    if (answers.length === 0 && allSources.length === 0) {
+    if (summaries.length === 0 && allSources.length === 0) {
       return { content: 'No results found.', isError: false };
     }
 
     const parts: string[] = [];
     parts.push(`# Deep Research: ${query}\n`);
 
-    if (answers.length > 0) {
+    if (summaries.length > 0) {
       parts.push('## Summaries\n');
-      parts.push(answers.join('\n\n'));
+      parts.push(summaries.join('\n\n'));
     }
 
     if (allSources.length > 0) {
       parts.push('\n## Sources\n');
-      // Sort by score descending (if available), then by insertion order
-      const sorted = [...allSources].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-      for (const [i, src] of sorted.entries()) {
-        const boundary = src.content.slice(0, MAX_SNIPPET_LENGTH).lastIndexOf(' ');
-        const snippet = src.content.length > MAX_SNIPPET_LENGTH
-          ? (boundary > 0 ? src.content.slice(0, boundary) : src.content.slice(0, MAX_SNIPPET_LENGTH)) + '...'
-          : src.content;
-        parts.push(`${i + 1}. **${src.title}**\n   URL: ${src.url}\n   ${snippet}`);
+      for (const [i, src] of allSources.entries()) {
+        parts.push(`${i + 1}. **${src.title}**\n   URL: ${src.url}\n   ${src.extract}`);
       }
     }
 

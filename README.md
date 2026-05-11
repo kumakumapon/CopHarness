@@ -283,7 +283,7 @@ npm run schedule run
 | スキル名 | 説明 | リスク | 必要な環境変数 |
 |---------|------|-------|--------------|
 | `fetchUrl` | URL のコンテンツを取得（HTML は自動でテキスト変換） | 中 | — |
-| `webSearch` | Tavily API でウェブ検索 | 中 | `TAVILY_API_KEY` |
+| `webSearch` | DuckDuckGo API でウェブ検索 | 低 | — |
 | `getWeather` | Open-Meteo API で現在の天気情報を取得（無料・キー不要） | 低 | — |
 
 #### システム系
@@ -309,7 +309,7 @@ npm run schedule run
 | スキル名 | 説明 | リスク | 必要な環境変数 |
 |---------|------|-------|--------------|
 | `githubSearch` | GitHub API でリポジトリ・Issue を検索 | 低 | `GITHUB_TOKEN`（任意、レート制限緩和） |
-| `translateText` | DeepL API でテキストを翻訳 | 低 | `DEEPL_API_KEY` |
+| `translateText` | LLM でテキストを翻訳 | 低 | — |
 | `sendNotification` | Slack / Discord Webhook に通知を送信 | 高 | `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` |
 
 ### スキルの有効/無効設定
