@@ -68,17 +68,18 @@ const replyMetrics: Record<string, number> = {
   retries: 0,
 };
 let Sentry: any = null;
-try {
-  if (process.env.SENTRY_DSN) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    // dynamically require so package is optional
-    // @ts-ignore
-    const _Sentry = require('@sentry/node');
-    _Sentry.init({ dsn: process.env.SENTRY_DSN });
-    Sentry = _Sentry;
-  }
-} catch (e) {
-  console.warn('[LINE Bot] Sentry not initialized or @sentry/node not installed:', e);
+if (process.env.SENTRY_DSN) {
+  // dynamically import so package is optional and avoid using require
+  // import() returns a promise; handle failures gracefully
+  import('@sentry/node')
+    .then((mod) => {
+      const _Sentry = (mod && (mod.default ?? mod)) as any;
+      _Sentry.init({ dsn: process.env.SENTRY_DSN });
+      Sentry = _Sentry;
+    })
+    .catch((e) => {
+      console.warn('[LINE Bot] Sentry not initialized or @sentry/node not installed:', e);
+    });
 }
 
 function recordMetric(name: keyof typeof replyMetrics, delta = 1) {
