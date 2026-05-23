@@ -41,6 +41,25 @@ const LINE_MESSAGE_MAX_LENGTH = 5000;
 
 const userHistory = new Map<string, LLMMessage[]>();
 
+// Helper: reply with retry on transient failures
+async function replyWithRetry(client: any, payload: any, attempts = 3): Promise<any> {
+  let lastErr: any = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await client.replyMessage(payload);
+    } catch (err) {
+      lastErr = err;
+      const waitMs = Math.pow(2, i) * 500; // exponential backoff: 500ms, 1000ms, 2000ms...
+      console.warn('[LINE Bot] replyMessage failed, attempt', i + 1, 'of', attempts, 'waiting', waitMs, 'ms', err);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+  console.error('[LINE Bot] replyMessage failed after retries:', lastErr);
+  // Re-throw so callers can handle if necessary
+  throw lastErr;
+}
+
+
 function getHistory(userId: string): LLMMessage[] {
   if (!userHistory.has(userId)) {
     const persisted = loadHistory(`line:${userId}`);
@@ -139,7 +158,7 @@ export async function POST(req: NextRequest) {
         'こんにちは！CopHarness AIアシスタントです 🤖\n' +
         '「ウィザード」と送ると AIが質問しながらプロンプトを作成します。\n' +
         'メッセージを送ると、AIがお答えします。お気軽にお話しください！';
-      await client.replyMessage({
+      await replyWithRetry(client, {
         replyToken: followEvent.replyToken,
         messages: [{ type: 'text', text: greeting }],
       });
@@ -197,7 +216,7 @@ export async function POST(req: NextRequest) {
     // ── Wizard: cancel ──
     if (wizSess && (lowerText === 'キャンセル' || lowerText === 'cancel')) {
       clearWizardSession(sessionKey);
-      await client.replyMessage({
+      await replyWithRetry(client, {
         replyToken,
         messages: [{ type: 'text', text: 'ウィザードをキャンセルしました。' }],
       });
@@ -210,7 +229,7 @@ export async function POST(req: NextRequest) {
       (lowerText === 'ウィザード' || lowerText === 'wizard' || lowerText === 'プロンプトウィザード')
     ) {
       const reply = enterSelectingMode(sessionKey);
-      await client.replyMessage({
+      await replyWithRetry(client, {
         replyToken,
         messages: [{ type: 'text', text: truncateMessage(reply) }],
       });
@@ -223,19 +242,19 @@ export async function POST(req: NextRequest) {
       if (!isNaN(num) && num >= 1) {
         try {
           const reply = await wizSelectTemplate(sessionKey, num, adapter);
-          await client.replyMessage({
+          await replyWithRetry(client, {
             replyToken,
             messages: [{ type: 'text', text: truncateMessage(reply) }],
           });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
-          await client.replyMessage({
+          await replyWithRetry(client, {
             replyToken,
             messages: [{ type: 'text', text: `エラーが発生しました: ${errMsg.slice(0, 200)}` }],
           });
         }
       } else {
-        await client.replyMessage({
+        await replyWithRetry(client, {
           replyToken,
           messages: [{ type: 'text', text: '番号を入力してテンプレートを選択してください。（例: 1）' }],
         });
@@ -256,12 +275,12 @@ export async function POST(req: NextRequest) {
             `${result.text}\n\n` +
             `📋 生成されたプロンプト:\n${promptPreview}\n\n` +
             `「実行」または「はい」で LLM に実行します。\n「キャンセル」でウィザードを終了します。`;
-          await client.replyMessage({
+          await replyWithRetry(client, {
             replyToken,
             messages: [{ type: 'text', text: truncateMessage(replyText) }],
           });
         } else {
-          await client.replyMessage({
+          await replyWithRetry(client, {
             replyToken,
             messages: [{ type: 'text', text: truncateMessage(result.text) }],
           });
@@ -289,13 +308,13 @@ export async function POST(req: NextRequest) {
           messages: [{ role: 'user', content: prompt }],
           timeoutMs,
         });
-        await client.replyMessage({
+        await replyWithRetry(client, {
           replyToken,
           messages: [{ type: 'text', text: truncateMessage(resp.content || '（応答がありませんでした）') }],
         });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        await client.replyMessage({
+        await replyWithRetry(client, {
           replyToken,
           messages: [{ type: 'text', text: `実行エラー: ${errMsg.slice(0, 200)}` }],
         });
