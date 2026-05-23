@@ -51,12 +51,107 @@ async function replyWithRetry(client: any, payload: any, attempts = 3): Promise<
       lastErr = err;
       const waitMs = Math.pow(2, i) * 500; // exponential backoff: 500ms, 1000ms, 2000ms...
       console.warn('[LINE Bot] replyMessage failed, attempt', i + 1, 'of', attempts, 'waiting', waitMs, 'ms', err);
+      // count retries metric if batching enabled below
       await new Promise((r) => setTimeout(r, waitMs));
     }
   }
   console.error('[LINE Bot] replyMessage failed after retries:', lastErr);
   // Re-throw so callers can handle if necessary
   throw lastErr;
+}
+
+// --- Metrics and optional Sentry integration ---
+const replyMetrics: Record<string, number> = {
+  attempted: 0,
+  succeeded: 0,
+  failed: 0,
+  retries: 0,
+};
+let Sentry: any = null;
+try {
+  if (process.env.SENTRY_DSN) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // dynamically require so package is optional
+    // @ts-ignore
+    const _Sentry = require('@sentry/node');
+    _Sentry.init({ dsn: process.env.SENTRY_DSN });
+    Sentry = _Sentry;
+  }
+} catch (e) {
+  console.warn('[LINE Bot] Sentry not initialized or @sentry/node not installed:', e);
+}
+
+function recordMetric(name: keyof typeof replyMetrics, delta = 1) {
+  if (replyMetrics[name] === undefined) return;
+  replyMetrics[name] += delta;
+}
+
+// --- Async batching configuration (disabled by default) ---
+const LINE_REPLY_BATCH_ASYNC = process.env.LINE_REPLY_BATCH_ASYNC === 'true';
+const REPLY_BATCH_INTERVAL = Number(process.env.LINE_REPLY_BATCH_INTERVAL_MS) || 200;
+const REPLY_BATCH_SIZE = Number(process.env.LINE_REPLY_BATCH_SIZE) || 10;
+const REPLY_CONCURRENCY = Number(process.env.LINE_REPLY_CONCURRENCY) || 3;
+
+const replyQueue: Array<any> = [];
+let replyWorkerRunning = false;
+
+async function processReplyQueue(client: any) {
+  if (replyWorkerRunning) return;
+  replyWorkerRunning = true;
+  try {
+    while (replyQueue.length > 0) {
+      const batch = replyQueue.splice(0, REPLY_BATCH_SIZE);
+      // process in concurrency-limited chunks
+      for (let i = 0; i < batch.length; i += REPLY_CONCURRENCY) {
+        const chunk = batch.slice(i, i + REPLY_CONCURRENCY);
+        await Promise.all(
+          chunk.map(async (payload) => {
+            try {
+              recordMetric('attempted');
+              await replyWithRetry(client, payload);
+              recordMetric('succeeded');
+            } catch (err) {
+              recordMetric('failed');
+              console.error('[LINE Bot] reply failed after retries:', err);
+              if (Sentry) Sentry.captureException(err);
+            }
+          })
+        );
+      }
+    }
+  } catch (err) {
+    console.error('[LINE Bot] reply worker error:', err);
+    if (Sentry) Sentry.captureException(err);
+  } finally {
+    replyWorkerRunning = false;
+  }
+}
+
+function scheduleReply(client: any, payload: any): Promise<any> | void {
+  if (!LINE_REPLY_BATCH_ASYNC) {
+    // immediate path (preserves existing behaviour)
+    recordMetric('attempted');
+    return replyWithRetry(client, payload)
+      .then((res) => {
+        recordMetric('succeeded');
+        return res;
+      })
+      .catch((err) => {
+        recordMetric('failed');
+        if (Sentry) Sentry.captureException(err);
+        throw err;
+      });
+  }
+
+  // enqueue for asynchronous processing
+  replyQueue.push(payload);
+  // schedule worker run shortly
+  setTimeout(() => {
+    processReplyQueue(client).catch((e) => {
+      console.error('[LINE Bot] reply worker fatal:', e);
+      if (Sentry) Sentry.captureException(e);
+    });
+  }, REPLY_BATCH_INTERVAL);
 }
 
 
@@ -158,7 +253,7 @@ export async function POST(req: NextRequest) {
         'こんにちは！CopHarness AIアシスタントです 🤖\n' +
         '「ウィザード」と送ると AIが質問しながらプロンプトを作成します。\n' +
         'メッセージを送ると、AIがお答えします。お気軽にお話しください！';
-      await replyWithRetry(client, {
+      await scheduleReply(client, {
         replyToken: followEvent.replyToken,
         messages: [{ type: 'text', text: greeting }],
       });
@@ -216,7 +311,7 @@ export async function POST(req: NextRequest) {
     // ── Wizard: cancel ──
     if (wizSess && (lowerText === 'キャンセル' || lowerText === 'cancel')) {
       clearWizardSession(sessionKey);
-      await replyWithRetry(client, {
+      await scheduleReply(client, {
         replyToken,
         messages: [{ type: 'text', text: 'ウィザードをキャンセルしました。' }],
       });
@@ -229,7 +324,7 @@ export async function POST(req: NextRequest) {
       (lowerText === 'ウィザード' || lowerText === 'wizard' || lowerText === 'プロンプトウィザード')
     ) {
       const reply = enterSelectingMode(sessionKey);
-      await replyWithRetry(client, {
+      await scheduleReply(client, {
         replyToken,
         messages: [{ type: 'text', text: truncateMessage(reply) }],
       });
@@ -242,19 +337,19 @@ export async function POST(req: NextRequest) {
       if (!isNaN(num) && num >= 1) {
         try {
           const reply = await wizSelectTemplate(sessionKey, num, adapter);
-          await replyWithRetry(client, {
+          await scheduleReply(client, {
             replyToken,
             messages: [{ type: 'text', text: truncateMessage(reply) }],
           });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
-          await replyWithRetry(client, {
+          await scheduleReply(client, {
             replyToken,
             messages: [{ type: 'text', text: `エラーが発生しました: ${errMsg.slice(0, 200)}` }],
           });
         }
       } else {
-        await replyWithRetry(client, {
+        await scheduleReply(client, {
           replyToken,
           messages: [{ type: 'text', text: '番号を入力してテンプレートを選択してください。（例: 1）' }],
         });
@@ -275,19 +370,19 @@ export async function POST(req: NextRequest) {
             `${result.text}\n\n` +
             `📋 生成されたプロンプト:\n${promptPreview}\n\n` +
             `「実行」または「はい」で LLM に実行します。\n「キャンセル」でウィザードを終了します。`;
-          await replyWithRetry(client, {
+          await scheduleReply(client, {
             replyToken,
             messages: [{ type: 'text', text: truncateMessage(replyText) }],
           });
         } else {
-          await replyWithRetry(client, {
+          await scheduleReply(client, {
             replyToken,
             messages: [{ type: 'text', text: truncateMessage(result.text) }],
           });
         }
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        await client.replyMessage({
+        await scheduleReply(client, {
           replyToken,
           messages: [{ type: 'text', text: `エラーが発生しました: ${errMsg.slice(0, 200)}` }],
         });
@@ -308,13 +403,13 @@ export async function POST(req: NextRequest) {
           messages: [{ role: 'user', content: prompt }],
           timeoutMs,
         });
-        await replyWithRetry(client, {
+        await scheduleReply(client, {
           replyToken,
           messages: [{ type: 'text', text: truncateMessage(resp.content || '（応答がありませんでした）') }],
         });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        await replyWithRetry(client, {
+        await scheduleReply(client, {
           replyToken,
           messages: [{ type: 'text', text: `実行エラー: ${errMsg.slice(0, 200)}` }],
         });
@@ -342,7 +437,7 @@ export async function POST(req: NextRequest) {
       console.error('[LINE Bot] LLM error:', err);
       const idx = history.findLastIndex((m) => m.role === 'user' && m.content === userText);
       if (idx !== -1) history.splice(idx, 1);
-      await client.replyMessage({
+      await scheduleReply(client, {
         replyToken,
         messages: [{ type: 'text', text: `エラーが発生しました: ${errMsg.slice(0, 200)}` }],
       });
