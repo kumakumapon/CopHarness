@@ -435,7 +435,7 @@ function LogFeed({ data }: { data: LogsData | undefined }) {
     if (data && scrollRef.current) {
       scrollRef.current.scrollTop = 0;
     }
-  }, [data?.logs.length]);
+  }, [data]);
 
   return (
     <section className="mb-6">
