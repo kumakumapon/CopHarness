@@ -11,6 +11,11 @@
 任意設定
 - LINE_MAX_HISTORY: ユーザーごとに保持するメッセージ対の上限（デフォルト: 20）
 - LINE_GREETING_MESSAGE: follow イベント時に送信する挨拶メッセージ
+- LINE_REPLY_BATCH_ASYNC: "true" にすると返信を非同期バッチ処理する（デフォルト: false）。テストやデバッグ時は無効推奨。
+- LINE_REPLY_BATCH_INTERVAL_MS: バッチワーカーのポーリング間隔（ms）（デフォルト: 200）
+- LINE_REPLY_BATCH_SIZE: 1 バッチで処理する最大返信数（デフォルト: 10）
+- LINE_REPLY_CONCURRENCY: バッチ内で同時実行する replyMessage の最大数（デフォルト: 3）
+- SENTRY_DSN: オプション。設定すると Sentry に例外を送信します（@sentry/node をインストールしておくこと）。
 
 エンドポイント
 - POST /api/line
