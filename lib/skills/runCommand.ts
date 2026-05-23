@@ -24,7 +24,12 @@ const MAX_OUTPUT_CHARS = 10_000;
 
 function runProcess(command: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { shell: false, timeout: TIMEOUT_MS });
+    // On Windows, many simple commands (like echo) are built into cmd.exe and not available as standalone binaries.
+    // Use cmd /c to run these commands on Windows while keeping spawn's shell:false to avoid extra shell parsing.
+    const isWin = process.platform === 'win32';
+    const spawnCmd = isWin ? 'cmd' : command;
+    const spawnArgs = isWin ? ['/c', command, ...args] : args;
+    const child = spawn(spawnCmd, spawnArgs, { shell: false, timeout: TIMEOUT_MS });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
