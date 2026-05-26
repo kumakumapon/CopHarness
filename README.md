@@ -6,9 +6,14 @@
 - **Discord Bot** — Discord の DM / @メンションで LLM と会話（画像添付対応）
 - **LINE Bot** — LINE メッセージに LLM が返答（ウェブフック経由）
 - **HTTP API** — `POST /api/copilot` エンドポイント（Next.js）
+- **ストリーミング API** — `POST /api/copilot/stream` SSE ストリーミングエンドポイント
 - **ダッシュボード** — `/dashboard` でプロバイダ状態・スケジュール・スキル・実行ログを確認（Web UI）
 - **スケジューラー** — cron 式でプロンプトを定期実行（即時実行・中断対応）
 - **スキル（ツール呼び出し）** — LLM からローカル関数を呼び出すツール機能
+- **MCP クライアント** — 外部 MCP サーバーのツールをスキルとして自動登録
+- **マルチエージェント** — 複数の役割エージェントを実行（A2A プロトコル対応）
+- **OpenTelemetry** — LLM 呼び出しをスパン計装し OTLP/HTTP で外部へエクスポート
+- **Human-in-the-Loop** — リスク高スキルの実行前に人間の承認を要求
 
 ---
 
@@ -33,6 +38,11 @@ cp .env.example .env.local
 | `LMSTUDIO_BASE_URL` | LM Studio ローカルサーバーの URL（デフォルト: `http://localhost:1234/v1`） |
 | `LEMONADE_BASE_URL` | Lemonade Server の URL（デフォルト: `http://localhost:8000/api/v0`） |
 | `DISCORD_BOT_TOKEN` | Discord ボットトークン（Discord Bot のみ必要） |
+| `MCP_SERVERS` | MCP サーバーの URL リスト（カンマ区切りまたは JSON 配列） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP エクスポート先 URL（例: `http://localhost:4318`） |
+| `HIL_ENABLED` | `true` または `1` に設定するとリスク高スキルに承認ゲートを適用 |
+| `HIL_APPROVAL_TIMEOUT_MS` | 承認待ちタイムアウト（ミリ秒、デフォルト: `300000`） |
+| `COPHARNESS_API_KEY` | HTTP API の Bearer 認証キー（設定時のみ認証が有効） |
 
 どれか一つの LLM キーがあれば自動判定されます。複数セット時は `COPILOT_PROVIDER` で明示指定も可能です。
 
@@ -438,6 +448,8 @@ npm run dev
 | **スケジュール** | スケジュール一覧の確認、有効/無効の切り替え、即時実行・中断操作 |
 | **スキル** | 登録済みスキル（ツール）の一覧表示 |
 | **実行ログ** | スケジューラーの実行履歴（成功・失敗・中断）を最大 200 件表示 |
+| **Telemetry** | 直近の OTel スパン一覧（プロバイダ・モデル・所要時間・ステータス）を表示 |
+| **承認待ち** | Human-in-the-Loop で待機中のスキル実行を承認または拒否（3 秒ポーリング） |
 
 ダッシュボードは自動更新に対応しており、右上のトグルで切り替え可能です。
 
@@ -455,6 +467,250 @@ npm run dev
 | `POST` | `/api/dashboard/schedules/[id]/stop` | 指定スケジュールの実行中プロンプトを中断させる |
 | `GET` | `/api/dashboard/logs` | 実行ログを返す（`?limit=N` で件数指定、最大 200） |
 | `GET` | `/api/dashboard/skills` | 登録済みスキルの名前と説明一覧を返す |
+| `GET` | `/api/dashboard/telemetry` | 直近の OTel スパン一覧を返す（`?limit=N` で件数指定） |
+| `GET` | `/api/dashboard/approvals` | 承認待ちスキル実行リストを返す |
+| `POST` | `/api/dashboard/approvals/[id]/approve` | 指定リクエストを承認する |
+| `POST` | `/api/dashboard/approvals/[id]/reject` | 指定リクエストを拒否する |
+
+---
+
+## ストリーミング API
+
+LLM の返答をリアルタイムで受け取れる SSE（Server-Sent Events）エンドポイントです。OpenAI / Anthropic / Gemini アダプターはネイティブストリーミングに対応します。
+
+```bash
+npm run dev
+```
+
+### POST /api/copilot/stream
+
+リクエスト形式は `POST /api/copilot` と同じです（`messages`, `attachments`, `skills`, `timeoutMs` フィールド）。
+
+**レスポンス形式（SSE）**
+
+```
+data: {"chunk":"こんにちは"}
+data: {"chunk":"！"}
+data: [DONE]
+```
+
+エラー時:
+
+```
+data: {"error":"タイムアウトしました"}
+```
+
+**クライアント実装例**
+
+```typescript
+const res = await fetch('/api/copilot/stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ messages: [{ role: 'user', content: 'こんにちは' }] }),
+});
+
+const reader = res.body!.getReader();
+const decoder = new TextDecoder();
+for await (const { done, value } of { [Symbol.asyncIterator]: () => ({ next: () => reader.read() }) }) {
+  if (done) break;
+  for (const line of decoder.decode(value).split('\n')) {
+    if (!line.startsWith('data: ')) continue;
+    const payload = line.slice(6);
+    if (payload === '[DONE]') break;
+    const { chunk, error } = JSON.parse(payload);
+    if (chunk) process.stdout.write(chunk);
+  }
+}
+```
+
+### 対応プロバイダ
+
+| プロバイダ | ストリーミング実装 |
+|-----------|-----------------|
+| OpenAI | ネイティブ SSE (`stream: true`) |
+| Anthropic | ネイティブ SSE (`stream: true`) |
+| Gemini | ネイティブ SSE (`streamGenerateContent`) |
+| LM Studio | OpenAI アダプターに委譲 |
+| Lemonade | OpenAI アダプターに委譲 |
+| GitHub Copilot | フォールバック（`complete()` 後に一括 yield） |
+
+---
+
+## MCP クライアント
+
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 準拠サーバーのツールを、CopHarness のスキルとして自動登録します。JSON-RPC over HTTP（2024-11-05 仕様）に対応しています。
+
+### 設定
+
+`MCP_SERVERS` 環境変数に MCP サーバーの URL を指定します。
+
+```env
+# カンマ区切り（シンプルな形式）
+MCP_SERVERS=http://localhost:3100,http://localhost:3101
+
+# JSON 配列（名前付き）
+MCP_SERVERS=[{"url":"http://localhost:3100","name":"my-tools"},{"url":"http://localhost:3101"}]
+```
+
+### 動作の仕組み
+
+起動時に `MCP_SERVERS` のサーバーに接続し、`tools/list` で利用可能なツールを取得してスキルとして登録します。登録後は通常のスキルと同様に LLM から呼び出せます。
+
+```
+[MCP] Registered 5 skill(s) from 2 server(s)
+```
+
+---
+
+## マルチエージェント
+
+複数の役割（ロール）を持つエージェントを実行し、結果を連携させるオーケストレーション機能です。
+
+### 組み込みロール
+
+| ロール名 | 説明 |
+|---------|------|
+| `researcher` | 情報収集と詳細レポートの作成 |
+| `coder` | クリーンで効率的なコードの実装 |
+| `reviewer` | コードレビューと改善提案 |
+| `summarizer` | 複雑な情報の簡潔なまとめ |
+| `planner` | 目標達成のための計画立案 |
+
+### TypeScript API
+
+```typescript
+import { runAgentTask, runAgentPipeline } from './lib/agents/orchestrator';
+
+// 単一タスク
+const result = await runAgentTask({
+  role: 'researcher',
+  userPrompt: 'TypeScript の最新トレンドを調査して',
+});
+console.log(result.content);
+
+// パイプライン（順次実行）
+const results = await runAgentPipeline([
+  { role: 'researcher', userPrompt: '課題を調査して' },
+  { role: 'coder',      userPrompt: '調査結果を元に実装して' },
+  { role: 'reviewer',   userPrompt: '実装をレビューして' },
+]);
+
+// カスタムロール
+const result2 = await runAgentTask({
+  role: { name: 'translator', description: '翻訳者', systemPrompt: 'あなたはプロの翻訳者です。' },
+  userPrompt: 'Hello, world! を日本語に翻訳して',
+  skills: ['currentDateTime'],
+  model: 'gpt-4o',
+});
+```
+
+### A2A エンドポイント
+
+Google が提唱する [Agent2Agent (A2A) プロトコル](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/)に準拠したエンドポイントです。
+
+**POST /api/a2a**
+
+```json
+{
+  "task": {
+    "id": "optional-uuid",
+    "role": "researcher",
+    "input": "TypeScript の最新トレンドを調査して",
+    "skills": ["webSearch"],
+    "timeoutMs": 60000,
+    "model": "gpt-4o"
+  }
+}
+```
+
+カスタムシステムプロンプトを指定する場合は `systemPrompt` フィールドを追加します。
+
+```json
+{
+  "task": {
+    "role": "custom",
+    "input": "...",
+    "systemPrompt": "あなたはカスタムエージェントです。"
+  }
+}
+```
+
+**レスポンス**
+
+```json
+{
+  "result": {
+    "id": "uuid",
+    "role": "researcher",
+    "output": "調査結果...",
+    "status": "completed",
+    "model": "gpt-4o",
+    "provider": "openai",
+    "durationMs": 3210,
+    "startedAt": "2026-01-01T00:00:00.000Z",
+    "completedAt": "2026-01-01T00:00:03.210Z"
+  }
+}
+```
+
+---
+
+## OpenTelemetry（可観測性）
+
+`OTEL_EXPORTER_OTLP_ENDPOINT` を設定すると、全 LLM 呼び出しがスパンとして計装され、OTLP/HTTP で外部の可観測性バックエンド（Jaeger、Grafana Tempo 等）にエクスポートされます。
+
+### 設定
+
+```env
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+エンドポイント未設定時もスパンはインプロセスのバッファ（最大 500 件）に保持され、ダッシュボードの **Telemetry** パネルで確認できます。
+
+### スパン属性
+
+| 属性 | 説明 |
+|------|------|
+| `llm.provider` | プロバイダ名（`openai`, `anthropic` 等） |
+| `llm.model` | モデル名 |
+| `llm.message_count` | 送信メッセージ数 |
+| `llm.content_length` | 返答のテキスト長 |
+| `llm.duration_ms` | 所要時間（ミリ秒） |
+
+### API
+
+```
+GET /api/dashboard/telemetry?limit=50
+```
+
+---
+
+## Human-in-the-Loop（承認ゲート）
+
+`HIL_ENABLED=true` に設定すると、リスクレベルが `high` のスキル（`runCommand`, `sendNotification`, `spawnAgent` 等）は実行前に人間の承認を要求します。
+
+### 設定
+
+```env
+HIL_ENABLED=true
+HIL_APPROVAL_TIMEOUT_MS=300000   # 5 分（デフォルト）
+```
+
+### 動作フロー
+
+1. LLM がリスク高スキルを呼び出そうとする
+2. スキルが実行待機状態になり、ダッシュボードの **承認待ち** パネルに表示される
+3. オペレーターがダッシュボードまたは API で承認 / 拒否する
+4. 承認された場合はスキルが実行され、結果が LLM に返る
+5. 拒否またはタイムアウトの場合はエラーメッセージが LLM に返る
+
+### 承認 API
+
+```
+GET  /api/dashboard/approvals              # 待機中リスト
+POST /api/dashboard/approvals/{id}/approve # 承認
+POST /api/dashboard/approvals/{id}/reject  # 拒否
+```
 
 ---
 
