@@ -5,12 +5,12 @@ import { AnthropicAdapter } from './adapters/anthropicAdapter';
 import { GeminiAdapter } from './adapters/geminiAdapter';
 import { LmStudioAdapter } from './adapters/lmstudioAdapter';
 import { LemonadeAdapter } from './adapters/lemonadeAdapter';
+import { InstrumentedAdapter } from './telemetry/instrumentedAdapter';
 import {
   GEMINI_DEFAULT_ENDPOINT,
   GEMINI_DEFAULT_TIMEOUT_MS,
   GEMINI_DEFAULT_RETRY_MAX,
 } from './services/geminiClient';
-// 他のアダプタも必要に応じて追加
 
 /**
  * Creates the appropriate LLM adapter based on the given options.
@@ -20,35 +20,40 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
   switch (options.provider) {
     case 'openai':
       if (!options.apiKey) throw new Error('apiKey is required for the OpenAI adapter');
-      return new OpenAIAdapter(
+      return instrument(new OpenAIAdapter(
         options.model,
         options.apiKey,
         options.apiBaseUrl,
         options.timeoutMs,
-      );
+      ));
     case 'anthropic':
       if (!options.apiKey) throw new Error('apiKey is required for the Anthropic adapter');
-      return new AnthropicAdapter(
+      return instrument(new AnthropicAdapter(
         options.model,
         options.apiKey,
         options.apiBaseUrl,
         options.timeoutMs,
-      );
+      ));
     case 'gemini': {
       if (!options.apiKey) throw new Error('apiKey is required for the Gemini adapter');
       const endpoint = options.apiBaseUrl ?? process.env.GEMINI_ENDPOINT ?? GEMINI_DEFAULT_ENDPOINT;
       const timeoutMs = (options.timeoutMs ?? Number(process.env.GEMINI_TIMEOUT_MS)) || GEMINI_DEFAULT_TIMEOUT_MS;
       const retryMax = Number(process.env.GEMINI_RETRY_MAX) || GEMINI_DEFAULT_RETRY_MAX;
-      return new GeminiAdapter(options.model, options.apiKey, endpoint, timeoutMs, retryMax);
+      return instrument(new GeminiAdapter(options.model, options.apiKey, endpoint, timeoutMs, retryMax));
     }
     case 'lmstudio':
-      return new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs);
+      return instrument(new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
     case 'lemonade':
-      return new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs);
+      return instrument(new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
     case 'copilot':
     default:
-      return new CopilotAdapter(options.model, options.timeoutMs);
+      return instrument(new CopilotAdapter(options.model, options.timeoutMs));
   }
+}
+
+function instrument(adapter: LLMAdapter): LLMAdapter {
+  if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return adapter;
+  return new InstrumentedAdapter(adapter);
 }
 
 export function resolveProvider(): ProviderType {

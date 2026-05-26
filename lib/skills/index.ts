@@ -62,6 +62,12 @@ import { colorConvert } from './colorConvert';
 // Prompt wizard
 import { listPromptTemplates, buildPromptFromTemplate } from './promptWizard';
 
+// Multi-agent
+import { spawnAgent } from './spawnAgent';
+
+// Human-in-the-loop gate
+import { applyGatesToRegistry } from '../humanInLoop/gate';
+
 const allSkills = [
   currentDateTime,
   calculator,
@@ -109,9 +115,11 @@ const allSkills = [
   rssFeed,
   listPromptTemplates,
   buildPromptFromTemplate,
+  spawnAgent,
 ];
 
-for (const skill of allSkills) {
+const gatedSkills = applyGatesToRegistry(allSkills);
+for (const skill of gatedSkills) {
   registerSkill(skill);
 }
 
@@ -162,4 +170,5 @@ export {
   rssFeed,
   listPromptTemplates,
   buildPromptFromTemplate,
+  spawnAgent,
 };

@@ -110,6 +110,54 @@ export class GeminiClient {
     this.retryMax = retryMax;
   }
 
+  async *streamRequest(
+    model: string,
+    payload: GeminiRequestPayload,
+    options?: { signal?: AbortSignal },
+  ): AsyncGenerator<GeminiResponsePayload> {
+    const url = `${this.endpoint}/models/${model}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
+    const { signal, cleanup } = mergeAbortSignals(this.timeoutMs, options?.signal);
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } finally {
+      cleanup();
+    }
+
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => resp.statusText);
+      throw new GeminiAPIError(resp.status, body, body);
+    }
+
+    const reader = resp.body!.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (!data) continue;
+          try {
+            yield JSON.parse(data) as GeminiResponsePayload;
+          } catch { /* ignore malformed */ }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   async request(
     model: string,
     payload: GeminiRequestPayload,

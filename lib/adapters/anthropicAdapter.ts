@@ -37,6 +37,183 @@ export class AnthropicAdapter implements LLMAdapter {
     );
   }
 
+  async *stream(request: LLMRequest): AsyncGenerator<string> {
+    const model = request.model ?? this.model;
+    const timeoutMs = request.timeoutMs ?? this.timeoutMs;
+    const skills = request.skills ?? [];
+
+    const systemMessages = request.messages.filter((m) => m.role === 'system');
+    const systemPrompt = systemMessages.map((m) => m.content).join('\n');
+    const conversationMessages = request.messages.filter((m) => m.role !== 'system');
+
+    type AnthropicMsg = { role: string; content: string | AnthropicContentBlock[] };
+    const messages: AnthropicMsg[] = conversationMessages.map((m, idx) => {
+      const isLastUser = m.role === 'user' && idx === conversationMessages.length - 1;
+      if (isLastUser && request.attachments && request.attachments.length > 0) {
+        const content: unknown[] = [{ type: 'text', text: m.content }];
+        for (const att of request.attachments) {
+          content.push({
+            type: 'image',
+            source: { type: 'base64', media_type: att.mimeType, data: att.data },
+          });
+        }
+        return { role: m.role, content: content as AnthropicContentBlock[] };
+      }
+      return { role: m.role, content: m.content };
+    });
+
+    const tools: AnthropicTool[] = skills.map((s) => ({
+      name: s.name,
+      description: s.description,
+      input_schema: s.parameters,
+    }));
+    const skillMap = new Map(skills.map((s) => [s.name, s]));
+
+    for (let iteration = 0; iteration < MAX_SKILL_ITERATIONS; iteration++) {
+      const body: Record<string, unknown> = {
+        model,
+        max_tokens: 4096,
+        messages,
+        stream: true,
+      };
+      if (systemPrompt) body['system'] = systemPrompt;
+      if (tools.length > 0) body['tools'] = tools;
+
+      const { signal, cleanup } = mergeAbortSignals(timeoutMs, request.abortSignal);
+      let resp: Response;
+      try {
+        resp = await fetch(`${this.baseUrl}/v1/messages`, {
+          method: 'POST',
+          signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(body),
+        });
+      } finally {
+        cleanup();
+      }
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => resp.statusText);
+        throw Object.assign(new Error(`Anthropic API error: ${text}`), { status: resp.status });
+      }
+
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      type StreamBlock = {
+        type: string;
+        text?: string;
+        id?: string;
+        name?: string;
+        input?: string;
+      };
+      const contentBlocks: StreamBlock[] = [];
+      let stopReason: string | undefined;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data || data === '[DONE]') continue;
+
+            let event: Record<string, unknown>;
+            try {
+              event = JSON.parse(data) as Record<string, unknown>;
+            } catch {
+              continue;
+            }
+
+            if (event['type'] === 'content_block_start') {
+              const idx = event['index'] as number;
+              const block = event['content_block'] as Record<string, unknown>;
+              contentBlocks[idx] = { type: String(block['type'] ?? '') };
+              if (block['type'] === 'tool_use') {
+                contentBlocks[idx].id = String(block['id'] ?? '');
+                contentBlocks[idx].name = String(block['name'] ?? '');
+                contentBlocks[idx].input = '';
+              }
+            } else if (event['type'] === 'content_block_delta') {
+              const idx = event['index'] as number;
+              const delta = event['delta'] as Record<string, unknown>;
+              if (delta['type'] === 'text_delta') {
+                const text = String(delta['text'] ?? '');
+                yield text;
+                if (!contentBlocks[idx]) contentBlocks[idx] = { type: 'text', text: '' };
+                contentBlocks[idx].text = (contentBlocks[idx].text ?? '') + text;
+              } else if (delta['type'] === 'input_json_delta') {
+                if (contentBlocks[idx]) {
+                  contentBlocks[idx].input =
+                    (contentBlocks[idx].input ?? '') + String(delta['partial_json'] ?? '');
+                }
+              }
+            } else if (event['type'] === 'message_delta') {
+              const d = event['delta'] as Record<string, unknown>;
+              stopReason = String(d['stop_reason'] ?? '');
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      if (stopReason !== 'tool_use') return;
+
+      const toolUseBlocks = contentBlocks.filter((b) => b.type === 'tool_use');
+      messages.push({
+        role: 'assistant',
+        content: contentBlocks.map((b) => {
+          if (b.type === 'text') return { type: 'text', text: b.text ?? '' } as AnthropicContentBlock;
+          return {
+            type: 'tool_use',
+            id: b.id ?? '',
+            name: b.name ?? '',
+            input: (() => {
+              try { return JSON.parse(b.input ?? '{}') as Record<string, unknown>; }
+              catch { return {}; }
+            })(),
+          } as AnthropicContentBlock;
+        }),
+      });
+
+      const toolResults: AnthropicContentBlock[] = [];
+      for (const block of toolUseBlocks) {
+        const skill = skillMap.get(block.name ?? '');
+        let resultContent: string;
+        let isError = false;
+        if (skill) {
+          let args: Record<string, unknown> = {};
+          try { args = JSON.parse(block.input ?? '{}') as Record<string, unknown>; } catch { /* ignore */ }
+          const result = await skill.handler(args);
+          resultContent = result.content;
+          isError = result.isError ?? false;
+        } else {
+          resultContent = `Unknown skill: ${block.name ?? ''}`;
+          isError = true;
+        }
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id ?? '',
+          content: resultContent,
+          ...(isError ? { is_error: true } : {}),
+        } as AnthropicContentBlock);
+      }
+      messages.push({ role: 'user', content: toolResults });
+    }
+  }
+
   private async _complete(request: LLMRequest): Promise<LLMResponse> {
     const model = request.model ?? this.model;
     const timeoutMs = request.timeoutMs ?? this.timeoutMs;
