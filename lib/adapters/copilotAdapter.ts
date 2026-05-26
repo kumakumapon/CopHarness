@@ -64,4 +64,9 @@ export class CopilotAdapter implements LLMAdapter {
       await session.destroy().catch(() => {});
     }
   }
+
+  async *stream(request: LLMRequest): AsyncGenerator<string> {
+    const resp = await this.complete(request);
+    yield resp.content;
+  }
 }

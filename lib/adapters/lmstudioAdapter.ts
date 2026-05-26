@@ -24,4 +24,8 @@ export class LmStudioAdapter implements LLMAdapter {
     const result = await this.delegate.complete(request);
     return { ...result, provider: 'lmstudio' };
   }
+
+  async *stream(request: LLMRequest): AsyncGenerator<string> {
+    yield* this.delegate.stream!(request);
+  }
 }

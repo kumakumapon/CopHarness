@@ -43,6 +43,8 @@ export interface LLMAdapter {
   readonly model: string;
   /** Send a conversation and await a response. */
   complete(request: LLMRequest): Promise<LLMResponse>;
+  /** Stream a response token by token. Yields text chunks as they arrive. */
+  stream?(request: LLMRequest): AsyncGenerator<string>;
   /** Optional cleanup (close connections, etc.). */
   destroy?(): Promise<void>;
 }
