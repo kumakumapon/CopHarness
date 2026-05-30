@@ -32,6 +32,8 @@ if (fs.existsSync(envPath)) {
 
 import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
 import { type LLMMessage } from '../lib/adapter';
+import '../lib/skills/index';
+import { listActiveSkills } from '../lib/skill';
 
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
 
@@ -91,7 +93,7 @@ async function main() {
 
       try {
         process.stdout.write('Assistant: ');
-        const resp = await adapter.complete({ messages, timeoutMs });
+        const resp = await adapter.complete({ messages, timeoutMs, skills: listActiveSkills() });
         console.log(resp.content);
         console.log();
         messages.push({ role: 'assistant', content: resp.content });

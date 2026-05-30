@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
-import { resolveSkills } from '../../../lib/skill';
+import { resolveSkills, listActiveSkills } from '../../../lib/skill';
 import '../../../lib/skills/index';
 
 
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       apiKey,
       timeoutMs,
     });
-    const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : undefined;
+    const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
     const resp = await adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal, skills });
     return NextResponse.json({ reply: resp.content });
   } catch (err: unknown) {
