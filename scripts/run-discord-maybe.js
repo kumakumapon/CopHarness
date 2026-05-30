@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+// Starts the Discord bot only when DISCORD_BOT_TOKEN is configured.
+// Called by npm run dev / npm start via concurrently.
+if (!process.env.DISCORD_BOT_TOKEN) {
+  console.log('[Discord] DISCORD_BOT_TOKEN not set — Discord bot skipped.');
+  process.exit(0);
+}
+
+const { spawn } = require('child_process');
+const path = require('path');
+
+const root = path.resolve(__dirname, '..');
+const bot = spawn(
+  process.platform === 'win32' ? 'npx.cmd' : 'npx',
+  ['tsx', path.join(root, 'discord', 'bot.ts')],
+  { stdio: 'inherit', cwd: root },
+);
+
+bot.on('exit', (code) => process.exit(code ?? 0));
