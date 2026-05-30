@@ -1,5 +1,5 @@
 import { type SkillDefinition } from '../skill';
-import { createAdapter, resolveProvider } from '../adapterFactory';
+import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
 
 /**
  * Text translation skill using the configured LLM.
@@ -57,14 +57,7 @@ export const translateText: SkillDefinition = {
           process.env.OPENAI_API_KEY ||
           process.env.ANTHROPIC_API_KEY ||
           process.env.GEMINI_API_KEY;
-      const model =
-        process.env.COPILOT_MODEL ||
-        process.env.OPENAI_MODEL ||
-        process.env.ANTHROPIC_MODEL ||
-        process.env.GEMINI_MODEL ||
-        process.env.LMSTUDIO_MODEL ||
-        process.env.LEMONADE_MODEL ||
-        'gpt-5-mini';
+      const model = resolveModel(provider);
       const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 60_000;
 
       const adapter = createAdapter({ provider, model, apiKey, timeoutMs });

@@ -67,7 +67,7 @@ import {
   Partials,
   TextChannel,
 } from 'discord.js';
-import { createAdapter, resolveProvider } from '../lib/adapterFactory';
+import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
 import { type LLMAdapter, type LLMAttachment, type LLMMessage } from '../lib/adapter';
 import {
   listSchedules,
@@ -643,12 +643,7 @@ async function main() {
     process.exit(1);
   }
 
-  const model =
-    process.env.COPILOT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    process.env.ANTHROPIC_MODEL ||
-    process.env.GEMINI_MODEL ||
-    'gpt-5-mini';
+  const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
   const adapter = createAdapter({ provider, model, apiKey, timeoutMs });

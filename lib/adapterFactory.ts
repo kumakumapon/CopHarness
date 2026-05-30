@@ -56,6 +56,23 @@ function instrument(adapter: LLMAdapter): LLMAdapter {
   return new InstrumentedAdapter(adapter);
 }
 
+/**
+ * Resolves the model name using provider-specific env vars.
+ * COPILOT_MODEL always takes precedence when set; otherwise the
+ * provider-specific variable (e.g. LEMONADE_MODEL) is used.
+ */
+export function resolveModel(provider?: ProviderType): string {
+  if (process.env.COPILOT_MODEL) return process.env.COPILOT_MODEL;
+  switch (provider) {
+    case 'lemonade':  return process.env.LEMONADE_MODEL  || 'gpt-5-mini';
+    case 'lmstudio':  return process.env.LMSTUDIO_MODEL  || 'gpt-5-mini';
+    case 'openai':    return process.env.OPENAI_MODEL    || 'gpt-5-mini';
+    case 'anthropic': return process.env.ANTHROPIC_MODEL || 'gpt-5-mini';
+    case 'gemini':    return process.env.GEMINI_MODEL    || 'gemini-1.5-pro';
+    default:          return 'gpt-5-mini';
+  }
+}
+
 export function resolveProvider(): ProviderType {
   const explicit = (process.env.COPILOT_PROVIDER ?? '').toLowerCase() as ProviderType;
   if (

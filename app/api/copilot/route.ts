@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdapter, resolveProvider } from '../../../lib/adapterFactory';
+import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
 import { resolveSkills } from '../../../lib/skill';
 import '../../../lib/skills/index';
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   try {
     // モデル名は環境変数またはデフォルト
-    const model = process.env.COPILOT_MODEL || process.env.OPENAI_MODEL || process.env.ANTHROPIC_MODEL || process.env.GEMINI_MODEL || process.env.LMSTUDIO_MODEL || process.env.LEMONADE_MODEL || 'gpt-5-mini';
+    const model = resolveModel(provider);
     const defaultTimeout = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     // Cap user-supplied timeoutMs to the server default to prevent resource exhaustion.
     const timeoutMs =

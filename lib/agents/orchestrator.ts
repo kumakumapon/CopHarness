@@ -1,4 +1,4 @@
-import { createAdapter, resolveProvider } from '../adapterFactory';
+import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
 import { resolveSkills } from '../skill';
 import type { AgentTask, AgentResult } from './types';
 
@@ -41,11 +41,7 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
   const provider = resolveProvider();
   const model =
     task.model ??
-    process.env.COPILOT_MODEL ??
-    process.env.OPENAI_MODEL ??
-    process.env.ANTHROPIC_MODEL ??
-    process.env.GEMINI_MODEL ??
-    'gpt-5-mini';
+    resolveModel(provider);
   const apiKey = resolveApiKey();
   const timeoutMs =
     task.timeoutMs ?? (Number(process.env.COPILOT_TIMEOUT_MS) || 120_000);
