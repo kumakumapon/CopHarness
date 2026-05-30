@@ -11,6 +11,7 @@ import { NextRequest } from 'next/server';
 jest.mock('../../lib/adapterFactory', () => ({
   createAdapter: jest.fn(),
   resolveProvider: jest.fn(),
+  resolveModel: jest.fn(),
 }));
 import * as adapterFactory from '../../lib/adapterFactory';
 import * as adapterModule from '../../lib/adapter';
@@ -39,6 +40,7 @@ describe('POST /api/copilot', () => {
       model: 'gpt-5-mini',
     } as unknown as adapterModule.LLMAdapter);
     (adapterFactory.resolveProvider as jest.Mock).mockReturnValue('copilot');
+    (adapterFactory.resolveModel as jest.Mock).mockReturnValue('gpt-5-mini');
   });
 
   afterEach(() => {
