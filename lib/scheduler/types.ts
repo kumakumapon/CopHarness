@@ -13,6 +13,8 @@ export interface ScheduledPrompt {
   stopRequested?: boolean;
   /** Discord channel ID to post the result to after execution. */
   discordChannelId?: string;
+  /** LINE user ID to push the result to after execution. */
+  lineUserId?: string;
 }
 
 export interface ScheduleStore {

@@ -7,7 +7,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  let body: { enabled?: boolean; name?: string; cron?: string; prompt?: string; discordChannelId?: string };
+  let body: { enabled?: boolean; name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string };
   try {
     body = await req.json();
   } catch {
@@ -27,12 +27,15 @@ export async function PATCH(
   }
 
   // field update
-  const updates: { name?: string; cron?: string; prompt?: string; discordChannelId?: string } = {};
+  const updates: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string } = {};
   if (typeof body.name === 'string' && body.name.trim()) updates.name = body.name.trim();
   if (typeof body.cron === 'string' && body.cron.trim()) updates.cron = normalizeCron(body.cron.trim());
   if (typeof body.prompt === 'string' && body.prompt.trim()) updates.prompt = body.prompt.trim();
   if (typeof body.discordChannelId === 'string') {
     updates.discordChannelId = body.discordChannelId.trim() || undefined;
+  }
+  if (typeof body.lineUserId === 'string') {
+    updates.lineUserId = body.lineUserId.trim() || undefined;
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
