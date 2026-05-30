@@ -69,6 +69,8 @@ import {
 } from 'discord.js';
 import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
 import { type LLMAdapter, type LLMAttachment, type LLMMessage } from '../lib/adapter';
+import '../lib/skills/index';
+import { listActiveSkills } from '../lib/skill';
 import {
   listSchedules,
   addSchedule,
@@ -480,6 +482,7 @@ async function executeWizardPrompt(
     const resp = await adapter.complete({
       messages: [{ role: 'user', content: generatedPrompt }],
       timeoutMs,
+      skills: listActiveSkills(),
     });
     await sendInChunks(message, resp.content || '（応答がありませんでした）');
   } catch (err) {
@@ -609,7 +612,7 @@ async function handleMessage(
     if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
 
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-    const resp = await adapter.complete({ messages: [...history], attachments, timeoutMs });
+    const resp = await adapter.complete({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() });
     const replyText = resp.content || '（応答がありませんでした）';
 
     history.push({ role: 'assistant', content: replyText });
