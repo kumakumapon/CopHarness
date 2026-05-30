@@ -44,6 +44,16 @@ import * as path from 'path';
 
 // Load .env.local if present (dev convenience)
 const envPath = path.resolve(process.cwd(), '.env.local');
+const stripWrappingQuotes = (raw: string): string => {
+  if (!raw) return raw;
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    return raw.slice(1, -1);
+  }
+  return raw;
+};
 if (fs.existsSync(envPath)) {
   const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
   for (const line of lines) {
@@ -52,7 +62,7 @@ if (fs.existsSync(envPath)) {
     const eqIdx = trimmed.indexOf('=');
     if (eqIdx === -1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
-    const value = trimmed.slice(eqIdx + 1).trim();
+    const value = stripWrappingQuotes(trimmed.slice(eqIdx + 1).trim());
     if (key && !(key in process.env)) {
       process.env[key] = value;
     }

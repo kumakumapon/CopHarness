@@ -6,6 +6,16 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const envPath = path.join(root, '.env.local');
+const stripWrappingQuotes = (raw) => {
+  if (!raw) return raw;
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    return raw.slice(1, -1);
+  }
+  return raw;
+};
 
 if (fs.existsSync(envPath)) {
   const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
@@ -15,7 +25,7 @@ if (fs.existsSync(envPath)) {
     const eqIdx = trimmed.indexOf('=');
     if (eqIdx === -1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
-    const value = trimmed.slice(eqIdx + 1).trim();
+    const value = stripWrappingQuotes(trimmed.slice(eqIdx + 1).trim());
     if (key && !(key in process.env)) {
       process.env[key] = value;
     }
