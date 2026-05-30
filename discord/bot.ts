@@ -108,6 +108,7 @@ const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
 const MAX_HISTORY = Math.max(1, Number(process.env.DISCORD_MAX_HISTORY) || 20);
 const DISCORD_RESPONSE_MAX_LENGTH = 2000;
 const MAX_IMAGE_BYTES = Number(process.env.DISCORD_MAX_IMAGE_BYTES) || 8 * 1024 * 1024;
+const API_KEY_OPTIONAL_PROVIDERS = ['copilot', 'lmstudio', 'lemonade'];
 
 if (!DISCORD_BOT_TOKEN) {
   console.error('Error: DISCORD_BOT_TOKEN is not set.');
@@ -649,8 +650,7 @@ async function main() {
     process.env.ANTHROPIC_API_KEY ||
     process.env.GEMINI_API_KEY;
 
-  const localProviders = ['lmstudio', 'lemonade'];
-  if (!apiKey && provider !== 'copilot' && !localProviders.includes(provider)) {
+  if (!apiKey && !API_KEY_OPTIONAL_PROVIDERS.includes(provider)) {
     console.error(
       'Error: No LLM API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY',
     );
