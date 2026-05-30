@@ -31,7 +31,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapter, resolveProvider } from '../lib/adapterFactory';
+import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
 import { runEvalSuite, summariseResults, type EvalResult } from '../lib/eval/evaluator';
 import { checkCiGate } from '../lib/eval/ciGate';
 import { builtinTestCases, type EvalTestCase } from '../lib/eval/testCases';
@@ -81,12 +81,7 @@ async function main(): Promise<void> {
     process.env.OPENAI_API_KEY ||
     process.env.ANTHROPIC_API_KEY ||
     process.env.GEMINI_API_KEY;
-  const model =
-    process.env.COPILOT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    process.env.ANTHROPIC_MODEL ||
-    process.env.GEMINI_MODEL ||
-    'gpt-5-mini';
+  const model = resolveModel(provider);
 
   const adapter = createAdapter({ provider, model, apiKey, timeoutMs: 60_000 });
 

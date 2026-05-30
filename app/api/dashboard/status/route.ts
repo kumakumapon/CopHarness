@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { resolveProvider } from '../../../../lib/adapterFactory';
+import { resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
 
 interface ComponentStatus {
   name: string;
@@ -9,14 +9,7 @@ interface ComponentStatus {
 
 export async function GET() {
   const provider = resolveProvider();
-  const model =
-    process.env.COPILOT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    process.env.ANTHROPIC_MODEL ||
-    process.env.GEMINI_MODEL ||
-    process.env.LMSTUDIO_MODEL ||
-    process.env.LEMONADE_MODEL ||
-    'gpt-5-mini';
+  const model = resolveModel(provider);
 
   const providers: ComponentStatus[] = [
     {

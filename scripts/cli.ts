@@ -30,7 +30,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapter, resolveProvider } from '../lib/adapterFactory';
+import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
 import { type LLMMessage } from '../lib/adapter';
 
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
@@ -53,14 +53,7 @@ async function main() {
     process.exit(1);
   }
 
-  const model =
-    process.env.COPILOT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    process.env.ANTHROPIC_MODEL ||
-    process.env.GEMINI_MODEL ||
-    process.env.LMSTUDIO_MODEL ||
-    process.env.LEMONADE_MODEL ||
-    'gpt-5-mini';
+  const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
 

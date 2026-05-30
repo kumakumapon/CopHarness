@@ -1,6 +1,6 @@
 import { listSchedules, setRunNow, setStopRequested, updateLastRun } from './store';
 import { matchesCron, normalizeCron, isValidCronInput } from './cron';
-import { createAdapter, resolveProvider } from '../adapterFactory';
+import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
@@ -26,12 +26,7 @@ export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Prom
     process.env.ANTHROPIC_API_KEY ||
     process.env.GEMINI_API_KEY;
 
-  const model =
-    process.env.COPILOT_MODEL ||
-    process.env.OPENAI_MODEL ||
-    process.env.ANTHROPIC_MODEL ||
-    process.env.GEMINI_MODEL ||
-    'gpt-5-mini';
+  const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
   const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
