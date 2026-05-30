@@ -87,3 +87,15 @@ export function setStopRequested(id: string, value: boolean): boolean {
   saveStore(store);
   return true;
 }
+
+export function updateSchedule(
+  id: string,
+  updates: Partial<Pick<ScheduledPrompt, 'name' | 'cron' | 'prompt' | 'discordChannelId'>>,
+): boolean {
+  const store = loadStore();
+  const s = store.schedules.find((x) => x.id === id);
+  if (!s) return false;
+  Object.assign(s, updates);
+  saveStore(store);
+  return true;
+}
