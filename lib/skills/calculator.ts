@@ -211,6 +211,7 @@ export const calculator: SkillDefinition = {
   },
   category: 'utility',
   riskLevel: 'low',
+  outputSchema: { type: 'number' },
   handler: async (args) => {
     const expression = String(args.expression ?? '').trim();
     if (!expression) return { content: 'Error: empty expression', isError: true };

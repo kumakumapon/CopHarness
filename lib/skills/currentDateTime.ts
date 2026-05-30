@@ -10,6 +10,11 @@ export const currentDateTime: SkillDefinition = {
   },
   category: 'utility',
   riskLevel: 'low',
+  outputSchema: {
+    type: 'string',
+    minLength: 20,
+    pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}',
+  },
   handler: async (_args) => {
     return { content: new Date().toISOString() };
   },

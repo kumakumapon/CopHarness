@@ -4,6 +4,9 @@
  * can expose to the model as callable tools.
  */
 
+import { validateSkillOutput } from './guardrails/outputValidator';
+import { recordViolation } from './guardrails/violationLog';
+
 /** A single property definition within a skill's parameter schema. */
 export interface SkillParameterProperty {
   type: string;
@@ -27,6 +30,27 @@ export interface SkillParameterSchema {
 /** Risk classification for a skill. */
 export type SkillRiskLevel = 'low' | 'medium' | 'high';
 
+/**
+ * JSON Schema subset for validating a skill's output content.
+ * When attached to a SkillDefinition, the harness validates every
+ * non-error SkillResult against this schema and records violations.
+ */
+export interface SkillOutputSchema {
+  type: 'string' | 'number' | 'object' | 'array';
+  /** Minimum string length (only for type 'string'). */
+  minLength?: number;
+  /** Maximum string length (only for type 'string'). */
+  maxLength?: number;
+  /** Regex pattern the string content must match (only for type 'string'). */
+  pattern?: string;
+  /** Required keys (only for type 'object'). */
+  required?: string[];
+  /** Property type constraints (only for type 'object'). */
+  properties?: Record<string, SkillParameterProperty>;
+  /** Item schema for type 'array'. */
+  items?: { type: string; description?: string };
+}
+
 /** Functional grouping for a skill. */
 export type SkillCategory =
   | 'utility'
@@ -47,6 +71,12 @@ export interface SkillDefinition {
   requiresEnv?: string[];
   /** Risk level: low = read-only / side-effect free, medium = writes local state, high = executes code / calls external APIs with side effects. */
   riskLevel?: SkillRiskLevel;
+  /**
+   * Optional schema describing the expected format of a successful SkillResult.content.
+   * When set, the harness validates every non-error output against this schema and
+   * records any violations in the schema violation log.
+   */
+  outputSchema?: SkillOutputSchema;
 }
 
 export interface SkillResult {
@@ -62,6 +92,23 @@ const skillRegistry = new Map<string, SkillDefinition>();
 
 /** Register a skill so it can be looked up by name. */
 export function registerSkill(skill: SkillDefinition): void {
+  if (skill.outputSchema) {
+    const schema = skill.outputSchema;
+    const originalHandler = skill.handler;
+    skill = {
+      ...skill,
+      handler: async (args) => {
+        const result = await originalHandler(args);
+        if (!result.isError) {
+          const validation = validateSkillOutput(result.content, schema);
+          if (!validation.valid) {
+            recordViolation(skill.name, validation.errors, result.content);
+          }
+        }
+        return result;
+      },
+    };
+  }
   skillRegistry.set(skill.name, skill);
 }
 
