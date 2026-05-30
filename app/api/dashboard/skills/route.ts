@@ -11,6 +11,7 @@ export async function GET() {
     riskLevel: s.riskLevel ?? 'low',
     requiresEnv: s.requiresEnv ?? [],
     enabled: activeNames.has(s.name),
+    hasOutputSchema: s.outputSchema !== undefined,
   }));
   return NextResponse.json({ skills });
 }

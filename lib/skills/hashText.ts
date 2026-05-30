@@ -26,6 +26,11 @@ export const hashText: SkillDefinition = {
   },
   category: 'utility',
   riskLevel: 'low',
+  outputSchema: {
+    type: 'string',
+    minLength: 32,
+    pattern: '^[0-9a-f]+$',
+  },
   handler: async (args) => {
     const text = String(args.text ?? '');
     const algorithm = String(args.algorithm ?? 'sha256').toLowerCase() as Algorithm;

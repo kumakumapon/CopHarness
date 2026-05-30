@@ -17,6 +17,11 @@ export const uuidGenerate: SkillDefinition = {
   },
   category: 'utility',
   riskLevel: 'low',
+  outputSchema: {
+    type: 'string',
+    minLength: 36,
+    pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}',
+  },
   handler: async (args) => {
     const count = typeof args.count === 'number' ? Math.min(100, Math.max(1, Math.floor(args.count))) : 1;
     const uuids = Array.from({ length: count }, () => randomUUID());

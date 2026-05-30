@@ -10,7 +10,8 @@
     "test": "jest",
     "cli": "tsx scripts/cli.ts",
     "discord": "tsx discord/bot.ts",
-    "schedule": "tsx scripts/schedule.ts"
+    "schedule": "tsx scripts/schedule.ts",
+    "eval": "tsx scripts/eval.ts"
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.2.2",

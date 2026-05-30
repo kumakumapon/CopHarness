@@ -3,6 +3,7 @@ import { matchesCron, normalizeCron, isValidCronInput } from './cron';
 import { createAdapter, resolveProvider } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
+import { runWithRalphLoop } from '../context/ralphLoop';
 
 /**
  * Optional callback invoked after a schedule successfully completes.
@@ -41,7 +42,11 @@ export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Prom
   messages.push({ role: 'user', content: prompt });
 
   try {
-    const resp = await adapter.complete({ messages, timeoutMs, abortSignal });
+    const resp = await runWithRalphLoop(
+      { messages, timeoutMs, abortSignal },
+      adapter,
+      { originalGoal: prompt },
+    );
     return resp.content;
   } finally {
     if (adapter.destroy) await adapter.destroy();
