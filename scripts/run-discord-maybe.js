@@ -11,9 +11,9 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const bot = spawn(
-  process.platform === 'win32' ? 'npx.cmd' : 'npx',
+  'npx',
   ['tsx', path.join(root, 'discord', 'bot.ts')],
-  { stdio: 'inherit', cwd: root },
+  { stdio: 'inherit', cwd: root, shell: process.platform === 'win32' },
 );
 
 bot.on('exit', (code) => process.exit(code ?? 0));
