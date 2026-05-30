@@ -26,6 +26,7 @@ import { NextRequest } from 'next/server';
 jest.mock('../../lib/adapterFactory', () => ({
   createAdapter: jest.fn(),
   resolveProvider: jest.fn(),
+  resolveModel: jest.fn(),
 }));
 
 import * as adapterFactory from '../../lib/adapterFactory';
@@ -95,6 +96,7 @@ describe('POST /api/line', () => {
       model: 'gpt-5-mini',
     } as unknown as adapterModule.LLMAdapter);
     (adapterFactory.resolveProvider as jest.Mock).mockReturnValue('copilot');
+    (adapterFactory.resolveModel as jest.Mock).mockReturnValue('gpt-5-mini');
 
     (lineBot.validateSignature as jest.Mock).mockReturnValue(true);
     (lineBot.messagingApi.MessagingApiClient as jest.Mock).mockImplementation(() => ({
