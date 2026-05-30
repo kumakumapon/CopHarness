@@ -13,13 +13,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { name?: string; cron?: string; prompt?: string; discordChannelId?: string };
+  let body: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { name, cron, prompt, discordChannelId } = body;
+  const { name, cron, prompt, discordChannelId, lineUserId } = body;
   if (typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'name (string) is required' }, { status: 400 });
   }
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
     cron: normalizeCron(cron.trim()),
     prompt: prompt.trim(),
     discordChannelId: typeof discordChannelId === 'string' ? discordChannelId.trim() || undefined : undefined,
+    lineUserId: typeof lineUserId === 'string' ? lineUserId.trim() || undefined : undefined,
   });
   const nextRun = nextRunDate(normalizeCron(entry.cron), new Date())?.toISOString() ?? null;
   return NextResponse.json({ schedule: { ...entry, nextRun } }, { status: 201 });

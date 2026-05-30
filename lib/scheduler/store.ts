@@ -29,7 +29,7 @@ export function listSchedules(): ScheduledPrompt[] {
 }
 
 export function addSchedule(
-  input: Pick<ScheduledPrompt, 'name' | 'cron' | 'prompt' | 'discordChannelId'>,
+  input: Pick<ScheduledPrompt, 'name' | 'cron' | 'prompt' | 'discordChannelId' | 'lineUserId'>,
 ): ScheduledPrompt {
   const store = loadStore();
   const entry: ScheduledPrompt = {
@@ -90,7 +90,7 @@ export function setStopRequested(id: string, value: boolean): boolean {
 
 export function updateSchedule(
   id: string,
-  updates: Partial<Pick<ScheduledPrompt, 'name' | 'cron' | 'prompt' | 'discordChannelId'>>,
+  updates: Partial<Pick<ScheduledPrompt, 'name' | 'cron' | 'prompt' | 'discordChannelId' | 'lineUserId'>>,
 ): boolean {
   const store = loadStore();
   const s = store.schedules.find((x) => x.id === id);

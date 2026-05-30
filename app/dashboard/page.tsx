@@ -63,6 +63,7 @@ interface Schedule {
   runNow?: boolean;
   stopRequested?: boolean;
   discordChannelId?: string;
+  lineUserId?: string;
 }
 
 interface SchedulesData {
@@ -325,6 +326,7 @@ interface ScheduleFormValues {
   cron: string;
   prompt: string;
   discordChannelId: string;
+  lineUserId: string;
 }
 
 function ScheduleFormModal({
@@ -343,6 +345,7 @@ function ScheduleFormModal({
     cron: initial?.cron ?? '',
     prompt: initial?.prompt ?? '',
     discordChannelId: initial?.discordChannelId ?? '',
+    lineUserId: initial?.lineUserId ?? '',
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -364,6 +367,7 @@ function ScheduleFormModal({
         cron: values.cron.trim(),
         prompt: values.prompt.trim(),
         discordChannelId: values.discordChannelId.trim() || undefined,
+        lineUserId: values.lineUserId.trim() || undefined,
       };
       const res = mode === 'add'
         ? await fetch('/api/dashboard/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -441,6 +445,17 @@ function ScheduleFormModal({
               value={values.discordChannelId}
               onChange={(e) => set('discordChannelId', e.target.value)}
               placeholder="123456789012345678"
+              className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-2"
+              style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-orange)' } as React.CSSProperties}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>LINE ユーザー ID <span className="font-normal">(任意)</span></label>
+            <input
+              type="text"
+              value={values.lineUserId}
+              onChange={(e) => set('lineUserId', e.target.value)}
+              placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
               className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-2"
               style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-orange)' } as React.CSSProperties}
             />

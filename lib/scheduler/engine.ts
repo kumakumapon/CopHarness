@@ -4,6 +4,8 @@ import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory'
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
+import '../skills/index';
+import { listActiveSkills } from '../skill';
 
 /**
  * Optional callback invoked after a schedule successfully completes.
@@ -14,6 +16,22 @@ export type ScheduleResultCallback = (
   scheduleName: string,
   payload: { status: 'success' | 'failed' | 'aborted'; message: string },
 ) => Promise<void>;
+
+/** Push a text message to a LINE user via the Messaging API. */
+async function sendLinePush(userId: string, text: string): Promise<void> {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token) return;
+  const truncated = text.length > 5000 ? text.slice(0, 5000) : text;
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ to: userId, messages: [{ type: 'text', text: truncated }] }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`LINE push failed (${res.status}): ${body}`);
+  }
+}
 
 /** Execute a single prompt against the configured LLM and return the response text. */
 export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Promise<string> {
@@ -38,7 +56,7 @@ export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Prom
 
   try {
     const resp = await runWithRalphLoop(
-      { messages, timeoutMs, abortSignal },
+      { messages, timeoutMs, abortSignal, skills: listActiveSkills() },
       adapter,
       { originalGoal: prompt },
     );
@@ -185,6 +203,15 @@ async function tick(): Promise<void> {
             console.error(`[${ts}] Failed to send Discord notification for "${schedule.name}":`, err);
           });
         }
+        // Notify LINE user if configured
+        if (schedule.lineUserId) {
+          sendLinePush(
+            schedule.lineUserId,
+            `スケジュール実行完了: ${schedule.name}\n\n${result}`,
+          ).catch((err: unknown) => {
+            console.error(`[${ts}] Failed to send LINE notification for "${schedule.name}":`, err);
+          });
+        }
       })
       .catch(async (err: unknown) => {
         const name = err instanceof Error ? err.name : '';
@@ -201,6 +228,14 @@ async function tick(): Promise<void> {
               message: msg,
             }).catch((notifyErr: unknown) => {
               console.error(`[${ts}] Failed to send Discord notification for "${schedule.name}":`, notifyErr);
+            });
+          }
+          if (schedule.lineUserId) {
+            sendLinePush(
+              schedule.lineUserId,
+              `スケジュール実行失敗: ${schedule.name}\n\nエラー: ${msg}`,
+            ).catch((notifyErr: unknown) => {
+              console.error(`[${ts}] Failed to send LINE notification for "${schedule.name}":`, notifyErr);
             });
           }
         }
