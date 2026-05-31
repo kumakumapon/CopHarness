@@ -257,12 +257,12 @@ async function tick(): Promise<void> {
 /** How often the daemon polls for runNow / stopRequested / new-minute cron checks. */
 const POLL_INTERVAL_MS = 5_000;
 
-/** Start the scheduler daemon. Returns a stop function that cleanly shuts down. */
-export function startScheduler(onResult?: ScheduleResultCallback): void {
+/** Start the scheduler daemon. Returns true if started, false if already running. */
+export function startScheduler(onResult?: ScheduleResultCallback): boolean {
   if (schedulerStarted) {
     console.warn('Scheduler daemon is already running — ignoring duplicate startScheduler() call.');
     if (onResult) resultCallback = onResult;
-    return;
+    return false;
   }
   schedulerStarted = true;
   if (onResult) resultCallback = onResult;
@@ -290,4 +290,5 @@ export function startScheduler(onResult?: ScheduleResultCallback): void {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  return true;
 }
