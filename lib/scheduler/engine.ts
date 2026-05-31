@@ -113,6 +113,9 @@ let lastCronMinute = -1;
 /** Callback to notify external consumers (e.g. Discord) of a completed schedule result. */
 let resultCallback: ScheduleResultCallback | undefined;
 
+/** Prevents startScheduler from being called more than once in the same process. */
+let schedulerStarted = false;
+
 /**
  * Poll tick: called every POLL_INTERVAL_MS.
  * - Fires schedules whose runNow flag is set (immediate execution).
@@ -174,6 +177,12 @@ async function tick(): Promise<void> {
     // Clear the runNow flag before launching so re-polling doesn't re-fire
     if (runNow) setRunNow(schedule.id, false);
 
+    // Record lastRun immediately (before the prompt executes) so that any other
+    // daemon process reading the same schedules.json in the same minute will see
+    // this schedule as already fired and skip it — preventing cross-process
+    // double execution.
+    updateLastRun(schedule.id, now);
+
     const controller = new AbortController();
     activeRuns.set(schedule.id, controller);
 
@@ -191,7 +200,6 @@ async function tick(): Promise<void> {
     // Launch async without awaiting — daemon stays unblocked
     runPrompt(schedule.prompt, controller.signal)
       .then(async (result) => {
-        await updateLastRun(schedule.id, now);
         finishLog(await logId, 'success', result);
         console.log(`[${ts}] Response from "${schedule.name}":\n${result}\n`);
         // Notify Discord channel if configured
@@ -249,8 +257,14 @@ async function tick(): Promise<void> {
 /** How often the daemon polls for runNow / stopRequested / new-minute cron checks. */
 const POLL_INTERVAL_MS = 5_000;
 
-/** Start the scheduler daemon. Returns a stop function that cleanly shuts down. */
-export function startScheduler(onResult?: ScheduleResultCallback): void {
+/** Start the scheduler daemon. Returns true if started, false if already running. */
+export function startScheduler(onResult?: ScheduleResultCallback): boolean {
+  if (schedulerStarted) {
+    console.warn('Scheduler daemon is already running — ignoring duplicate startScheduler() call.');
+    if (onResult) resultCallback = onResult;
+    return false;
+  }
+  schedulerStarted = true;
   if (onResult) resultCallback = onResult;
   console.log('Scheduler daemon started (polling every 5 s). Press Ctrl+C to stop.');
 
@@ -269,10 +283,12 @@ export function startScheduler(onResult?: ScheduleResultCallback): void {
       controller.abort();
     }
     activeRuns.clear();
+    schedulerStarted = false;
     console.log('\nScheduler stopped.');
     process.exit(0);
   };
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  return true;
 }
