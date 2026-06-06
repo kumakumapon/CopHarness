@@ -1079,6 +1079,159 @@ curl -X POST http://localhost:3000/api/copilot \
 - `SKILL_MEMORY_FILE` で指定したファイルのディレクトリに書き込み権限があるか確認してください。
 - `SKILL_NOTES_FILE` で指定したファイルのディレクトリに書き込み権限があるか確認してください。
 
+---
+
+## Phase 8: 文書・スライド作成スキル
+
+**先行事例**
+- **OpenClaw** (★160k): SKILL.md（YAML + Markdown）でスキル定義。ファイルベース記憶パターン。
+- **Hermes Agent** (NousResearch): pptxgenjs + python-pptx を用いた PowerPoint 生成。
+
+---
+
+### `createDocument` — 文書生成
+
+カテゴリ: `file` | リスクレベル: `medium` | 依存: なし
+
+タイトルとセクション配列から構造化文書（Markdown または HTML）を生成し、サンドボックスに保存します。
+
+**パラメータ**
+
+| 名前 | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `title` | string | ✓ | 文書タイトル |
+| `sections` | string | ✓ | JSON 配列: `[{"heading":"見出し","content":"本文"}]` |
+| `format` | string | — | `"markdown"`（デフォルト）または `"html"` |
+| `filename` | string | — | 保存ファイル名（省略時は自動生成） |
+
+**使用例**
+
+```
+createDocument を使って以下の内容で文書を作成してください:
+  - タイトル: 「プロジェクト概要」
+  - セクション:
+    1. 背景: このプロジェクトは…
+    2. 目標: 主要 KPI は…
+  - フォーマット: html
+```
+
+LLM への呼び出しイメージ:
+```json
+{
+  "title": "プロジェクト概要",
+  "sections": "[{\"heading\":\"背景\",\"content\":\"このプロジェクトは...\"},{\"heading\":\"目標\",\"content\":\"主要KPIは...\"}]",
+  "format": "html"
+}
+```
+
+**出力例**
+
+```
+Document created: "document-1700000000000.html"
+Format: html
+Sections: 2
+Size: 2341 characters
+
+Preview:
+<!DOCTYPE html>
+<html lang="ja">...
+```
+
+---
+
+### `createSlideshow` — HTML5 スライドデッキ生成
+
+カテゴリ: `file` | リスクレベル: `medium` | 依存: なし
+
+自己完結型 HTML5 プレゼンテーションを生成してサンドボックスに保存します。外部 CDN 依存なし、単一 HTML ファイルで完結。
+
+**パラメータ**
+
+| 名前 | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `title` | string | ✓ | プレゼンタイトル（タイトルスライドに表示） |
+| `slides` | string | ✓ | JSON 配列: `[{"title":"スライドタイトル","bullets":["箇条書き1","箇条書き2"],"notes":"スピーカーノート（省略可）"}]` |
+| `theme` | string | — | `"light"`（デフォルト）/ `"dark"` / `"corporate"` |
+| `filename` | string | — | 保存ファイル名（省略時は自動生成） |
+
+**キーボード操作**（ブラウザで開いた後）
+
+| キー | 動作 |
+|---|---|
+| `→` / `Space` | 次のスライド |
+| `←` | 前のスライド |
+| `N` | スピーカーノート表示切替 |
+| `Home` / `End` | 最初 / 最後のスライド |
+| `Esc` | ノートを閉じる |
+
+**テーマ**
+
+| テーマ | 背景 | アクセント |
+|---|---|---|
+| `light` | 白 | インディゴ |
+| `dark` | ダーク紺 | ラベンダー |
+| `corporate` | ネイビー | オレンジ |
+
+**使用例**
+
+```
+createSlideshow で以下のスライドデッキを作成してください:
+  テーマ: dark
+  スライド: 
+    1. LLM ハーネスとは / 要点: 複数プロバイダ対応, スキル拡張可能
+    2. アーキテクチャ / 要点: Next.js, TypeScript, 60+ スキル
+```
+
+---
+
+### `createPresentation` — PowerPoint (.pptx) 生成
+
+カテゴリ: `file` | リスクレベル: `medium` | 依存: **pptxgenjs**（事前インストール必要）
+
+pptxgenjs を使って本物の .pptx ファイルを生成。Microsoft PowerPoint / LibreOffice Impress / Google Slides で編集可能。
+
+**前提**
+
+```bash
+npm install pptxgenjs
+```
+
+**パラメータ**
+
+| 名前 | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `title` | string | ✓ | プレゼンタイトル |
+| `slides` | string | ✓ | JSON 配列: `[{"title":"...","bullets":["..."],"layout":"bullets"}]` |
+| `theme` | string | — | `"default"`（白）/ `"dark"`（ダーク）/ `"minimal"`（ミニマル） |
+| `filename` | string | — | 保存ファイル名（省略時は自動生成） |
+
+`layout` の値:
+- `"bullets"` （デフォルト）: タイトル + 箇条書き
+- `"title"`: タイトルのみ
+- `"blank"`: 空白スライド
+
+**使用例**
+
+```
+createPresentation を使って「2026年 Q2 レビュー」プレゼンを作成してください。
+  テーマ: default
+  スライド:
+    1. 概要 / 今四半期の成果
+    2. 数字 / KPI: 達成率 95%, 新規顧客 120社
+```
+
+**pptxgenjs 未インストール時のエラー**
+
+```
+Error: pptxgenjs is not installed.
+Install it with: npm install pptxgenjs
+Then restart the server.
+
+Alternatively, use createSlideshow to generate a dependency-free HTML5 presentation.
+```
+
+---
+
 ### ダッシュボードでスキル一覧を確認
 
 ```bash
