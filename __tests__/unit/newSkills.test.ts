@@ -32,6 +32,7 @@ describe('SkillDefinition metadata', () => {
       'arXivSearch', 'deepResearch', 'freeResearch', 'techNews', 'githubRepo', 'youtubeInfo',
       'noteCreate', 'noteRead', 'noteList', 'noteDelete',
       'markdownToHtml', 'diffText', 'colorConvert',
+      'createDocument', 'createSlideshow', 'createPresentation',
       'trendSearch', 'newsBrief',
       'rssFeed',
     ];
