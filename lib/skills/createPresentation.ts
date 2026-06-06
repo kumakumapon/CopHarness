@@ -13,37 +13,38 @@ interface ThemeConfig {
   background: { color: string };
   titleColor: string;
   bodyColor: string;
-  accentColor: string;
+}
+
+/** Minimal interface for the pptxgenjs slide object (methods we actually call). */
+interface PptxGenSlide {
+  background: { color: string };
+  addText(text: string | object[], options: object): void;
+}
+
+/** Minimal interface for the pptxgenjs presentation object (methods we actually call). */
+interface PptxGenPresentation {
+  layout: string;
+  addSlide(): PptxGenSlide;
+  write(opts: { outputType: string }): Promise<Buffer>;
 }
 
 const THEMES: Record<string, ThemeConfig> = {
-  default: {
-    background: { color: 'FFFFFF' },
-    titleColor: '003366',
-    bodyColor: '333333',
-    accentColor: '4472C4',
-  },
-  dark: {
-    background: { color: '1E1E2E' },
-    titleColor: 'CBA6F7',
-    bodyColor: 'CDD6F4',
-    accentColor: '89B4FA',
-  },
-  minimal: {
-    background: { color: 'FAFAFA' },
-    titleColor: '111111',
-    bodyColor: '555555',
-    accentColor: '888888',
-  },
+  default: { background: { color: 'FFFFFF' }, titleColor: '003366', bodyColor: '333333' },
+  dark:    { background: { color: '1E1E2E' }, titleColor: 'CBA6F7', bodyColor: 'CDD6F4' },
+  minimal: { background: { color: 'FAFAFA' }, titleColor: '111111', bodyColor: '555555' },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadPptxGen(): Promise<(new () => any) | null> {
+/**
+ * Dynamically load pptxgenjs at runtime so the skill works even when the
+ * package is not installed (returns null in that case).
+ */
+async function loadPptxGen(): Promise<(new () => PptxGenPresentation) | null> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('pptxgenjs') as { default?: unknown; [key: string]: unknown };
     const ctor = mod.default ?? mod;
-    if (typeof ctor === 'function') return ctor as new () => unknown;
+    if (typeof ctor === 'function') {
+      return ctor as unknown as new () => PptxGenPresentation;
+    }
     return null;
   } catch {
     return null;
@@ -143,8 +144,7 @@ export const createPresentation: SkillDefinition = {
     const filename = String(args.filename ?? '').trim() || `presentation-${Date.now()}.pptx`;
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pres = new PptxGen() as any;
+      const pres = new PptxGen();
       pres.layout = 'LAYOUT_WIDE'; // 13.33" × 7.5"
 
       // Title slide
@@ -190,7 +190,7 @@ export const createPresentation: SkillDefinition = {
         }
       }
 
-      const buffer = await pres.write({ outputType: 'nodebuffer' }) as Buffer;
+      const buffer = await pres.write({ outputType: 'nodebuffer' });
       const resolved = await resolveSafe(filename);
       await fs.mkdir(path.dirname(resolved), { recursive: true });
       await fs.writeFile(resolved, buffer);
