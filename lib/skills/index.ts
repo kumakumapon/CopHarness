@@ -59,6 +59,11 @@ import { markdownToHtmlSkill } from './markdownToHtml';
 import { diffText } from './diffText';
 import { colorConvert } from './colorConvert';
 
+// Phase 8: document / presentation (inspired by OpenClaw SKILL.md & Hermes Agent pptxgenjs)
+import { createDocument } from './createDocument';
+import { createSlideshow } from './createSlideshow';
+import { createPresentation } from './createPresentation';
+
 // Prompt wizard
 import { listPromptTemplates, buildPromptFromTemplate } from './promptWizard';
 
@@ -112,6 +117,9 @@ const allSkills = [
   markdownToHtmlSkill,
   diffText,
   colorConvert,
+  createDocument,
+  createSlideshow,
+  createPresentation,
   rssFeed,
   listPromptTemplates,
   buildPromptFromTemplate,
@@ -167,6 +175,9 @@ export {
   markdownToHtmlSkill,
   diffText,
   colorConvert,
+  createDocument,
+  createSlideshow,
+  createPresentation,
   rssFeed,
   listPromptTemplates,
   buildPromptFromTemplate,
