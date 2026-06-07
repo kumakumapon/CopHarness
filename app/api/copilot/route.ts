@@ -2,19 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../lib/skill';
+import { requireApiKey } from '../../../lib/apiAuth';
 import '../../../lib/skills/index';
 
 
 export async function POST(req: NextRequest) {
   // Optional cross-service API key authentication (e.g. from CopChat)
-  const expectedApiKey = process.env.COPHARNESS_API_KEY;
-  if (expectedApiKey) {
-    const authHeader = req.headers.get('Authorization');
-    const provided = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (provided !== expectedApiKey) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
 
   // プロバイダ自動判定
   const provider = resolveProvider();

@@ -121,13 +121,16 @@ export function getSkill(name: string): SkillDefinition | undefined {
  * Return the definitions for a list of skill names, silently ignoring unknown names.
  * If the ENABLED_SKILLS environment variable is set (comma-separated list of skill names),
  * only skills in that list are returned even if they were requested.
+ * When unset, only low-risk skills can be resolved implicitly.
  */
 export function resolveSkills(names: string[]): SkillDefinition[] {
   const enabledSet = buildEnabledSet();
   return names.flatMap((name) => {
-    if (enabledSet && !enabledSet.has(name)) return [];
     const skill = skillRegistry.get(name);
-    return skill ? [skill] : [];
+    if (!skill) return [];
+    if (enabledSet) return enabledSet.has(name) ? [skill] : [];
+    if ((skill.riskLevel ?? 'low') !== 'low') return [];
+    return [skill];
   });
 }
 
@@ -139,11 +142,11 @@ export function listSkills(): SkillDefinition[] {
 /**
  * Return registered skills that are currently active.
  * When ENABLED_SKILLS is set, only skills in that list are returned.
- * When unset, all registered skills are returned.
+ * When unset, only low-risk skills are returned by default.
  */
 export function listActiveSkills(): SkillDefinition[] {
   const enabledSet = buildEnabledSet();
-  if (!enabledSet) return listSkills();
+  if (!enabledSet) return listSkills().filter((s) => (s.riskLevel ?? 'low') === 'low');
   return listSkills().filter((s) => enabledSet.has(s.name));
 }
 
