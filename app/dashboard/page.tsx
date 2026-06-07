@@ -149,8 +149,31 @@ interface ViolationsData {
 // Fetcher
 // ---------------------------------------------------------------------------
 
+const DASHBOARD_API_KEY_STORAGE = 'copharness.dashboardApiKey';
+
+function getDashboardApiKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(DASHBOARD_API_KEY_STORAGE);
+}
+
+async function dashboardFetch(input: RequestInfo | URL, init: RequestInit = {}, retry = true): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const apiKey = getDashboardApiKey();
+  if (apiKey && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${apiKey}`);
+  }
+
+  const res = await fetch(input, { ...init, headers });
+  if (res.status !== 401 || !retry || typeof window === 'undefined') return res;
+
+  const nextKey = window.prompt('Dashboard API key');
+  if (!nextKey) return res;
+  window.localStorage.setItem(DASHBOARD_API_KEY_STORAGE, nextKey);
+  return dashboardFetch(input, init, false);
+}
+
 async function fetcher<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await dashboardFetch(url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 }
@@ -370,8 +393,8 @@ function ScheduleFormModal({
         lineUserId: values.lineUserId.trim() || undefined,
       };
       const res = mode === 'add'
-        ? await fetch('/api/dashboard/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        : await fetch(`/api/dashboard/schedules/${initial!.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        ? await dashboardFetch('/api/dashboard/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        : await dashboardFetch(`/api/dashboard/schedules/${initial!.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) {
         const data = await res.json() as { error?: string };
         setError(data.error ?? '保存に失敗しました');
@@ -496,7 +519,7 @@ function SchedulerPanel({ data, onMutate }: { data: SchedulesData | undefined; o
   const [modal, setModal] = useState<{ mode: 'add' | 'edit'; schedule?: Schedule } | null>(null);
 
   async function apiCall(url: string, method: string, body?: object) {
-    const res = await fetch(url, {
+    const res = await dashboardFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
@@ -931,7 +954,7 @@ function ApprovalsPanel({
 
   async function resolve(id: string, action: 'approve' | 'reject') {
     setLoading((l) => ({ ...l, [id]: action }));
-    await fetch(`/api/dashboard/approvals/${id}/${action}`, { method: 'POST' });
+    await dashboardFetch(`/api/dashboard/approvals/${id}/${action}`, { method: 'POST' });
     onMutate();
     setLoading((l) => { const n = { ...l }; delete n[id]; return n; });
   }

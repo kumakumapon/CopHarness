@@ -78,9 +78,11 @@ describe('ENABLED_SKILLS filtering', () => {
     else process.env.ENABLED_SKILLS = saved;
   });
 
-  it('listActiveSkills returns all skills when ENABLED_SKILLS is not set', () => {
+  it('listActiveSkills returns only low-risk skills when ENABLED_SKILLS is not set', () => {
     delete process.env.ENABLED_SKILLS;
-    expect(listActiveSkills().length).toBe(listSkills().length);
+    const active = listActiveSkills();
+    expect(active.every((s) => (s.riskLevel ?? 'low') === 'low')).toBe(true);
+    expect(active.map((s) => s.name)).not.toContain('runCommand');
   });
 
   it('listActiveSkills filters to specified skills', () => {
@@ -96,10 +98,16 @@ describe('ENABLED_SKILLS filtering', () => {
     expect(result.map((s) => s.name)).toEqual(['currentDateTime']);
   });
 
-  it('resolveSkills returns all requested skills when ENABLED_SKILLS is empty string', () => {
+  it('resolveSkills returns requested low-risk skills when ENABLED_SKILLS is empty string', () => {
     process.env.ENABLED_SKILLS = '';
-    const result = resolveSkills(['currentDateTime', 'calculator']);
-    expect(result.length).toBe(2);
+    const result = resolveSkills(['currentDateTime', 'calculator', 'runCommand']);
+    expect(result.map((s) => s.name)).toEqual(['currentDateTime', 'calculator']);
+  });
+
+  it('resolveSkills allows high-risk skills only when explicitly enabled', () => {
+    process.env.ENABLED_SKILLS = 'runCommand';
+    const result = resolveSkills(['runCommand']);
+    expect(result.map((s) => s.name)).toEqual(['runCommand']);
   });
 });
 
@@ -369,14 +377,24 @@ describe('getSystemInfo skill', () => {
 
 describe('getEnvVariable skill', () => {
   const savedExposed = process.env.EXPOSED_ENV_VARS;
+  const savedNodeEnv = process.env.NODE_ENV;
   afterEach(() => {
     if (savedExposed === undefined) delete process.env.EXPOSED_ENV_VARS;
     else process.env.EXPOSED_ENV_VARS = savedExposed;
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: savedNodeEnv,
+      configurable: true,
+      writable: true,
+    });
   });
 
   it('returns value for allowed variable', async () => {
     process.env.EXPOSED_ENV_VARS = 'NODE_ENV';
-    process.env.NODE_ENV = 'test';
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'test',
+      configurable: true,
+      writable: true,
+    });
     const result = await getEnvVariable.handler({ name: 'NODE_ENV' });
     expect(result.isError).toBeFalsy();
     expect(result.content).toBe('test');
