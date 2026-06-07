@@ -9,13 +9,12 @@ import { type SkillDefinition } from '../skill';
 const ALLOWED_COMMANDS = new Set([
   'ls', 'dir', 'pwd', 'echo', 'date', 'whoami', 'hostname',
   'cat', 'head', 'tail', 'wc', 'grep', 'find', 'sort', 'uniq',
-  'which', 'env', 'printenv', 'df', 'du', 'uname', 'uptime',
-  'node', 'python3', 'python', 'ruby', 'go',
+  'which', 'df', 'du', 'uname', 'uptime',
 ]);
 
 /** Additional check: reject arguments that look like shell injection attempts. */
 function hasDangerousArg(args: string[]): boolean {
-  const dangerous = /[;&|`$><!]|\.\.\/|\/etc\/|\/proc\/|\/sys\//;
+  const dangerous = /[;&|`$%><!]|\.\.\/|\/etc\/|\/proc\/|\/sys\//;
   return args.some((a) => dangerous.test(a));
 }
 
@@ -77,7 +76,7 @@ export const runCommand: SkillDefinition = {
     }
     if (hasDangerousArg(commandArgs)) {
       return {
-        content: 'Error: one or more arguments contain disallowed characters (;, |, &, >, $, !, .., /etc/, /proc/, /sys/).',
+        content: 'Error: one or more arguments contain disallowed characters (;, |, &, >, $, %, !, .., /etc/, /proc/, /sys/).',
         isError: true,
       };
     }
