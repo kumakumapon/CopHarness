@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setStopRequested } from '../../../../../../lib/scheduler/store';
+import { requireApiKey } from '../../../../../../lib/apiAuth';
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const { id } = await params;
   const ok = setStopRequested(id, true);
   if (!ok) return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });

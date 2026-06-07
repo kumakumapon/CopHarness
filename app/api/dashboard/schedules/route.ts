@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listSchedules, setEnabled, addSchedule } from '../../../../lib/scheduler/store';
 import { nextRunDate, normalizeCron } from '../../../../lib/scheduler/cron';
+import { requireApiKey } from '../../../../lib/apiAuth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const schedules = listSchedules().map((s) => {
     const nextRun = s.enabled
       ? nextRunDate(normalizeCron(s.cron), new Date())?.toISOString() ?? null
@@ -13,6 +17,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   let body: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string };
   try {
     body = await req.json();
@@ -41,6 +48,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   let body: { id?: string; enabled?: boolean };
   try {
     body = await req.json();

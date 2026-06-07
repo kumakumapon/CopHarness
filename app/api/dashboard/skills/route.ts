@@ -1,8 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { listSkills, listActiveSkills } from '../../../../lib/skill';
+import { requireApiKey } from '../../../../lib/apiAuth';
 import '../../../../lib/skills/index';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const activeNames = new Set(listActiveSkills().map((s) => s.name));
   const skills = listSkills().map((s) => ({
     name: s.name,

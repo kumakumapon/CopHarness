@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setEnabled, listSchedules, removeSchedule, updateSchedule } from '../../../../../lib/scheduler/store';
 import { nextRunDate, normalizeCron } from '../../../../../lib/scheduler/cron';
+import { requireApiKey } from '../../../../../lib/apiAuth';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const { id } = await params;
   let body: { enabled?: boolean; name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string };
   try {
@@ -51,9 +55,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const { id } = await params;
   const ok = removeSchedule(id);
   if (!ok) return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });

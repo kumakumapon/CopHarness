@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
+import { requireApiKey } from '../../../../lib/apiAuth';
 
 interface ComponentStatus {
   name: string;
@@ -7,7 +8,10 @@ interface ComponentStatus {
   detail?: string;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const unauthorized = requireApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const provider = resolveProvider();
   const model = resolveModel(provider);
 
