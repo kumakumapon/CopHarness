@@ -11,6 +11,7 @@ import {
   recordSkillExecution,
 } from '../../lib/skills/executionLog';
 import { withSkillExecutionContext } from '../../lib/skills/executionContext';
+import { _resetRecentSpansForTests, getRecentSpans } from '../../lib/telemetry/tracer';
 
 describe('skill execution logging', () => {
   let tmpDir: string;
@@ -20,12 +21,14 @@ describe('skill execution logging', () => {
     process.env.DATA_DIR = tmpDir;
     _resetDataDirCache();
     _resetSkillExecutionLogForTests();
+    _resetRecentSpansForTests();
   });
 
   afterEach(() => {
     delete process.env.DATA_DIR;
     _resetDataDirCache();
     _resetSkillExecutionLogForTests();
+    _resetRecentSpansForTests();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -85,6 +88,48 @@ describe('skill execution logging', () => {
       channelKey: 'api:alice',
       taskId: 'task_456',
       approvalId: 'approval_789',
+    });
+  });
+
+  it('emits OpenTelemetry-compatible skill spans with execution correlation fields', async () => {
+    const skill: SkillDefinition = {
+      name: '__telemetry_skill__',
+      description: 'records telemetry span attributes',
+      parameters: { type: 'object', properties: {} },
+      riskLevel: 'medium',
+      handler: async () => ({ content: 'telemetry ok' }),
+    };
+    registerSkill(skill);
+
+    await withSkillExecutionContext(
+      {
+        personId: 'person_span',
+        channelKey: 'discord:span-user',
+        taskId: 'task_span',
+        approvalId: 'approval_span',
+        policyDecision: 'approval_approved',
+        approvalStatus: 'approved',
+      },
+      () => skill.handler({ value: 'visible-in-log-preview' }),
+    );
+
+    const execution = listSkillExecutions(1)[0];
+    const span = getRecentSpans(1)[0];
+    expect(span).toMatchObject({
+      name: 'skill.execute',
+      status: 'OK',
+      attributes: expect.objectContaining({
+        'skill.name': '__telemetry_skill__',
+        'skill.risk_level': 'medium',
+        'skill.execution.id': execution.id,
+        'skill.status': 'success',
+        'person.id': 'person_span',
+        'channel.key': 'discord:span-user',
+        'task.id': 'task_span',
+        'approval.id': 'approval_span',
+        'approval.status': 'approved',
+        'policy.decision': 'approval_approved',
+      }),
     });
   });
 
