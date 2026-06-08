@@ -51,3 +51,4 @@ schema_violations.json
 skill_executions.json
 workspace/
 identities.json
+task_ledger.json

@@ -5,6 +5,7 @@ import { resolveSkills, listActiveSkills } from '../../../lib/skill';
 import { requireApiKey } from '../../../lib/apiAuth';
 import { resolveConversationKey } from '../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
+import { finishTask, startTask } from '../../../lib/tasks/ledger';
 import '../../../lib/skills/index';
 
 
@@ -58,15 +59,29 @@ export async function POST(req: NextRequest) {
     const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
     const subject = String(body.subject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';
     const identity = await resolveConversationKey('api', subject, { displayName: body.displayName });
-    const resp = await withSkillExecutionContext(
-      {
-        personId: identity.personId,
-        channelKey: identity.channelKey,
-        taskId: body.taskId,
-      },
-      () => adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal, skills }),
-    );
-    return NextResponse.json({ reply: resp.content });
+    const task = await startTask({
+      id: body.taskId,
+      kind: 'api',
+      personId: identity.personId,
+      channelKey: identity.channelKey,
+      conversationKey: identity.conversationKey,
+      title: messages[messages.length - 1]?.content?.slice(0, 120),
+    });
+    try {
+      const resp = await withSkillExecutionContext(
+        {
+          personId: identity.personId,
+          channelKey: identity.channelKey,
+          taskId: task.id,
+        },
+        () => adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal, skills }),
+      );
+      await finishTask(task.id, 'succeeded');
+      return NextResponse.json({ reply: resp.content, taskId: task.id });
+    } catch (err) {
+      await finishTask(task.id, 'failed', err);
+      throw err;
+    }
   } catch (err: unknown) {
     console.error('LLM API handler error:', err);
     const message = err instanceof Error ? err.message : String(err);

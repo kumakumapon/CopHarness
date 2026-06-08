@@ -28,6 +28,7 @@ import { type LLMMessage } from '../../../lib/adapter';
 import { loadHistory, saveHistory } from '../../../lib/history/store';
 import { resolveConversationKey } from '../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
+import { finishTask, startTask } from '../../../lib/tasks/ledger';
 import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
 import {
   getSession as getWizardSession,
@@ -396,19 +397,28 @@ export async function POST(req: NextRequest) {
     ) {
       const prompt = wizSess.generatedPrompt;
       clearWizardSession(sessionKey);
+      const task = await startTask({
+        kind: 'wizard',
+        personId: identity.personId,
+        channelKey: identity.channelKey,
+        conversationKey,
+        title: prompt.slice(0, 120),
+      });
       try {
         const resp = await withSkillExecutionContext(
-          { personId: identity.personId, channelKey: identity.channelKey },
+          { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
           () => adapter.complete({
             messages: [{ role: 'user', content: prompt }],
             timeoutMs,
           }),
         );
+        await finishTask(task.id, 'succeeded');
         await scheduleReply(client, {
           replyToken,
           messages: [{ type: 'text', text: truncateMessage(resp.content || '（応答がありませんでした）') }],
         });
       } catch (err) {
+        await finishTask(task.id, 'failed', err);
         const errMsg = err instanceof Error ? err.message : String(err);
         await scheduleReply(client, {
           replyToken,
@@ -423,20 +433,29 @@ export async function POST(req: NextRequest) {
     history.push({ role: 'user', content: userText });
     trimHistory(history);
 
+    const task = await startTask({
+      kind: 'conversation',
+      personId: identity.personId,
+      channelKey: identity.channelKey,
+      conversationKey,
+      title: userText.slice(0, 120),
+    });
     try {
       const resp = await withSkillExecutionContext(
-        { personId: identity.personId, channelKey: identity.channelKey },
+        { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
         () => adapter.complete({ messages: [...history], timeoutMs }),
       );
       const replyText = resp.content || '（応答がありませんでした）';
       history.push({ role: 'assistant', content: replyText });
       trimHistory(history);
       await persistHistory(conversationKey, history);
+      await finishTask(task.id, 'succeeded');
       await client.replyMessage({
         replyToken,
         messages: [{ type: 'text', text: truncateMessage(replyText) }],
       });
     } catch (err) {
+      await finishTask(task.id, 'failed', err);
       const errMsg = err instanceof Error ? err.message : String(err);
       console.error('[LINE Bot] LLM error:', err);
       const idx = history.findLastIndex((m) => m.role === 'user' && m.content === userText);

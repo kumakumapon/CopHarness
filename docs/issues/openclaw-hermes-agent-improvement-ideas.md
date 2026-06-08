@@ -234,3 +234,33 @@ context compaction を会話要約だけで終わらせず、構造化された�
 ## 補足
 
 この issue は、OpenClaw の常駐実行・日常チャット操作の方向性と、Hermes Agent の学習ループ・長期記憶・並列サブエージェントの方向性を参考に、CopHarness の既存構成へ段階的に取り込むための親 issue として扱う。
+
+### 2026-06-08: Phase 1 継続（TaskLedger による自動 taskId 発行）
+
+#### 完了
+
+- `TaskLedger` を追加し、会話 / API / ウィザード実行ごとの `taskId`、人物、チャネル、会話キー、状態、開始 / 終了時刻、エラープレビューを `task_ledger.json` に保存できるようにした。
+- HTTP / SSE API で `taskId` が未指定の場合もサーバー側で自動発行し、スキル実行コンテキストとレスポンス / SSE エラーに紐付けるようにした。既存クライアントが `taskId` を渡した場合は、その ID を TaskLedger に採用する。
+- LINE / Discord の通常チャットとウィザード実行で TaskLedger タスクを開始 / 成功 / 失敗として記録し、スキル実行ログの `taskId` と相互参照できるようにした。
+- ダッシュボード API に `/api/dashboard/tasks` を追加し、直近タスクの状態を取得できるようにした。
+- `task_ledger.json` を `.gitignore` に追加し、実行時データをリポジトリへ混入させないようにした。
+- TaskLedger の単体テストを追加し、自動 ID 発行、外部 ID 採用、成功 / 失敗状態の記録を検証した。
+
+#### 未完了 / 次に小さく切る issue
+
+- ダッシュボード UI に TaskLedger の一覧、状態フィルタ、人物 / チャネル検索、関連スキル実行ログへのリンクを追加する。
+- スケジューラーとサブエージェント実行にも TaskLedger を接続し、`schedule` / `agent` kind のタスクを自動発行する。
+- 停止 / 再開 API を TaskLedger と接続し、実行中タスクの cancellation / retry を状態遷移として扱う。
+- OpenTelemetry span と JSON ログへ `task.id` を付与し、TaskLedger、スキル実行ログ、外部テレメトリを横断参照できるようにする。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/taskLedger.test.ts __tests__/unit/skillExecutionLog.test.ts` で TaskLedger と既存スキル実行ログの単体テスト通過を確認した。
+- `npm test` で Jest 全体を実行し、全テスト通過を確認した。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認した。
+
+#### リスク / 注意点
+
+- タスクの粒度は現時点では LLM への 1 リクエスト単位であり、長期的な「依頼」単位の親子タスクや再開可能セッションは未実装。
+- SSE はストリーム開始前に TaskLedger へ記録するため、クライアント切断時の状態は adapter / stream 側の例外伝播に依存する。
+- `taskId` は監査相関用に発行されるが、停止 / 再開 / 認可判定の正式な制御単位として使うには追加実装が必要。

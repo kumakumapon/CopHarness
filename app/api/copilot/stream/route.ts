@@ -5,6 +5,7 @@ import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
 import { requireApiKey } from '../../../../lib/apiAuth';
 import { resolveConversationKey } from '../../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../../lib/skills/executionContext';
+import { finishTask, startTask } from '../../../../lib/tasks/ledger';
 import '../../../../lib/skills/index';
 
 export async function POST(req: NextRequest) {
@@ -57,6 +58,15 @@ export async function POST(req: NextRequest) {
   const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
   const subject = String(body.subject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';
   const identity = await resolveConversationKey('api', subject, { displayName: body.displayName });
+  const task = await startTask({
+    id: body.taskId,
+    kind: 'api',
+    personId: identity.personId,
+    channelKey: identity.channelKey,
+    conversationKey: identity.conversationKey,
+    title: messages[messages.length - 1]?.content?.slice(0, 120),
+    metadata: { stream: true },
+  });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -66,7 +76,7 @@ export async function POST(req: NextRequest) {
           {
             personId: identity.personId,
             channelKey: identity.channelKey,
-            taskId: body.taskId,
+            taskId: task.id,
           },
           async () => {
             const gen = adapter.stream
@@ -89,11 +99,13 @@ export async function POST(req: NextRequest) {
             }
           },
         );
+        await finishTask(task.id, 'succeeded');
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        await finishTask(task.id, 'failed', err);
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: message })}\n\n`),
+          encoder.encode(`data: ${JSON.stringify({ error: message, taskId: task.id })}\n\n`),
         );
       } finally {
         controller.close();
