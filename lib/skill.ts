@@ -8,6 +8,7 @@ import { validateSkillOutput } from './guardrails/outputValidator';
 import { recordViolation } from './guardrails/violationLog';
 import { recordSkillExecution } from './skills/executionLog';
 import { getSkillExecutionContext } from './skills/executionContext';
+import { startSpan } from './telemetry/tracer';
 
 /** A single property definition within a skill's parameter schema. */
 export interface SkillParameterProperty {
@@ -100,6 +101,17 @@ export function registerSkill(skill: SkillDefinition): void {
   skill.handler = async (args) => {
     const startedAt = new Date();
     const startMs = Date.now();
+    const initialContext = getSkillExecutionContext();
+    const span = startSpan('skill.execute', {
+      'skill.name': skill.name,
+      'skill.risk_level': skill.riskLevel ?? 'low',
+      ...(initialContext?.personId ? { 'person.id': initialContext.personId } : {}),
+      ...(initialContext?.channelKey ? { 'channel.key': initialContext.channelKey } : {}),
+      ...(initialContext?.taskId ? { 'task.id': initialContext.taskId } : {}),
+      ...(initialContext?.approvalId ? { 'approval.id': initialContext.approvalId } : {}),
+      'policy.decision': initialContext?.policyDecision ?? 'allowed',
+    });
+
     try {
       const result = await originalHandler(args);
       if (schema && !result.isError) {
@@ -110,7 +122,7 @@ export function registerSkill(skill: SkillDefinition): void {
       }
       const finishedAt = new Date();
       const context = getSkillExecutionContext();
-      await recordSkillExecution({
+      const executionRecord = await recordSkillExecution({
         skillName: skill.name,
         startedAt,
         finishedAt,
@@ -124,11 +136,22 @@ export function registerSkill(skill: SkillDefinition): void {
         taskId: context?.taskId,
         approvalId: context?.approvalId,
       });
+      span.end({
+        'skill.execution.id': executionRecord.id,
+        'skill.status': result.isError ? 'error' : 'success',
+        'skill.result.length': result.content.length,
+        ...(context?.personId ? { 'person.id': context.personId } : {}),
+        ...(context?.channelKey ? { 'channel.key': context.channelKey } : {}),
+        ...(context?.taskId ? { 'task.id': context.taskId } : {}),
+        ...(context?.approvalId ? { 'approval.id': context.approvalId } : {}),
+        ...(context?.approvalStatus ? { 'approval.status': context.approvalStatus } : {}),
+        'policy.decision': context?.policyDecision ?? (context?.approvalId ? (result.isError ? 'approval_rejected' : 'approval_approved') : 'allowed'),
+      });
       return result;
     } catch (error) {
       const finishedAt = new Date();
       const context = getSkillExecutionContext();
-      await recordSkillExecution({
+      const executionRecord = await recordSkillExecution({
         skillName: skill.name,
         startedAt,
         finishedAt,
@@ -141,6 +164,16 @@ export function registerSkill(skill: SkillDefinition): void {
         taskId: context?.taskId,
         approvalId: context?.approvalId,
       });
+      span.end({
+        'skill.execution.id': executionRecord.id,
+        'skill.status': 'exception',
+        ...(context?.personId ? { 'person.id': context.personId } : {}),
+        ...(context?.channelKey ? { 'channel.key': context.channelKey } : {}),
+        ...(context?.taskId ? { 'task.id': context.taskId } : {}),
+        ...(context?.approvalId ? { 'approval.id': context.approvalId } : {}),
+        ...(context?.approvalStatus ? { 'approval.status': context.approvalStatus } : {}),
+        'policy.decision': context?.policyDecision ?? (context?.approvalId ? 'approval_exception' : 'allowed'),
+      }, error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   };

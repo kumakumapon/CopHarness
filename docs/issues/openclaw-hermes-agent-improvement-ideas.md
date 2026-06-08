@@ -289,3 +289,18 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - タスクの粒度は現時点では LLM への 1 リクエスト単位であり、長期的な「依頼」単位の親子タスクや再開可能セッションは未実装。
 - SSE はストリーム開始前に TaskLedger へ記録するため、クライアント切断時の状態は adapter / stream 側の例外伝播に依存する。
 - `taskId` は監査相関用に発行されるが、停止 / 再開 / 認可判定の正式な制御単位として使うには追加実装が必要。
+
+### 2026-06-08: Phase 1 継続（OpenTelemetry スキル相関）
+
+#### 完了
+
+- スキル実行ごとに `skill.execute` span を発行し、`skill.name`、`skill.risk_level`、`skill.execution.id`、`skill.status` を付与するようにした。
+- スキル実行コンテキストの `personId` / `channelKey` / `taskId` / `approvalId` を `person.id`、`channel.key`、`task.id`、`approval.id` として span に反映し、JSON のスキル実行ログとテレメトリを相互参照できるようにした。
+- Human-in-the-Loop の承認待ち / 承認 / 拒否 / タイムアウト結果を `policy.decision` と `approval.status` に反映できるようにした。
+- スキル実行ログの単体テストに、span 属性と実行ログ ID の相関検証を追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- 引数 / 結果プレビューの秘匿・マスキングルールを Tool Policy Engine と共有する。
+- OpenTelemetry の親子 span（LLM completion → skill.execute → backend execution）を維持するため、trace context を `AsyncLocalStorage` に拡張する。
+- Tool Policy Engine の正式導入後、`policy.decision` を provisional な文字列ではなくポリシー評価結果オブジェクト由来に切り替える。
