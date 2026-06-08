@@ -1,5 +1,6 @@
 import type { SkillDefinition } from '../skill';
 import { createApprovalRequest, waitForApproval } from './store';
+import { getSkillExecutionContext, updateSkillExecutionContext } from '../skills/executionContext';
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -20,7 +21,9 @@ export function wrapWithGate(skill: SkillDefinition): SkillDefinition {
   const gated: SkillDefinition = {
     ...skill,
     handler: async (args) => {
-      const req = createApprovalRequest(skill.name, args);
+      const context = getSkillExecutionContext();
+      const req = createApprovalRequest(skill.name, args, context?.personId ?? context?.channelKey);
+      updateSkillExecutionContext({ approvalId: req.id });
       console.info(`[HIL] Awaiting approval for "${skill.name}" (id=${req.id})`);
 
       const status = await waitForApproval(req.id, timeoutMs);

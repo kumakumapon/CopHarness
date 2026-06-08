@@ -194,6 +194,36 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - Discord は従来 channel 単位の履歴だったが、今回の初期実装では user 単位の identity を使う。複数チャンネルでの会話分離が必要な場合は `personId` と `channelKey` を併用した task/session ledger が必要。
 - 高リスクな自律実行は今回実装していない。今後の DAG runner / watcher / remote runtime 実装時は Tool Policy Engine または Human-in-the-Loop を経由する。
 
+
+### 2026-06-08: Phase 1 継続（スキル実行コンテキスト / 履歴詳細）
+
+#### 完了
+
+- `AsyncLocalStorage` ベースのスキル実行コンテキストを追加し、`personId`、`channelKey`、`taskId`、`approvalId` をスキル実行ログへ記録できるようにした。
+- HTTP / SSE API チャネルで `api:<subject>` を `IdentityStore` に解決し、スキル実行時に person-scoped なコンテキストを渡すようにした。
+- LINE / Discord の通常チャットおよびウィザード実行で、既存の `IdentityStore` 解決結果をスキル実行コンテキストへ接続した。
+- Human-in-the-Loop 承認リクエスト作成時に現在の人物 / チャネル情報を `requestedBy` として渡し、生成された承認 ID をスキル実行ログへ紐付けるようにした。
+- ダッシュボード API に `/api/dashboard/skill-executions` を追加し、ダッシュボードのスキル一覧に直近の実行履歴詳細テーブルを表示するようにした。
+- スキル実行ログの単体テストにコンテキスト項目の記録検証を追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- `taskId` の正式な発行元として TaskLedger を実装し、API から任意に渡すだけでなく会話 / スケジュール / サブエージェント単位で自動採番する。
+- ダッシュボードのスキル実行履歴に期間フィルタ、リスク別フィルタ、人物 / チャネル検索を追加する。
+- 引数 / 結果プレビューの秘匿・マスキングルールを Tool Policy Engine と共有する。
+- OpenTelemetry span に `skill.name`、`policy.decision`、`approval.id`、`task.id` を付与し、JSON ログと外部テレメトリを相互参照できるようにする。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/skillExecutionLog.test.ts` でスキル実行ログの単体テスト通過を確認する。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認する。
+
+#### リスク / 注意点
+
+- API チャネルの `subject` は現時点ではリクエスト本文または `x-copharness-subject` ヘッダーの自己申告値であり、認証主体との厳密なバインドは未実装。
+- `taskId` はまだ TaskLedger に裏付けられていないため、監査や停止 / 再開の単位として使うには追加実装が必要。
+- 引数と結果の秘匿は従来どおり短いプレビューへの切り詰めのみであり、キー単位マスキングは未実装。
+
 ## 受け入れ条件
 
 - [ ] 上記提案から Phase 1 の実装対象を小さな issue に分割できる。
