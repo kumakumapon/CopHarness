@@ -48,5 +48,6 @@ conversation_history.json
 logs.json
 memory.json
 schema_violations.json
+skill_executions.json
 workspace/
 identities.json
