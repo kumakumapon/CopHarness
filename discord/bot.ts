@@ -94,6 +94,7 @@ import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 import { loadHistory, saveHistory } from '../lib/history/store';
 import { resolveConversationKey } from '../lib/identity/store';
 import { withSkillExecutionContext } from '../lib/skills/executionContext';
+import { finishTask, startTask } from '../lib/tasks/ledger';
 import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
 import {
   getSession as getWizardSession,
@@ -484,25 +485,34 @@ async function sendWizardComplete(
 
 async function executeWizardPrompt(
   message: Message,
-  identity: { personId: string; channelKey: string },
+  identity: { personId: string; channelKey: string; conversationKey?: string },
   generatedPrompt: string,
   adapter: LLMAdapter,
 ): Promise<void> {
   const { channelKey } = identity;
   clearWizardSession(channelKey);
   if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
+  const task = await startTask({
+    kind: 'wizard',
+    personId: identity.personId,
+    channelKey: identity.channelKey,
+    conversationKey: identity.conversationKey,
+    title: generatedPrompt.slice(0, 120),
+  });
   try {
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     const resp = await withSkillExecutionContext(
-      { personId: identity.personId, channelKey: identity.channelKey },
+      { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
       () => adapter.complete({
         messages: [{ role: 'user', content: generatedPrompt }],
         timeoutMs,
         skills: listActiveSkills(),
       }),
     );
+    await finishTask(task.id, 'succeeded');
     await sendInChunks(message, resp.content || '（応答がありませんでした）');
   } catch (err) {
+    await finishTask(task.id, 'failed', err);
     const msg = err instanceof Error ? err.message : String(err);
     await message.reply(`実行エラー: ${msg.slice(0, 200)}`);
   }
@@ -627,12 +637,19 @@ async function handleMessage(
   history.push({ role: 'user', content: userText });
   trimHistory(history);
 
+  const task = await startTask({
+    kind: 'conversation',
+    personId: identity.personId,
+    channelKey: identity.channelKey,
+    conversationKey: identity.conversationKey,
+    title: userText.slice(0, 120),
+  });
   try {
     if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
 
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     const resp = await withSkillExecutionContext(
-      { personId: identity.personId, channelKey: identity.channelKey },
+      { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
       () => adapter.complete({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() }),
     );
     const replyText = resp.content || '（応答がありませんでした）';
@@ -640,9 +657,11 @@ async function handleMessage(
     history.push({ role: 'assistant', content: replyText });
     trimHistory(history);
     await persistChannelHistory(identity.conversationKey, history);
+    await finishTask(task.id, 'succeeded');
 
     await sendInChunks(message, replyText);
   } catch (err) {
+    await finishTask(task.id, 'failed', err);
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Discord Bot] LLM error:', err);
     const idx = history.lastIndexOf(history.find((m) => m.role === 'user' && m.content === userText)!);
