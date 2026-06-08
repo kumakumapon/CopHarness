@@ -26,6 +26,7 @@ import { validateSignature, messagingApi } from '@line/bot-sdk';
 import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
 import { type LLMMessage } from '../../../lib/adapter';
 import { loadHistory, saveHistory } from '../../../lib/history/store';
+import { resolveConversationKey } from '../../../lib/identity/store';
 import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
 import {
   getSession as getWizardSession,
@@ -156,21 +157,21 @@ function scheduleReply(client: any, payload: any): Promise<any> | void {
 }
 
 
-function getHistory(userId: string): LLMMessage[] {
-  if (!userHistory.has(userId)) {
-    const persisted = loadHistory(`line:${userId}`);
+function getHistory(conversationKey: string): LLMMessage[] {
+  if (!userHistory.has(conversationKey)) {
+    const persisted = loadHistory(conversationKey);
     const history: LLMMessage[] = persisted.length > 0 ? persisted : [];
     if (history.length === 0 && SYSTEM_PROMPT) {
       history.push({ role: 'system', content: SYSTEM_PROMPT });
     }
-    userHistory.set(userId, history);
+    userHistory.set(conversationKey, history);
   }
-  return userHistory.get(userId)!;
+  return userHistory.get(conversationKey)!;
 }
 
-async function persistHistory(userId: string, history: LLMMessage[]): Promise<void> {
+async function persistHistory(conversationKey: string, history: LLMMessage[]): Promise<void> {
   try {
-    await saveHistory(`line:${userId}`, history);
+    await saveHistory(conversationKey, history);
   } catch (err) {
     console.warn('[LINE Bot] Failed to persist conversation history:', err);
   }
@@ -298,7 +299,9 @@ export async function POST(req: NextRequest) {
 
     if (!replyToken || !userId || !userText) continue;
 
-    const sessionKey = `line:${userId}`;
+    const identity = await resolveConversationKey('line', userId);
+    const sessionKey = identity.channelKey;
+    const conversationKey = identity.conversationKey;
     const wizSess = getWizardSession(sessionKey);
     const lowerText = userText.toLowerCase();
 
@@ -412,7 +415,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Normal LLM chat (existing) ──
-    const history = getHistory(userId);
+    const history = getHistory(conversationKey);
     history.push({ role: 'user', content: userText });
     trimHistory(history);
 
@@ -421,7 +424,7 @@ export async function POST(req: NextRequest) {
       const replyText = resp.content || '（応答がありませんでした）';
       history.push({ role: 'assistant', content: replyText });
       trimHistory(history);
-      await persistHistory(userId, history);
+      await persistHistory(conversationKey, history);
       await client.replyMessage({
         replyToken,
         messages: [{ type: 'text', text: truncateMessage(replyText) }],

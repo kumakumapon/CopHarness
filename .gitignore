@@ -49,3 +49,4 @@ logs.json
 memory.json
 schema_violations.json
 workspace/
+identities.json
