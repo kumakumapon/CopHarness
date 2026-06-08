@@ -115,7 +115,7 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 - [x] IdentityStore によるチャネル横断ユーザー統合（初期実装完了。LINE / Discord の通常チャット履歴を `personId` ベースの会話キーへ接続）
 - [ ] SQLite / FTS ベースの MemoryStore
-- [ ] スキル実行ログと成功率の可視化
+- [x] スキル実行ログと成功率の可視化（初期実装完了。`skill_executions.json` に実行ログを保持し、ダッシュボードのスキル一覧で実行回数・成功率・平均時間・直近エラーを表示）
 - [ ] スキル承認ポリシーの JSON 化
 - [x] AgentPlan DAG 型の定義（`AgentPlan` / `AgentPlanProgress` の型定義を追加。Runner 実装は Phase 3 の「並列 Agent DAG runner」で継続）
 
@@ -136,6 +136,33 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - [ ] モバイルチャットからの進捗確認・停止・承認
 
 ## 実装進捗
+
+### 2026-06-08: Phase 1 継続（スキル実行ログ）
+
+#### 完了
+
+- スキル登録時に handler を計装し、成功・`isError`・例外・所要時間・引数/結果プレビューを `skill_executions.json` に記録する初期実装を追加した。
+- ダッシュボードの `/api/dashboard/skills` レスポンスへスキル別メトリクスを追加し、未実行スキルにもゼロ値メトリクスを返すようにした。
+- ダッシュボードのスキル一覧に実行回数、成功率、平均実行時間、最終実行時刻、直近エラーを表示するようにした。
+- `SkillResult.isError` と throw された例外の両方を失敗として集計する単体テストを追加した。
+- 実行時データ `skill_executions.json` を `.gitignore` に追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- スキル実行ログに `personId`、`channelKey`、`taskId`、`approvalId` を渡す呼び出しコンテキストを追加し、IdentityStore / TaskLedger / Human-in-the-Loop と接続する。
+- 引数プレビューの秘匿・マスキングルールを Tool Policy Engine と共有する。
+- OpenTelemetry span に `skill.name`、`policy.decision`、`approval.id`、`task.id` を付与し、JSON ログと外部テレメトリを相互参照できるようにする。
+- ダッシュボードにスキル実行履歴の詳細テーブル、期間フィルタ、リスク別フィルタを追加する。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/skillExecutionLog.test.ts` でスキル実行ログの単体テスト通過を確認する。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認する。
+
+#### リスク / 注意点
+
+- 現時点では引数と結果は短いプレビューに切り詰めるだけで、機密値のキー単位マスキングは未実装。高リスクスキルや外部送信を扱う前にポリシー連動の秘匿処理が必要。
+- メトリクスはローカル JSON の最新 500 件から算出する簡易実装であり、長期集計や複数プロセス統合は未対応。
 
 ### 2026-06-08: Phase 1 着手
 
