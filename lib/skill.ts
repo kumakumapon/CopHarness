@@ -7,6 +7,7 @@
 import { validateSkillOutput } from './guardrails/outputValidator';
 import { recordViolation } from './guardrails/violationLog';
 import { recordSkillExecution } from './skills/executionLog';
+import { getSkillExecutionContext } from './skills/executionContext';
 
 /** A single property definition within a skill's parameter schema. */
 export interface SkillParameterProperty {
@@ -108,6 +109,7 @@ export function registerSkill(skill: SkillDefinition): void {
         }
       }
       const finishedAt = new Date();
+      const context = getSkillExecutionContext();
       await recordSkillExecution({
         skillName: skill.name,
         startedAt,
@@ -117,10 +119,15 @@ export function registerSkill(skill: SkillDefinition): void {
         args,
         resultContent: result.content,
         error: result.isError ? result.content : undefined,
+        personId: context?.personId,
+        channelKey: context?.channelKey,
+        taskId: context?.taskId,
+        approvalId: context?.approvalId,
       });
       return result;
     } catch (error) {
       const finishedAt = new Date();
+      const context = getSkillExecutionContext();
       await recordSkillExecution({
         skillName: skill.name,
         startedAt,
@@ -129,6 +136,10 @@ export function registerSkill(skill: SkillDefinition): void {
         status: 'exception',
         args,
         error,
+        personId: context?.personId,
+        channelKey: context?.channelKey,
+        taskId: context?.taskId,
+        approvalId: context?.approvalId,
       });
       throw error;
     }

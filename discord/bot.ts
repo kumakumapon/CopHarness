@@ -93,6 +93,7 @@ import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
 import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 import { loadHistory, saveHistory } from '../lib/history/store';
 import { resolveConversationKey } from '../lib/identity/store';
+import { withSkillExecutionContext } from '../lib/skills/executionContext';
 import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
 import {
   getSession as getWizardSession,
@@ -483,19 +484,23 @@ async function sendWizardComplete(
 
 async function executeWizardPrompt(
   message: Message,
-  channelKey: string,
+  identity: { personId: string; channelKey: string },
   generatedPrompt: string,
   adapter: LLMAdapter,
 ): Promise<void> {
+  const { channelKey } = identity;
   clearWizardSession(channelKey);
   if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
   try {
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-    const resp = await adapter.complete({
-      messages: [{ role: 'user', content: generatedPrompt }],
-      timeoutMs,
-      skills: listActiveSkills(),
-    });
+    const resp = await withSkillExecutionContext(
+      { personId: identity.personId, channelKey: identity.channelKey },
+      () => adapter.complete({
+        messages: [{ role: 'user', content: generatedPrompt }],
+        timeoutMs,
+        skills: listActiveSkills(),
+      }),
+    );
     await sendInChunks(message, resp.content || '（応答がありませんでした）');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -545,7 +550,7 @@ async function handleMessage(
   if (userText === `${DISCORD_PREFIX}run`) {
     const wizSess = getWizardSession(channelKey);
     if (wizSess?.stage === 'ready' && wizSess.generatedPrompt) {
-      await executeWizardPrompt(message, channelKey, wizSess.generatedPrompt, adapter);
+      await executeWizardPrompt(message, identity, wizSess.generatedPrompt, adapter);
     } else {
       await message.reply(
         '実行できるプロンプトがありません。先に `!wizard` でプロンプトを生成してください。',
@@ -607,7 +612,7 @@ async function handleMessage(
 
     if (wizSess.stage === 'ready' && wizSess.generatedPrompt) {
       if (lowerText === '実行' || lowerText === 'はい' || lowerText === 'yes' || lowerText === 'run') {
-        await executeWizardPrompt(message, channelKey, wizSess.generatedPrompt, adapter);
+        await executeWizardPrompt(message, identity, wizSess.generatedPrompt, adapter);
       } else {
         await message.reply(
           '`!run` または「実行」でプロンプトを実行。「キャンセル」でキャンセル。',
@@ -626,7 +631,10 @@ async function handleMessage(
     if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
 
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-    const resp = await adapter.complete({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() });
+    const resp = await withSkillExecutionContext(
+      { personId: identity.personId, channelKey: identity.channelKey },
+      () => adapter.complete({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() }),
+    );
     const replyText = resp.content || '（応答がありませんでした）';
 
     history.push({ role: 'assistant', content: replyText });

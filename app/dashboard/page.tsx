@@ -114,6 +114,27 @@ interface SkillsData {
   skills: Skill[];
 }
 
+interface SkillExecutionRecord {
+  id: string;
+  skillName: string;
+  personId?: string;
+  channelKey?: string;
+  taskId?: string;
+  approvalId?: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  status: 'success' | 'error' | 'exception';
+  argsPreview: string;
+  resultPreview?: string;
+  errorPreview?: string;
+}
+
+interface SkillExecutionsData {
+  executions: SkillExecutionRecord[];
+  total: number;
+}
+
 interface ApprovalRequest {
   id: string;
   skillName: string;
@@ -882,7 +903,13 @@ const RISK_STYLES: Record<string, { bg: string; text: string; label: string }> =
   high:   { bg: 'bg-red-100',   text: 'text-red-700',   label: '高' },
 };
 
-function SkillsPanel({ data }: { data: SkillsData | undefined }) {
+function SkillsPanel({
+  data,
+  executionsData,
+}: {
+  data: SkillsData | undefined;
+  executionsData: SkillExecutionsData | undefined;
+}) {
   return (
     <section className="mb-6">
       <h2 className="text-sm font-semibold uppercase tracking-widest mb-3 flex items-center gap-2"
@@ -973,6 +1000,54 @@ function SkillsPanel({ data }: { data: SkillsData | undefined }) {
           })}
         </div>
       )}
+
+      <div className="mt-4 rounded-xl overflow-hidden" style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
+        <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>スキル実行履歴</div>
+          <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>最新 {executionsData?.total ?? 0} 件</div>
+        </div>
+        {!executionsData ? (
+          <div className="h-20 animate-pulse" style={{ background: 'var(--secondary-bg)' }} />
+        ) : executionsData.executions.length === 0 ? (
+          <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>実行履歴はまだありません。</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)' }}>
+                <tr>
+                  {['時刻', 'スキル', '状態', '所要時間', '人物 / チャネル / タスク', '承認', '引数 / 結果'].map((h) => (
+                    <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {executionsData.executions.map((execution) => (
+                  <tr key={execution.id} style={{ borderTop: '1px solid var(--border-color)' }}>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{fmtDate(execution.finishedAt)}</td>
+                    <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-primary)' }}>{execution.skillName}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`inline-block px-1.5 py-0.5 rounded ${execution.status === 'success' ? 'bg-green-100 text-green-700' : execution.status === 'error' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                        {execution.status === 'success' ? '成功' : execution.status === 'error' ? 'エラー結果' : '例外'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{execution.durationMs}ms</td>
+                    <td className="px-3 py-2 font-mono max-w-[220px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                      {[execution.personId, execution.channelKey, execution.taskId].filter(Boolean).join(' / ') || '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono max-w-[120px] truncate" style={{ color: 'var(--text-secondary)' }}>{execution.approvalId ?? '—'}</td>
+                    <td className="px-3 py-2 max-w-[360px]" style={{ color: 'var(--text-secondary)' }}>
+                      <div className="truncate">args: {execution.argsPreview || '—'}</div>
+                      {(execution.resultPreview || execution.errorPreview) && (
+                        <div className="truncate">{execution.errorPreview ? `error: ${execution.errorPreview}` : `result: ${execution.resultPreview}`}</div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -1254,6 +1329,8 @@ export default function DashboardPage() {
     useSWR<LogsData>('/api/dashboard/logs?limit=20', fetcher, { refreshInterval });
   const { data: skillsData } =
     useSWR<SkillsData>('/api/dashboard/skills', fetcher);
+  const { data: skillExecutionsData, mutate: mutateSkillExecutions } =
+    useSWR<SkillExecutionsData>('/api/dashboard/skill-executions?limit=50', fetcher, { refreshInterval });
   const { data: approvalsData, mutate: mutateApprovals } =
     useSWR<ApprovalsData>('/api/dashboard/approvals', fetcher, { refreshInterval: 3_000 });
   const { data: telemetryData } =
@@ -1266,6 +1343,7 @@ export default function DashboardPage() {
     void mutateSchedules();
     void mutateLogs();
     void mutateApprovals();
+    void mutateSkillExecutions();
   }
 
   return (
@@ -1283,7 +1361,7 @@ export default function DashboardPage() {
         <ApprovalsPanel data={approvalsData} onMutate={() => void mutateApprovals()} />
         <TelemetryPanel data={telemetryData} />
         <ViolationsPanel data={violationsData} />
-        <SkillsPanel data={skillsData} />
+        <SkillsPanel data={skillsData} executionsData={skillExecutionsData} />
       </div>
     </div>
   );

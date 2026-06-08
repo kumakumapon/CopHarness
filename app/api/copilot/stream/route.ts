@@ -3,6 +3,8 @@ import { createAdapter, resolveProvider, resolveModel } from '../../../../lib/ad
 import { type LLMMessage, type LLMAttachment } from '../../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
 import { requireApiKey } from '../../../../lib/apiAuth';
+import { resolveConversationKey } from '../../../../lib/identity/store';
+import { withSkillExecutionContext } from '../../../../lib/skills/executionContext';
 import '../../../../lib/skills/index';
 
 export async function POST(req: NextRequest) {
@@ -27,6 +29,9 @@ export async function POST(req: NextRequest) {
     attachments?: LLMAttachment[];
     timeoutMs?: number;
     skills?: string[];
+    subject?: string;
+    displayName?: string;
+    taskId?: string;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -50,29 +55,40 @@ export async function POST(req: NextRequest) {
 
   const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
   const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
+  const subject = String(body.subject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';
+  const identity = await resolveConversationKey('api', subject, { displayName: body.displayName });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const gen = adapter.stream
-          ? adapter.stream({ messages, attachments, timeoutMs, abortSignal: req.signal, skills })
-          : (async function* fallback() {
-              const resp = await adapter.complete({
-                messages,
-                attachments,
-                timeoutMs,
-                abortSignal: req.signal,
-                skills,
-              });
-              yield resp.content;
-            })();
+        await withSkillExecutionContext(
+          {
+            personId: identity.personId,
+            channelKey: identity.channelKey,
+            taskId: body.taskId,
+          },
+          async () => {
+            const gen = adapter.stream
+              ? adapter.stream({ messages, attachments, timeoutMs, abortSignal: req.signal, skills })
+              : (async function* fallback() {
+                  const resp = await adapter.complete({
+                    messages,
+                    attachments,
+                    timeoutMs,
+                    abortSignal: req.signal,
+                    skills,
+                  });
+                  yield resp.content;
+                })();
 
-        for await (const chunk of gen) {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`),
-          );
-        }
+            for await (const chunk of gen) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ chunk })}\n\n`),
+              );
+            }
+          },
+        );
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
