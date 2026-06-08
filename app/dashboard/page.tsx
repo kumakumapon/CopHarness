@@ -87,6 +87,19 @@ interface LogsData {
   logs: LogEntry[];
 }
 
+interface SkillExecutionMetrics {
+  skillName: string;
+  totalRuns: number;
+  successRuns: number;
+  errorRuns: number;
+  exceptionRuns: number;
+  successRate: number | null;
+  averageDurationMs: number | null;
+  lastRunAt?: string;
+  lastStatus?: 'success' | 'error' | 'exception';
+  lastErrorPreview?: string;
+}
+
 interface Skill {
   name: string;
   description: string;
@@ -94,6 +107,7 @@ interface Skill {
   riskLevel: 'low' | 'medium' | 'high';
   requiresEnv: string[];
   enabled: boolean;
+  metrics: SkillExecutionMetrics;
 }
 
 interface SkillsData {
@@ -911,6 +925,37 @@ function SkillsPanel({ data }: { data: SkillsData | undefined }) {
                   </div>
                 </div>
                 <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{skill.description}</div>
+                <div className="grid grid-cols-3 gap-2 rounded-lg p-2 text-xs" style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)' }}>
+                  <div>
+                    <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{skill.metrics.totalRuns}</div>
+                    <div style={{ color: 'var(--text-secondary)' }}>実行</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {skill.metrics.successRate == null ? '—' : `${Math.round(skill.metrics.successRate * 100)}%`}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)' }}>成功率</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {skill.metrics.averageDurationMs == null ? '—' : `${skill.metrics.averageDurationMs}ms`}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)' }}>平均</div>
+                  </div>
+                </div>
+                <div className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                  最終実行: {skill.metrics.lastRunAt ? fmtDate(skill.metrics.lastRunAt) : '—'}
+                  {skill.metrics.lastStatus && (
+                    <span className="ml-2">
+                      ({skill.metrics.lastStatus === 'success' ? '成功' : skill.metrics.lastStatus === 'error' ? 'エラー結果' : '例外'})
+                    </span>
+                  )}
+                </div>
+                {skill.metrics.lastErrorPreview && (
+                  <div className="text-[11px] rounded px-2 py-1 bg-red-50 text-red-700 border border-red-100">
+                    直近エラー: {skill.metrics.lastErrorPreview}
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-1.5 mt-auto">
                   <span className="inline-block px-2 py-0.5 rounded text-xs font-medium"
                     style={{ background: 'var(--accent-warm)', color: 'var(--text-secondary)' }}>
