@@ -3,6 +3,8 @@ import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapt
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../lib/skill';
 import { requireApiKey } from '../../../lib/apiAuth';
+import { resolveConversationKey } from '../../../lib/identity/store';
+import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
 import '../../../lib/skills/index';
 
 
@@ -23,7 +25,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { messages?: LLMMessage[]; attachments?: LLMAttachment[]; timeoutMs?: number; skills?: string[] }
+  let body: { messages?: LLMMessage[]; attachments?: LLMAttachment[]; timeoutMs?: number; skills?: string[]; subject?: string; displayName?: string; taskId?: string }
   try {
     body = await req.json()
   } catch {
@@ -54,7 +56,16 @@ export async function POST(req: NextRequest) {
       timeoutMs,
     });
     const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
-    const resp = await adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal, skills });
+    const subject = String(body.subject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';
+    const identity = await resolveConversationKey('api', subject, { displayName: body.displayName });
+    const resp = await withSkillExecutionContext(
+      {
+        personId: identity.personId,
+        channelKey: identity.channelKey,
+        taskId: body.taskId,
+      },
+      () => adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal, skills }),
+    );
     return NextResponse.json({ reply: resp.content });
   } catch (err: unknown) {
     console.error('LLM API handler error:', err);
