@@ -92,6 +92,7 @@ import {
 import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
 import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 import { loadHistory, saveHistory } from '../lib/history/store';
+import { resolveConversationKey } from '../lib/identity/store';
 import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
 import {
   getSession as getWizardSession,
@@ -143,21 +144,21 @@ async function fetchImageAttachment(
   return { type: 'blob', data, mimeType };
 }
 
-function getHistory(channelId: string): LLMMessage[] {
-  if (!channelHistory.has(channelId)) {
-    const persisted = loadHistory(`discord:${channelId}`);
+function getHistory(conversationKey: string): LLMMessage[] {
+  if (!channelHistory.has(conversationKey)) {
+    const persisted = loadHistory(conversationKey);
     const history: LLMMessage[] = persisted.length > 0 ? persisted : [];
     if (history.length === 0 && SYSTEM_PROMPT) {
       history.push({ role: 'system', content: SYSTEM_PROMPT });
     }
-    channelHistory.set(channelId, history);
+    channelHistory.set(conversationKey, history);
   }
-  return channelHistory.get(channelId)!;
+  return channelHistory.get(conversationKey)!;
 }
 
-async function persistChannelHistory(channelId: string, history: LLMMessage[]): Promise<void> {
+async function persistChannelHistory(conversationKey: string, history: LLMMessage[]): Promise<void> {
   try {
-    await saveHistory(`discord:${channelId}`, history);
+    await saveHistory(conversationKey, history);
   } catch (err) {
     console.warn('[Discord Bot] Failed to persist conversation history:', err);
   }
@@ -529,7 +530,10 @@ async function handleMessage(
 
   // ── !wizard commands ──
   const wizardCmd = `${DISCORD_PREFIX}wizard`;
-  const channelKey = `discord:${message.channelId}`;
+  const identity = await resolveConversationKey('discord', message.author.id, {
+    displayName: message.author.username,
+  });
+  const channelKey = identity.channelKey;
 
   if (userText.startsWith(wizardCmd)) {
     const args = userText.slice(wizardCmd.length).trim();
@@ -614,8 +618,7 @@ async function handleMessage(
   }
 
   // ── Normal LLM chat (existing) ──
-  const channelId = message.channelId;
-  const history = getHistory(channelId);
+  const history = getHistory(identity.conversationKey);
   history.push({ role: 'user', content: userText });
   trimHistory(history);
 
@@ -628,7 +631,7 @@ async function handleMessage(
 
     history.push({ role: 'assistant', content: replyText });
     trimHistory(history);
-    await persistChannelHistory(channelId, history);
+    await persistChannelHistory(identity.conversationKey, history);
 
     await sendInChunks(message, replyText);
   } catch (err) {
