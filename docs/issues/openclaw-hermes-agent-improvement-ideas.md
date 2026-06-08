@@ -113,11 +113,11 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 ### Phase 1: 基盤強化
 
-- [ ] IdentityStore によるチャネル横断ユーザー統合
+- [x] IdentityStore によるチャネル横断ユーザー統合（初期実装完了。LINE / Discord の通常チャット履歴を `personId` ベースの会話キーへ接続）
 - [ ] SQLite / FTS ベースの MemoryStore
 - [ ] スキル実行ログと成功率の可視化
 - [ ] スキル承認ポリシーの JSON 化
-- [ ] AgentPlan DAG 型の定義
+- [x] AgentPlan DAG 型の定義（`AgentPlan` / `AgentPlanProgress` の型定義を追加。Runner 実装は Phase 3 の「並列 Agent DAG runner」で継続）
 
 ### Phase 2: 学習・改善ループ
 
@@ -134,6 +134,38 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - [ ] 並列 Agent DAG runner
 - [ ] toolset / MCP hub
 - [ ] モバイルチャットからの進捗確認・停止・承認
+
+## 実装進捗
+
+### 2026-06-08: Phase 1 着手
+
+#### 完了
+
+- `IdentityStore` の初期実装を追加した。`line:<userId>`、`discord:<userId>`、`api:<subject>` のようなチャネル別 ID を `personId` に紐付け、`person:<personId>` 形式の会話キーを返せるようにした。
+- LINE Bot の通常チャット履歴を `IdentityStore` 経由の person-scoped conversation key で保存するように変更した。Wizard などのチャネル別 UX は従来どおり `channelKey` を使う。
+- Discord Bot の通常チャット履歴を `IdentityStore` 経由の person-scoped conversation key で保存するように変更した。Discord username は `displayName` として保存する。
+- `AgentPlan`、`AgentPlanStatus`、`AgentPlanProgress` の型を追加し、DAG / 並列 Runner のデータモデルに着手した。
+- `IdentityStore` の単体テストを追加し、同一チャネル ID の安定解決、複数チャネルの同一人物リンク、person-scoped conversation key、入力正規化を検証した。
+- 実行時データ `identities.json` を `.gitignore` に追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- Identity linking の UX / API: LINE と Discord を同一人物として手動または認証コードで紐付ける操作を追加する。現状は同一チャネル ID の安定解決と `linkIdentity` API の土台まで。
+- API チャネル統合: HTTP / SSE API から `api:<subject>` を解決し、同じ `personId` / TaskLedger / memory に接続する。
+- Dashboard 表示: 人物、紐付いたチャネル、進行中タスク、最近の記憶を表示する。
+- 既存履歴移行: 旧 `line:<userId>` / `discord:<channelId>` 履歴を `person:<personId>` に移行または参照する互換レイヤーを検討する。
+- Agent DAG runner: 今回は型定義のみ。依存解決、`Promise.allSettled` 並列実行、workspace 割り当て、失敗ノードのリトライは未実装。
+
+#### テスト / 検証
+
+- `npm test` で Jest 全体を実行し、全テスト通過を確認した。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認した。
+
+#### リスク / 注意点
+
+- person-scoped conversation key へ切り替えたため、旧 channel-scoped 履歴との連続性は移行処理を追加するまで限定的になる。
+- Discord は従来 channel 単位の履歴だったが、今回の初期実装では user 単位の identity を使う。複数チャンネルでの会話分離が必要な場合は `personId` と `channelKey` を併用した task/session ledger が必要。
+- 高リスクな自律実行は今回実装していない。今後の DAG runner / watcher / remote runtime 実装時は Tool Policy Engine または Human-in-the-Loop を経由する。
 
 ## 受け入れ条件
 
