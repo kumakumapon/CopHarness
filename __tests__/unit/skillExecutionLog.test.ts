@@ -7,6 +7,8 @@ import {
   _resetSkillExecutionLogForTests,
   listSkillExecutionSummaries,
   listSkillExecutions,
+  querySkillExecutions,
+  recordSkillExecution,
 } from '../../lib/skills/executionLog';
 import { withSkillExecutionContext } from '../../lib/skills/executionContext';
 
@@ -83,6 +85,52 @@ describe('skill execution logging', () => {
       channelKey: 'api:alice',
       taskId: 'task_456',
       approvalId: 'approval_789',
+    });
+  });
+
+  it('filters execution records by context, status, and date range', async () => {
+    await recordSkillExecution({
+      skillName: '__filter_skill__',
+      startedAt: new Date('2026-06-07T09:59:59Z'),
+      finishedAt: new Date('2026-06-07T10:00:00Z'),
+      durationMs: 10,
+      status: 'success',
+      args: { value: 1 },
+      resultContent: 'ok',
+      personId: 'person_alice',
+      channelKey: 'line:alice',
+      taskId: 'task_old',
+    });
+    await recordSkillExecution({
+      skillName: '__filter_skill__',
+      startedAt: new Date('2026-06-08T10:00:00Z'),
+      finishedAt: new Date('2026-06-08T10:00:01Z'),
+      durationMs: 20,
+      status: 'exception',
+      args: { value: 2 },
+      error: new Error('boom'),
+      personId: 'person_bob',
+      channelKey: 'discord:bob',
+      taskId: 'task_new',
+      approvalId: 'approval_1',
+    });
+
+    const result = querySkillExecutions({
+      status: 'exception',
+      personQuery: 'bob',
+      channelQuery: 'discord',
+      from: new Date('2026-06-08T00:00:00Z'),
+      to: new Date('2026-06-08T23:59:59Z'),
+      limit: 10,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.executions[0]).toMatchObject({
+      status: 'exception',
+      personId: 'person_bob',
+      channelKey: 'discord:bob',
+      taskId: 'task_new',
+      approvalId: 'approval_1',
     });
   });
 

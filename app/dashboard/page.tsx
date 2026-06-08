@@ -1,7 +1,7 @@
 'use client';
 
 import useSWR, { mutate } from 'swr';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   CheckCircle,
   XCircle,
@@ -125,6 +125,7 @@ interface SkillExecutionRecord {
   finishedAt: string;
   durationMs: number;
   status: 'success' | 'error' | 'exception';
+  riskLevel?: 'low' | 'medium' | 'high';
   argsPreview: string;
   resultPreview?: string;
   errorPreview?: string;
@@ -133,6 +134,15 @@ interface SkillExecutionRecord {
 interface SkillExecutionsData {
   executions: SkillExecutionRecord[];
   total: number;
+}
+
+interface SkillExecutionFilters {
+  status: '' | 'success' | 'error' | 'exception';
+  riskLevel: '' | 'low' | 'medium' | 'high';
+  personQuery: string;
+  channelQuery: string;
+  from: string;
+  to: string;
 }
 
 interface ApprovalRequest {
@@ -906,10 +916,23 @@ const RISK_STYLES: Record<string, { bg: string; text: string; label: string }> =
 function SkillsPanel({
   data,
   executionsData,
+  executionFilters,
+  onExecutionFiltersChange,
 }: {
   data: SkillsData | undefined;
   executionsData: SkillExecutionsData | undefined;
+  executionFilters: SkillExecutionFilters;
+  onExecutionFiltersChange: (filters: SkillExecutionFilters) => void;
 }) {
+  const updateFilter = (key: keyof SkillExecutionFilters, value: string) => {
+    onExecutionFiltersChange({ ...executionFilters, [key]: value });
+  };
+
+  const clearFilters = () => {
+    onExecutionFiltersChange({ status: '', riskLevel: '', personQuery: '', channelQuery: '', from: '', to: '' });
+  };
+
+  const hasActiveFilters = Object.values(executionFilters).some(Boolean);
   return (
     <section className="mb-6">
       <h2 className="text-sm font-semibold uppercase tracking-widest mb-3 flex items-center gap-2"
@@ -1002,9 +1025,88 @@ function SkillsPanel({
       )}
 
       <div className="mt-4 rounded-xl overflow-hidden" style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
-        <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-color)' }}>
-          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>スキル実行履歴</div>
-          <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>最新 {executionsData?.total ?? 0} 件</div>
+        <div className="px-4 py-3 flex flex-col gap-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>スキル実行履歴</div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {hasActiveFilters ? '絞り込み結果' : '最新'} {executionsData?.total ?? 0} 件
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 text-xs">
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              状態
+              <select
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                value={executionFilters.status}
+                onChange={(e) => updateFilter('status', e.target.value)}
+              >
+                <option value="">すべて</option>
+                <option value="success">成功</option>
+                <option value="error">エラー結果</option>
+                <option value="exception">例外</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              リスク
+              <select
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                value={executionFilters.riskLevel}
+                onChange={(e) => updateFilter('riskLevel', e.target.value)}
+              >
+                <option value="">すべて</option>
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              人物
+              <input
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                placeholder="personId"
+                value={executionFilters.personQuery}
+                onChange={(e) => updateFilter('personQuery', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              チャネル
+              <input
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                placeholder="channelKey"
+                value={executionFilters.channelQuery}
+                onChange={(e) => updateFilter('channelQuery', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              開始日
+              <input
+                type="date"
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                value={executionFilters.from}
+                onChange={(e) => updateFilter('from', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              終了日
+              <input
+                type="date"
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                value={executionFilters.to}
+                onChange={(e) => updateFilter('to', e.target.value)}
+              />
+            </label>
+          </div>
+          {hasActiveFilters && (
+            <button type="button" className="self-start text-xs underline" style={{ color: 'var(--text-secondary)' }} onClick={clearFilters}>
+              絞り込みをクリア
+            </button>
+          )}
         </div>
         {!executionsData ? (
           <div className="h-20 animate-pulse" style={{ background: 'var(--secondary-bg)' }} />
@@ -1015,7 +1117,7 @@ function SkillsPanel({
             <table className="w-full text-xs">
               <thead style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)' }}>
                 <tr>
-                  {['時刻', 'スキル', '状態', '所要時間', '人物 / チャネル / タスク', '承認', '引数 / 結果'].map((h) => (
+                  {['時刻', 'スキル', '状態', 'リスク', '所要時間', '人物 / チャネル / タスク', '承認', '引数 / 結果'].map((h) => (
                     <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1029,6 +1131,13 @@ function SkillsPanel({
                       <span className={`inline-block px-1.5 py-0.5 rounded ${execution.status === 'success' ? 'bg-green-100 text-green-700' : execution.status === 'error' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
                         {execution.status === 'success' ? '成功' : execution.status === 'error' ? 'エラー結果' : '例外'}
                       </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {execution.riskLevel ? (
+                        <span className={`inline-block px-1.5 py-0.5 rounded ${RISK_STYLES[execution.riskLevel]?.bg ?? RISK_STYLES.low.bg} ${RISK_STYLES[execution.riskLevel]?.text ?? RISK_STYLES.low.text}`}>
+                          {RISK_STYLES[execution.riskLevel]?.label ?? execution.riskLevel}
+                        </span>
+                      ) : '—'}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{execution.durationMs}ms</td>
                     <td className="px-3 py-2 font-mono max-w-[220px] truncate" style={{ color: 'var(--text-secondary)' }}>
@@ -1319,7 +1428,23 @@ function ViolationsPanel({ data }: { data: ViolationsData | undefined }) {
 
 export default function DashboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [skillExecutionFilters, setSkillExecutionFilters] = useState<SkillExecutionFilters>({
+    status: '',
+    riskLevel: '',
+    personQuery: '',
+    channelQuery: '',
+    from: '',
+    to: '',
+  });
   const refreshInterval = autoRefresh ? 30_000 : 0;
+  const skillExecutionsUrl = useMemo(() => {
+    const params = new URLSearchParams({ limit: '50' });
+    Object.entries(skillExecutionFilters).forEach(([key, value]) => {
+      if (!value) return;
+      params.set(key, key === 'to' ? `${value}T23:59:59` : value);
+    });
+    return `/api/dashboard/skill-executions?${params.toString()}`;
+  }, [skillExecutionFilters]);
 
   const { data: statusData, mutate: mutateStatus } =
     useSWR<StatusData>('/api/dashboard/status', fetcher, { refreshInterval });
@@ -1330,7 +1455,7 @@ export default function DashboardPage() {
   const { data: skillsData } =
     useSWR<SkillsData>('/api/dashboard/skills', fetcher);
   const { data: skillExecutionsData, mutate: mutateSkillExecutions } =
-    useSWR<SkillExecutionsData>('/api/dashboard/skill-executions?limit=50', fetcher, { refreshInterval });
+    useSWR<SkillExecutionsData>(skillExecutionsUrl, fetcher, { refreshInterval });
   const { data: approvalsData, mutate: mutateApprovals } =
     useSWR<ApprovalsData>('/api/dashboard/approvals', fetcher, { refreshInterval: 3_000 });
   const { data: telemetryData } =
@@ -1361,7 +1486,12 @@ export default function DashboardPage() {
         <ApprovalsPanel data={approvalsData} onMutate={() => void mutateApprovals()} />
         <TelemetryPanel data={telemetryData} />
         <ViolationsPanel data={violationsData} />
-        <SkillsPanel data={skillsData} executionsData={skillExecutionsData} />
+        <SkillsPanel
+          data={skillsData}
+          executionsData={skillExecutionsData}
+          executionFilters={skillExecutionFilters}
+          onExecutionFiltersChange={setSkillExecutionFilters}
+        />
       </div>
     </div>
   );

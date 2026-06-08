@@ -30,6 +30,23 @@ export interface SkillExecutionRecord {
   errorPreview?: string;
 }
 
+export interface SkillExecutionListOptions {
+  limit?: number;
+  skillName?: string;
+  status?: SkillExecutionStatus;
+  personQuery?: string;
+  channelQuery?: string;
+  taskQuery?: string;
+  approvalQuery?: string;
+  from?: Date;
+  to?: Date;
+}
+
+export interface SkillExecutionListResult {
+  executions: SkillExecutionRecord[];
+  total: number;
+}
+
 export interface SkillExecutionSummary {
   skillName: string;
   totalRuns: number;
@@ -125,9 +142,49 @@ export async function recordSkillExecution(input: {
   await persist();
 }
 
-export function listSkillExecutions(limit = 50): SkillExecutionRecord[] {
+
+function includesQuery(value: string | undefined, query: string | undefined): boolean {
+  if (!query) return true;
+  return (value ?? '').toLowerCase().includes(query.toLowerCase());
+}
+
+function matchesDateRange(record: SkillExecutionRecord, from?: Date, to?: Date): boolean {
+  const finishedAt = Date.parse(record.finishedAt);
+  if (Number.isNaN(finishedAt)) return false;
+  if (from && finishedAt < from.getTime()) return false;
+  if (to && finishedAt > to.getTime()) return false;
+  return true;
+}
+
+function normalizeLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return 50;
+  return Math.min(Math.max(1, Math.floor(limit)), MAX_RECORDS);
+}
+
+function normalizeListOptions(input?: number | SkillExecutionListOptions): Required<Pick<SkillExecutionListOptions, 'limit'>> & Omit<SkillExecutionListOptions, 'limit'> {
+  if (typeof input === 'number') return { limit: normalizeLimit(input) };
+  return { ...input, limit: normalizeLimit(input?.limit) };
+}
+
+export function querySkillExecutions(input?: number | SkillExecutionListOptions): SkillExecutionListResult {
   ensureLoaded();
-  return buffer.slice().reverse().slice(0, Math.min(limit, MAX_RECORDS));
+  const options = normalizeListOptions(input);
+  const matching = buffer
+    .filter((record) => !options.skillName || record.skillName === options.skillName)
+    .filter((record) => !options.status || record.status === options.status)
+    .filter((record) => includesQuery(record.personId, options.personQuery))
+    .filter((record) => includesQuery(record.channelKey, options.channelQuery))
+    .filter((record) => includesQuery(record.taskId, options.taskQuery))
+    .filter((record) => includesQuery(record.approvalId, options.approvalQuery))
+    .filter((record) => matchesDateRange(record, options.from, options.to));
+
+  const total = matching.length;
+  const executions = matching.slice().reverse().slice(0, options.limit);
+  return { executions, total };
+}
+
+export function listSkillExecutions(input: number | SkillExecutionListOptions = 50): SkillExecutionRecord[] {
+  return querySkillExecutions(input).executions;
 }
 
 export function listSkillExecutionSummaries(): SkillExecutionSummary[] {
