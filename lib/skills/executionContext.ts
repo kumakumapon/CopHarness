@@ -5,6 +5,10 @@ export interface SkillExecutionContext {
   channelKey?: string;
   taskId?: string;
   approvalId?: string;
+  /** Final policy / approval decision for the current tool call, when known. */
+  policyDecision?: string;
+  /** Approval resolution for Human-in-the-Loop gated tool calls. */
+  approvalStatus?: string;
 }
 
 const storage = new AsyncLocalStorage<SkillExecutionContext>();

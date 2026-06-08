@@ -23,10 +23,15 @@ export function wrapWithGate(skill: SkillDefinition): SkillDefinition {
     handler: async (args) => {
       const context = getSkillExecutionContext();
       const req = createApprovalRequest(skill.name, args, context?.personId ?? context?.channelKey);
-      updateSkillExecutionContext({ approvalId: req.id });
+      updateSkillExecutionContext({ approvalId: req.id, policyDecision: 'approval_required' });
       console.info(`[HIL] Awaiting approval for "${skill.name}" (id=${req.id})`);
 
       const status = await waitForApproval(req.id, timeoutMs);
+
+      updateSkillExecutionContext({
+        approvalStatus: status,
+        policyDecision: status === 'approved' ? 'approval_approved' : `approval_${status}`,
+      });
 
       if (status === 'approved') {
         console.info(`[HIL] Approved "${skill.name}" (id=${req.id})`);

@@ -70,6 +70,11 @@ export function getRecentSpans(limit = 100): Span[] {
   return spanBuffer.slice(-limit).reverse();
 }
 
+/** Test helper: clear buffered spans between isolated unit tests. */
+export function _resetRecentSpansForTests(): void {
+  spanBuffer.length = 0;
+}
+
 async function exportSpan(span: Span): Promise<void> {
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   if (!endpoint) return;
