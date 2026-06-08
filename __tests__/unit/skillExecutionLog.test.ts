@@ -8,6 +8,7 @@ import {
   listSkillExecutionSummaries,
   listSkillExecutions,
 } from '../../lib/skills/executionLog';
+import { withSkillExecutionContext } from '../../lib/skills/executionContext';
 
 describe('skill execution logging', () => {
   let tmpDir: string;
@@ -54,6 +55,34 @@ describe('skill execution logging', () => {
       exceptionRuns: 0,
       successRate: 0.5,
       lastStatus: 'error',
+    });
+  });
+
+  it('records execution context fields when provided', async () => {
+    const skill: SkillDefinition = {
+      name: '__context_skill__',
+      description: 'records context',
+      parameters: { type: 'object', properties: {} },
+      handler: async () => ({ content: 'ok' }),
+    };
+    registerSkill(skill);
+
+    await withSkillExecutionContext(
+      {
+        personId: 'person_123',
+        channelKey: 'api:alice',
+        taskId: 'task_456',
+        approvalId: 'approval_789',
+      },
+      () => skill.handler({ value: 'secret' }),
+    );
+
+    expect(listSkillExecutions(1)[0]).toMatchObject({
+      skillName: '__context_skill__',
+      personId: 'person_123',
+      channelKey: 'api:alice',
+      taskId: 'task_456',
+      approvalId: 'approval_789',
     });
   });
 

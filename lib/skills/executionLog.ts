@@ -17,6 +17,10 @@ export type SkillExecutionStatus = 'success' | 'error' | 'exception';
 export interface SkillExecutionRecord {
   id: string;
   skillName: string;
+  personId?: string;
+  channelKey?: string;
+  taskId?: string;
+  approvalId?: string;
   startedAt: string;
   finishedAt: string;
   durationMs: number;
@@ -95,11 +99,19 @@ export async function recordSkillExecution(input: {
   args: Record<string, unknown>;
   resultContent?: string;
   error?: unknown;
+  personId?: string;
+  channelKey?: string;
+  taskId?: string;
+  approvalId?: string;
 }): Promise<void> {
   ensureLoaded();
   const record: SkillExecutionRecord = {
     id: crypto.randomUUID(),
     skillName: input.skillName,
+    personId: input.personId,
+    channelKey: input.channelKey,
+    taskId: input.taskId,
+    approvalId: input.approvalId,
     startedAt: input.startedAt.toISOString(),
     finishedAt: input.finishedAt.toISOString(),
     durationMs: input.durationMs,

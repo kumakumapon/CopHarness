@@ -27,6 +27,7 @@ import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapt
 import { type LLMMessage } from '../../../lib/adapter';
 import { loadHistory, saveHistory } from '../../../lib/history/store';
 import { resolveConversationKey } from '../../../lib/identity/store';
+import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
 import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
 import {
   getSession as getWizardSession,
@@ -396,10 +397,13 @@ export async function POST(req: NextRequest) {
       const prompt = wizSess.generatedPrompt;
       clearWizardSession(sessionKey);
       try {
-        const resp = await adapter.complete({
-          messages: [{ role: 'user', content: prompt }],
-          timeoutMs,
-        });
+        const resp = await withSkillExecutionContext(
+          { personId: identity.personId, channelKey: identity.channelKey },
+          () => adapter.complete({
+            messages: [{ role: 'user', content: prompt }],
+            timeoutMs,
+          }),
+        );
         await scheduleReply(client, {
           replyToken,
           messages: [{ type: 'text', text: truncateMessage(resp.content || '（応答がありませんでした）') }],
@@ -420,7 +424,10 @@ export async function POST(req: NextRequest) {
     trimHistory(history);
 
     try {
-      const resp = await adapter.complete({ messages: [...history], timeoutMs });
+      const resp = await withSkillExecutionContext(
+        { personId: identity.personId, channelKey: identity.channelKey },
+        () => adapter.complete({ messages: [...history], timeoutMs }),
+      );
       const replyText = resp.content || '（応答がありませんでした）';
       history.push({ role: 'assistant', content: replyText });
       trimHistory(history);
