@@ -6,6 +6,7 @@
 
 import { validateSkillOutput } from './guardrails/outputValidator';
 import { recordViolation } from './guardrails/violationLog';
+import { recordSkillExecution } from './skills/executionLog';
 
 /** A single property definition within a skill's parameter schema. */
 export interface SkillParameterProperty {
@@ -92,23 +93,47 @@ const skillRegistry = new Map<string, SkillDefinition>();
 
 /** Register a skill so it can be looked up by name. */
 export function registerSkill(skill: SkillDefinition): void {
-  if (skill.outputSchema) {
-    const schema = skill.outputSchema;
-    const originalHandler = skill.handler;
-    skill = {
-      ...skill,
-      handler: async (args) => {
-        const result = await originalHandler(args);
-        if (!result.isError) {
-          const validation = validateSkillOutput(result.content, schema);
-          if (!validation.valid) {
-            recordViolation(skill.name, validation.errors, result.content);
-          }
+  const originalHandler = skill.handler;
+  const schema = skill.outputSchema;
+
+  skill.handler = async (args) => {
+    const startedAt = new Date();
+    const startMs = Date.now();
+    try {
+      const result = await originalHandler(args);
+      if (schema && !result.isError) {
+        const validation = validateSkillOutput(result.content, schema);
+        if (!validation.valid) {
+          recordViolation(skill.name, validation.errors, result.content);
         }
-        return result;
-      },
-    };
-  }
+      }
+      const finishedAt = new Date();
+      await recordSkillExecution({
+        skillName: skill.name,
+        startedAt,
+        finishedAt,
+        durationMs: Date.now() - startMs,
+        status: result.isError ? 'error' : 'success',
+        args,
+        resultContent: result.content,
+        error: result.isError ? result.content : undefined,
+      });
+      return result;
+    } catch (error) {
+      const finishedAt = new Date();
+      await recordSkillExecution({
+        skillName: skill.name,
+        startedAt,
+        finishedAt,
+        durationMs: Date.now() - startMs,
+        status: 'exception',
+        args,
+        error,
+      });
+      throw error;
+    }
+  };
+
   skillRegistry.set(skill.name, skill);
 }
 
