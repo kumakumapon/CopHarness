@@ -120,7 +120,7 @@ export async function recordSkillExecution(input: {
   channelKey?: string;
   taskId?: string;
   approvalId?: string;
-}): Promise<void> {
+}): Promise<SkillExecutionRecord> {
   ensureLoaded();
   const record: SkillExecutionRecord = {
     id: crypto.randomUUID(),
@@ -140,6 +140,7 @@ export async function recordSkillExecution(input: {
   buffer.push(record);
   if (buffer.length > MAX_RECORDS) buffer = buffer.slice(-MAX_RECORDS);
   await persist();
+  return { ...record };
 }
 
 
