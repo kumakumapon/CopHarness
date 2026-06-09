@@ -6,6 +6,7 @@ import {
   getIdentity,
   getPerson,
   linkIdentity,
+  listChannelIdentities,
   listPeople,
   makeChannelKey,
   resolveConversationKey,
@@ -53,6 +54,17 @@ describe('identity store', () => {
 
     expect(resolved.channelKey).toBe('api:subject-1');
     expect(resolved.conversationKey).toBe(`person:${resolved.personId}`);
+  });
+
+
+  it('lists channel identities for dashboard joins', async () => {
+    const line = await resolveIdentity('line', 'user-1', { displayName: 'Ada' });
+    await linkIdentity(line.personId, 'api', 'ada@example.com', 'Ada API');
+
+    expect(listChannelIdentities().map((identity) => identity.channelKey).sort()).toEqual([
+      'api:ada@example.com',
+      'line:user-1',
+    ]);
   });
 
   it('normalizes channels and rejects empty inputs', () => {

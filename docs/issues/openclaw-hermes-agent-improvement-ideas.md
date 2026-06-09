@@ -113,7 +113,7 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 ### Phase 1: 基盤強化
 
-- [x] IdentityStore によるチャネル横断ユーザー統合（初期実装完了。LINE / Discord の通常チャット履歴を `personId` ベースの会話キーへ接続）
+- [x] IdentityStore によるチャネル横断ユーザー統合（初期実装完了。LINE / Discord / API の通常チャット履歴を `personId` ベースの会話キーへ接続し、ダッシュボードで人物・チャネル・最近のタスクを表示）
 - [ ] SQLite / FTS ベースの MemoryStore
 - [x] スキル実行ログと成功率の可視化（初期実装完了。`skill_executions.json` に実行ログを保持し、ダッシュボードのスキル一覧で実行回数・成功率・平均時間・直近エラーを表示）
 - [ ] スキル承認ポリシーの JSON 化
@@ -136,6 +136,31 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - [ ] モバイルチャットからの進捗確認・停止・承認
 
 ## 実装進捗
+
+### 2026-06-09: Phase 1 継続（Identity ダッシュボード）
+
+#### 完了
+
+- `IdentityStore` にチャネル ID 一覧取得 API を追加し、ダッシュボード側で `personId` と `channelKey` を結合できるようにした。
+- `/api/dashboard/identities` を追加し、人物、紐付いたチャネル、実行中タスク数、最近のタスクを返すようにした。
+- ダッシュボードに人物 / チャネル / タスクのカード表示を追加し、LINE / Discord / API の同一人物に紐付いた状態と直近作業を確認できるようにした。
+- Identity ダッシュボード API と `IdentityStore` のチャネル一覧取得の単体テストを追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- Identity linking の UX / API: LINE と Discord を同一人物として手動または認証コードで紐付ける操作を追加する。現状は同一チャネル ID の安定解決と `linkIdentity` API / 表示 API の土台まで。
+- Dashboard の人物詳細: 最近の記憶、承認履歴、スキル実行履歴へのドリルダウンリンクを追加する。
+- 既存履歴移行: 旧 `line:<userId>` / `discord:<channelId>` 履歴を `person:<personId>` に移行または参照する互換レイヤーを検討する。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/identityStore.test.ts __tests__/api/dashboardIdentities.test.ts` で IdentityStore とダッシュボード identities API のテスト通過を確認した。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認した。
+
+#### リスク / 注意点
+
+- ダッシュボード表示はローカル JSON ストアの最新タスクを簡易集計している。長期運用ではページング、DB 化、人物詳細 API が必要。
+- 自動リンクはまだ実装していないため、複数チャネルを同一人物としてまとめるには現状 `linkIdentity` を呼び出す管理操作が必要。
 
 ### 2026-06-09: Phase 1 継続（スキル実行プレビューの秘匿）
 
