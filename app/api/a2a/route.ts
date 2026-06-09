@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runAgentTask({
+      id: taskId,
       role: task.systemPrompt
         ? { name: task.role, description: task.role, systemPrompt: task.systemPrompt }
         : task.role,
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       result: {
-        id: taskId,
+        id: result.taskId ?? taskId,
         role: result.role,
         output: result.content,
         status: result.error ? 'failed' : 'completed',

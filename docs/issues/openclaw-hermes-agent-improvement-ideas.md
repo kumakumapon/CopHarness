@@ -304,3 +304,30 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - 引数 / 結果プレビューの秘匿・マスキングルールを Tool Policy Engine と共有する。
 - OpenTelemetry の親子 span（LLM completion → skill.execute → backend execution）を維持するため、trace context を `AsyncLocalStorage` に拡張する。
 - Tool Policy Engine の正式導入後、`policy.decision` を provisional な文字列ではなくポリシー評価結果オブジェクト由来に切り替える。
+
+### 2026-06-08: Phase 1 継続（スケジューラー / サブエージェント TaskLedger 接続）
+
+#### 完了
+
+- スケジューラー実行時に `schedule` kind の TaskLedger タスクを自動発行し、スケジュール ID、スケジュール名、発火理由、通知先チャネルキーを記録するようにした。
+- スケジュール実行中のスキル / adapter 呼び出しへ `taskId` と `channelKey` を AsyncLocalStorage コンテキストとして渡し、スキル実行ログと TaskLedger を相互参照できるようにした。
+- スケジュールの AbortError は `cancelled`、その他の例外は `failed` として TaskLedger に記録するようにした。
+- サブエージェント実行時に `agent` kind の TaskLedger タスクを自動発行し、親スキル実行コンテキストの `personId`、`channelKey`、親 `taskId` を継承するようにした。
+- A2A エンドポイントから渡された task ID を Agent TaskLedger の ID として採用し、レスポンス ID と TaskLedger ID を一致させるようにした。
+- スケジューラー / サブエージェント TaskLedger 接続の単体テストを追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- ダッシュボード UI に TaskLedger の一覧、状態フィルタ、人物 / チャネル検索、関連スキル実行ログへのリンクを追加する。
+- 停止 / 再開 API を TaskLedger と接続し、実行中タスクの cancellation / retry を状態遷移として扱う。
+- Agent DAG / Parallel Runner 実装時に、DAG ノードごとの TaskLedger 親子関係、workspace、budget、retry 情報を正式な構造として保存する。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/taskLedger.test.ts __tests__/unit/skillExecutionLog.test.ts __tests__/unit/taskLedgerIntegration.test.ts` で TaskLedger、スキル実行ログ、スケジューラー / サブエージェント統合テストの通過を確認した。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認した。
+
+#### リスク / 注意点
+
+- スケジュールの `discordChannelId` はユーザー ID ではなく通知先チャンネルであるため、現時点では `personId` ではなく `discord-channel:<id>` の `channelKey` として記録する。
+- サブエージェントの親子関係は `metadata.parentTaskId` に保存しており、TaskLedger の正式な親子インデックスや DAG 可視化は未実装。

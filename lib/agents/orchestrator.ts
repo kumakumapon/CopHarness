@@ -1,5 +1,8 @@
 import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
 import { resolveSkills } from '../skill';
+import { getSkillExecutionContext, withSkillExecutionContext } from '../skills/executionContext';
+import { finishTask, startTask } from '../tasks/ledger';
+import type { LLMAdapter } from '../adapter';
 import type { AgentTask, AgentResult } from './types';
 
 export const BUILT_IN_ROLE_PROMPTS: Record<string, string> = {
@@ -45,21 +48,47 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
   const apiKey = resolveApiKey();
   const timeoutMs =
     task.timeoutMs ?? (Number(process.env.COPILOT_TIMEOUT_MS) || 120_000);
+  const inheritedContext = getSkillExecutionContext();
+  const taskRecord = await startTask({
+    id: task.id,
+    kind: 'agent',
+    personId: task.personId ?? inheritedContext?.personId,
+    channelKey: task.channelKey ?? inheritedContext?.channelKey,
+    conversationKey: task.conversationKey,
+    title: `${roleName}: ${task.userPrompt.slice(0, 100)}`,
+    metadata: {
+      role: roleName,
+      parentTaskId: task.parentTaskId ?? inheritedContext?.taskId,
+      requestedSkills: task.skills,
+      model,
+      provider,
+    },
+  });
 
-  const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
-  const skills = task.skills ? resolveSkills(task.skills) : undefined;
-
+  let adapter: LLMAdapter | undefined;
   const start = Date.now();
   try {
-    const resp = await adapter.complete({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: task.userPrompt },
-      ],
-      skills,
-      timeoutMs,
-    });
+    adapter = createAdapter({ provider, model, apiKey, timeoutMs });
+    const skills = task.skills ? resolveSkills(task.skills) : undefined;
+    const resp = await withSkillExecutionContext(
+      {
+        ...inheritedContext,
+        personId: taskRecord.personId,
+        channelKey: taskRecord.channelKey,
+        taskId: taskRecord.id,
+      },
+      () => adapter!.complete({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: task.userPrompt },
+        ],
+        skills,
+        timeoutMs,
+      }),
+    );
+    await finishTask(taskRecord.id, 'succeeded');
     return {
+      taskId: taskRecord.id,
       role: roleName,
       content: resp.content,
       model: resp.model,
@@ -67,14 +96,16 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
       durationMs: Date.now() - start,
     };
   } catch (err) {
+    await finishTask(taskRecord.id, 'failed', err);
     return {
+      taskId: taskRecord.id,
       role: roleName,
       content: '',
       durationMs: Date.now() - start,
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
-    await adapter.destroy?.().catch(() => {});
+    await Promise.resolve(adapter?.destroy?.()).catch(() => {});
   }
 }
 
