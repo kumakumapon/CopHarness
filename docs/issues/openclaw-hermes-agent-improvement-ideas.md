@@ -162,6 +162,33 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - ダッシュボード表示はローカル JSON ストアの最新タスクを簡易集計している。長期運用ではページング、DB 化、人物詳細 API が必要。
 - 自動リンクはまだ実装していないため、複数チャネルを同一人物としてまとめるには現状 `linkIdentity` を呼び出す管理操作が必要。
 
+
+### 2026-06-09: Phase 1 継続（TaskLedger ダッシュボード UI）
+
+#### 完了
+
+- TaskLedger の一覧 API を状態、種別、人物、チャネル、更新期間で絞り込めるように拡張した。
+- ダッシュボードに TaskLedger テーブルを追加し、タスクの状態、種別、タイトル / ID、人物 / チャネル、開始 / 終了時刻、メタデータ、エラー概要を確認できるようにした。
+- TaskLedger の各行から該当 `taskId` でスキル実行履歴を絞り込める導線を追加し、TaskLedger と `skill_executions.json` の相互参照を UI から行えるようにした。
+- スキル実行履歴フィルタにも `taskQuery` を追加し、特定タスクに紐づくスキル実行だけを直接検索できるようにした。
+- TaskLedger のフィルタリング単体テストと `/api/dashboard/tasks` の API テストを追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- 停止 / 再開 API を TaskLedger と接続し、実行中タスクの cancellation / retry を状態遷移として扱う。
+- Agent DAG / Parallel Runner 実装時に、DAG ノードごとの TaskLedger 親子関係、workspace、budget、retry 情報を正式な構造として保存する。
+- TaskLedger とスキル実行履歴のリンクを URL クエリやアンカーにも反映し、共有可能な監査ビューにする。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/taskLedger.test.ts __tests__/api/dashboardTasks.test.ts` で TaskLedger と dashboard tasks API のテスト通過を確認する。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認する。
+
+#### リスク / 注意点
+
+- TaskLedger の一覧はローカル JSON の最新 1000 件に対する簡易検索であり、長期監査や複数プロセス統合には永続 DB / ページングが必要。
+- スキル実行履歴へのリンクは現時点では画面内フィルタの更新であり、URL に状態は保存していない。
+
 ### 2026-06-09: Phase 1 継続（スキル実行プレビューの秘匿）
 
 #### 完了
