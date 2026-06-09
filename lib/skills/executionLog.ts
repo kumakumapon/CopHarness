@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as crypto from 'crypto';
 import { dataPath } from '../utils/dataDir';
+import { redactPreviewText, redactPreviewValue } from '../toolPolicy/redaction';
 
 export type SkillExecutionStatus = 'success' | 'error' | 'exception';
 
@@ -72,7 +73,8 @@ function storePath(): string {
 
 function safePreview(value: unknown): string {
   try {
-    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    const redacted = typeof value === 'string' ? redactPreviewText(value) : redactPreviewValue(value);
+    const text = typeof redacted === 'string' ? redacted : JSON.stringify(redacted);
     if (!text) return '';
     return text.length > PREVIEW_LENGTH ? `${text.slice(0, PREVIEW_LENGTH)}…` : text;
   } catch {
