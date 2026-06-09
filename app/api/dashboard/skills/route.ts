@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listSkills, listActiveSkills } from '../../../../lib/skill';
 import { listSkillExecutionSummaries } from '../../../../lib/skills/executionLog';
 import { requireApiKey } from '../../../../lib/apiAuth';
+import { describeSkillPolicy } from '../../../../lib/toolPolicy/policy';
 import '../../../../lib/skills/index';
 
 export async function GET(req: NextRequest) {
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest) {
     requiresEnv: s.requiresEnv ?? [],
     enabled: activeNames.has(s.name),
     hasOutputSchema: s.outputSchema !== undefined,
+    approvalPolicy: describeSkillPolicy(s),
     metrics: metricsBySkill.get(s.name) ?? {
       skillName: s.name,
       totalRuns: 0,
