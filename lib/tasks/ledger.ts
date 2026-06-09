@@ -152,15 +152,69 @@ export function getTask(id: string): TaskRecord | undefined {
   return task ? { ...task, metadata: task.metadata ? { ...task.metadata } : undefined } : undefined;
 }
 
-export function listTasks(limit = 50): TaskRecord[] {
+
+export interface TaskQueryOptions {
+  limit?: number;
+  status?: TaskStatus;
+  kindQuery?: string;
+  personQuery?: string;
+  channelQuery?: string;
+  from?: Date;
+  to?: Date;
+}
+
+function normalizeQuery(value?: string): string | undefined {
+  const trimmed = value?.trim().toLowerCase();
+  return trimmed || undefined;
+}
+
+function includesQuery(value: string | undefined, query: string | undefined): boolean {
+  if (!query) return true;
+  return value?.toLowerCase().includes(query) ?? false;
+}
+
+function taskUpdatedAtMs(task: TaskRecord): number {
+  const parsed = new Date(task.updatedAt).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function cloneTask(task: TaskRecord): TaskRecord {
+  return { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+}
+
+export function queryTasks(options: TaskQueryOptions = {}): { tasks: TaskRecord[]; total: number } {
   const ledger = getLedger();
-  return ledger.order
+  const limit = Math.max(1, Math.min(options.limit ?? 50, MAX_TASKS));
+  const kindQuery = normalizeQuery(options.kindQuery);
+  const personQuery = normalizeQuery(options.personQuery);
+  const channelQuery = normalizeQuery(options.channelQuery);
+  const fromMs = options.from?.getTime();
+  const toMs = options.to?.getTime();
+
+  const filtered = ledger.order
     .slice()
     .reverse()
     .map((id) => ledger.tasks[id])
     .filter(Boolean)
-    .slice(0, Math.max(1, Math.min(limit, MAX_TASKS)))
-    .map((task) => ({ ...task, metadata: task.metadata ? { ...task.metadata } : undefined }));
+    .filter((task) => {
+      if (options.status && task.status !== options.status) return false;
+      if (!includesQuery(task.kind, kindQuery)) return false;
+      if (!includesQuery(task.personId, personQuery)) return false;
+      if (!includesQuery(task.channelKey, channelQuery)) return false;
+      const updatedAt = taskUpdatedAtMs(task);
+      if (fromMs !== undefined && Number.isFinite(fromMs) && updatedAt < fromMs) return false;
+      if (toMs !== undefined && Number.isFinite(toMs) && updatedAt > toMs) return false;
+      return true;
+    });
+
+  return {
+    tasks: filtered.slice(0, limit).map(cloneTask),
+    total: filtered.length,
+  };
+}
+
+export function listTasks(limit = 50): TaskRecord[] {
+  return queryTasks({ limit }).tasks;
 }
 
 /** Test helper: clear in-memory state so env-controlled file paths are re-read. */

@@ -141,6 +141,7 @@ interface SkillExecutionFilters {
   riskLevel: '' | 'low' | 'medium' | 'high';
   personQuery: string;
   channelQuery: string;
+  taskQuery: string;
   from: string;
   to: string;
 }
@@ -149,9 +150,30 @@ interface DashboardTask {
   id: string;
   kind: string;
   status: 'running' | 'succeeded' | 'failed' | 'cancelled';
+  personId?: string;
+  channelKey?: string;
+  conversationKey?: string;
   title?: string;
+  createdAt?: string;
+  startedAt: string;
   updatedAt: string;
+  finishedAt?: string;
   errorPreview?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface TasksData {
+  tasks: DashboardTask[];
+  total: number;
+}
+
+interface TaskFilters {
+  status: '' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  kindQuery: string;
+  personQuery: string;
+  channelQuery: string;
+  from: string;
+  to: string;
 }
 
 interface DashboardChannelIdentity {
@@ -963,7 +985,7 @@ function SkillsPanel({
   };
 
   const clearFilters = () => {
-    onExecutionFiltersChange({ status: '', riskLevel: '', personQuery: '', channelQuery: '', from: '', to: '' });
+    onExecutionFiltersChange({ status: '', riskLevel: '', personQuery: '', channelQuery: '', taskQuery: '', from: '', to: '' });
   };
 
   const hasActiveFilters = Object.values(executionFilters).some(Boolean);
@@ -1116,6 +1138,16 @@ function SkillsPanel({
               />
             </label>
             <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              タスク
+              <input
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                placeholder="taskId"
+                value={executionFilters.taskQuery}
+                onChange={(e) => updateFilter('taskQuery', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
               開始日
               <input
                 type="date"
@@ -1205,6 +1237,187 @@ const TASK_STATUS_STYLES: Record<string, { bg: string; text: string; label: stri
   failed: { bg: 'bg-red-100', text: 'text-red-700', label: '失敗' },
   cancelled: { bg: 'bg-gray-100', text: 'text-gray-600', label: '取消' },
 };
+
+
+function taskMetadataPreview(metadata?: Record<string, unknown>): string {
+  if (!metadata) return '—';
+  const text = JSON.stringify(metadata);
+  return text.length > 120 ? `${text.slice(0, 120)}…` : text;
+}
+
+function TasksPanel({
+  data,
+  filters,
+  onFiltersChange,
+  onSkillExecutionFiltersChange,
+}: {
+  data: TasksData | undefined;
+  filters: TaskFilters;
+  onFiltersChange: (filters: TaskFilters) => void;
+  onSkillExecutionFiltersChange: (filters: SkillExecutionFilters) => void;
+}) {
+  const updateFilter = (key: keyof TaskFilters, value: string) => {
+    onFiltersChange({ ...filters, [key]: value });
+  };
+  const clearFilters = () => onFiltersChange({ status: '', kindQuery: '', personQuery: '', channelQuery: '', from: '', to: '' });
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+
+  const showSkillExecutionsForTask = (task: DashboardTask) => {
+    onSkillExecutionFiltersChange({
+      status: '',
+      riskLevel: '',
+      personQuery: '',
+      channelQuery: '',
+      taskQuery: task.id,
+      from: '',
+      to: '',
+    });
+  };
+
+  return (
+    <section className="mb-6">
+      <h2
+        className="text-sm font-semibold uppercase tracking-widest mb-3 flex items-center gap-2"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        <Clock className="w-4 h-4" /> TaskLedger
+        {data && (
+          <span className="ml-auto text-xs font-normal normal-case" style={{ color: 'var(--text-secondary)' }}>
+            {hasActiveFilters ? '絞り込み結果' : '最新'} {data.total} 件
+          </span>
+        )}
+      </h2>
+
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
+        <div className="px-4 py-3 flex flex-col gap-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 text-xs">
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              状態
+              <select
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                value={filters.status}
+                onChange={(e) => updateFilter('status', e.target.value)}
+              >
+                <option value="">すべて</option>
+                <option value="running">実行中</option>
+                <option value="succeeded">成功</option>
+                <option value="failed">失敗</option>
+                <option value="cancelled">取消</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              種別
+              <input
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                placeholder="conversation / schedule"
+                value={filters.kindQuery}
+                onChange={(e) => updateFilter('kindQuery', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              人物
+              <input
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                placeholder="personId"
+                value={filters.personQuery}
+                onChange={(e) => updateFilter('personQuery', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              チャネル
+              <input
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                placeholder="channelKey"
+                value={filters.channelQuery}
+                onChange={(e) => updateFilter('channelQuery', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              更新日 From
+              <input
+                type="date"
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                value={filters.from}
+                onChange={(e) => updateFilter('from', e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>
+              更新日 To
+              <input
+                type="date"
+                className="rounded px-2 py-1"
+                style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+                value={filters.to}
+                onChange={(e) => updateFilter('to', e.target.value)}
+              />
+            </label>
+          </div>
+          {hasActiveFilters && (
+            <button type="button" className="self-start text-xs underline" style={{ color: 'var(--text-secondary)' }} onClick={clearFilters}>
+              絞り込みをクリア
+            </button>
+          )}
+        </div>
+
+        {!data ? (
+          <div className="h-28 animate-pulse" style={{ background: 'var(--secondary-bg)' }} />
+        ) : data.tasks.length === 0 ? (
+          <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>TaskLedger に一致するタスクはありません。</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)' }}>
+                <tr>
+                  {['更新', '状態', '種別', 'タイトル / ID', '人物 / チャネル', '期間', 'メタデータ / エラー', '関連'].map((h) => (
+                    <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.tasks.map((task) => {
+                  const st = TASK_STATUS_STYLES[task.status] ?? TASK_STATUS_STYLES.running;
+                  return (
+                    <tr key={task.id} style={{ borderTop: '1px solid var(--border-color)' }}>
+                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{fmtDate(task.updatedAt)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap"><span className={`inline-block px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span></td>
+                      <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{task.kind}</td>
+                      <td className="px-3 py-2 max-w-[260px]">
+                        <div className="truncate" style={{ color: 'var(--text-primary)' }} title={task.title || task.id}>{task.title || '—'}</div>
+                        <div className="font-mono truncate" style={{ color: 'var(--text-secondary)' }} title={task.id}>{task.id}</div>
+                      </td>
+                      <td className="px-3 py-2 font-mono max-w-[220px]" style={{ color: 'var(--text-secondary)' }}>
+                        <div className="truncate">{task.personId || '—'}</div>
+                        <div className="truncate">{task.channelKey || '—'}</div>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                        <div>開始: {fmtDate(task.startedAt)}</div>
+                        <div>終了: {task.finishedAt ? fmtDate(task.finishedAt) : '—'}</div>
+                      </td>
+                      <td className="px-3 py-2 max-w-[300px]" style={{ color: 'var(--text-secondary)' }}>
+                        {task.errorPreview ? <div className="truncate text-red-600">error: {task.errorPreview}</div> : null}
+                        <div className="font-mono truncate" title={taskMetadataPreview(task.metadata)}>{taskMetadataPreview(task.metadata)}</div>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <button type="button" className="text-xs underline" style={{ color: 'var(--text-primary)' }} onClick={() => showSkillExecutionsForTask(task)}>
+                          スキル履歴へ
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function IdentitiesPanel({ data }: { data: IdentitiesData | undefined }) {
   return (
@@ -1573,6 +1786,15 @@ export default function DashboardPage() {
     riskLevel: '',
     personQuery: '',
     channelQuery: '',
+    taskQuery: '',
+    from: '',
+    to: '',
+  });
+  const [taskFilters, setTaskFilters] = useState<TaskFilters>({
+    status: '',
+    kindQuery: '',
+    personQuery: '',
+    channelQuery: '',
     from: '',
     to: '',
   });
@@ -1585,6 +1807,14 @@ export default function DashboardPage() {
     });
     return `/api/dashboard/skill-executions?${params.toString()}`;
   }, [skillExecutionFilters]);
+  const tasksUrl = useMemo(() => {
+    const params = new URLSearchParams({ limit: '50' });
+    Object.entries(taskFilters).forEach(([key, value]) => {
+      if (!value) return;
+      params.set(key, key === 'to' ? `${value}T23:59:59` : value);
+    });
+    return `/api/dashboard/tasks?${params.toString()}`;
+  }, [taskFilters]);
 
   const { data: statusData, mutate: mutateStatus } =
     useSWR<StatusData>('/api/dashboard/status', fetcher, { refreshInterval });
@@ -1600,6 +1830,8 @@ export default function DashboardPage() {
     useSWR<ApprovalsData>('/api/dashboard/approvals', fetcher, { refreshInterval: 3_000 });
   const { data: identitiesData, mutate: mutateIdentities } =
     useSWR<IdentitiesData>('/api/dashboard/identities?limit=50&recentTaskLimit=3', fetcher, { refreshInterval });
+  const { data: tasksData, mutate: mutateTasks } =
+    useSWR<TasksData>(tasksUrl, fetcher, { refreshInterval });
   const { data: telemetryData } =
     useSWR<TelemetryData>('/api/dashboard/telemetry?limit=50', fetcher, { refreshInterval });
   const { data: violationsData } =
@@ -1611,6 +1843,7 @@ export default function DashboardPage() {
     void mutateLogs();
     void mutateApprovals();
     void mutateIdentities();
+    void mutateTasks();
     void mutateSkillExecutions();
   }
 
@@ -1628,6 +1861,12 @@ export default function DashboardPage() {
         <LogFeed data={logsData} />
         <ApprovalsPanel data={approvalsData} onMutate={() => void mutateApprovals()} />
         <IdentitiesPanel data={identitiesData} />
+        <TasksPanel
+          data={tasksData}
+          filters={taskFilters}
+          onFiltersChange={setTaskFilters}
+          onSkillExecutionFiltersChange={setSkillExecutionFilters}
+        />
         <TelemetryPanel data={telemetryData} />
         <ViolationsPanel data={violationsData} />
         <SkillsPanel
