@@ -5,11 +5,19 @@ export interface AgentRole {
 }
 
 export interface AgentTask {
+  /** Optional external task identifier to adopt in TaskLedger. */
+  id?: string;
   role: AgentRole | string;
   userPrompt: string;
   skills?: string[];
   timeoutMs?: number;
   model?: string;
+  /** Optional caller identity context for TaskLedger and nested skill logs. */
+  personId?: string;
+  channelKey?: string;
+  conversationKey?: string;
+  /** Parent TaskLedger id when this task is a sub-agent spawned by another run. */
+  parentTaskId?: string;
 }
 
 /**
@@ -44,6 +52,8 @@ export interface AgentPlanProgress {
 }
 
 export interface AgentResult {
+  /** TaskLedger id assigned to this agent execution. */
+  taskId?: string;
   role: string;
   content: string;
   model?: string;

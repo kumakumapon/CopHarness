@@ -4,6 +4,9 @@ import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory'
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
+import { withSkillExecutionContext } from '../skills/executionContext';
+import { finishTask, startTask } from '../tasks/ledger';
+import type { ScheduledPrompt } from './types';
 import '../skills/index';
 import { listActiveSkills } from '../skill';
 
@@ -33,8 +36,27 @@ async function sendLinePush(userId: string, text: string): Promise<void> {
   }
 }
 
+export interface ScheduledPromptRunContext {
+  schedule: Pick<ScheduledPrompt, 'id' | 'name' | 'discordChannelId' | 'lineUserId'>;
+  reason: 'manual fire' | 'cron' | string;
+}
+
+function scheduleChannelKey(schedule: Pick<ScheduledPrompt, 'discordChannelId' | 'lineUserId'>): string | undefined {
+  if (schedule.lineUserId) return `line:${schedule.lineUserId}`;
+  if (schedule.discordChannelId) return `discord-channel:${schedule.discordChannelId}`;
+  return undefined;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 /** Execute a single prompt against the configured LLM and return the response text. */
-export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Promise<string> {
+export async function runPrompt(
+  prompt: string,
+  abortSignal?: AbortSignal,
+  scheduledContext?: ScheduledPromptRunContext,
+): Promise<string> {
   const provider = resolveProvider();
   const apiKey =
     process.env.COPILOT_PROVIDER_API_KEY ||
@@ -54,13 +76,40 @@ export async function runPrompt(prompt: string, abortSignal?: AbortSignal): Prom
   if (sys) messages.push({ role: 'system', content: sys });
   messages.push({ role: 'user', content: prompt });
 
-  try {
+  const execute = async () => {
     const resp = await runWithRalphLoop(
       { messages, timeoutMs, abortSignal, skills: listActiveSkills() },
       adapter,
       { originalGoal: prompt },
     );
     return resp.content;
+  };
+
+  try {
+    if (!scheduledContext) return await execute();
+
+    const task = await startTask({
+      kind: 'schedule',
+      channelKey: scheduleChannelKey(scheduledContext.schedule),
+      title: scheduledContext.schedule.name,
+      metadata: {
+        scheduleId: scheduledContext.schedule.id,
+        scheduleName: scheduledContext.schedule.name,
+        reason: scheduledContext.reason,
+      },
+    });
+
+    try {
+      const result = await withSkillExecutionContext(
+        { channelKey: task.channelKey, taskId: task.id },
+        execute,
+      );
+      await finishTask(task.id, 'succeeded');
+      return result;
+    } catch (err) {
+      await finishTask(task.id, isAbortError(err) ? 'cancelled' : 'failed', err);
+      throw err;
+    }
   } finally {
     if (adapter.destroy) await adapter.destroy();
   }
@@ -198,7 +247,7 @@ async function tick(): Promise<void> {
     });
 
     // Launch async without awaiting — daemon stays unblocked
-    runPrompt(schedule.prompt, controller.signal)
+    runPrompt(schedule.prompt, controller.signal, { schedule, reason })
       .then(async (result) => {
         finishLog(await logId, 'success', result);
         console.log(`[${ts}] Response from "${schedule.name}":\n${result}\n`);
