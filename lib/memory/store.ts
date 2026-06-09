@@ -72,6 +72,17 @@ function loadSqlite(): SqliteModuleLike {
 export function getMemoryDbPath(): string {
   const raw = process.env.MEMORY_DB_FILE;
   if (raw && raw.trim()) return path.resolve(raw);
+
+  // Backward-compatible test/runtime isolation for the legacy JSON memory skill.
+  // Existing callers set SKILL_MEMORY_FILE to point at a per-session memory.json;
+  // use the same directory with a SQLite extension so old isolation assumptions
+  // remain true while the backing store is upgraded.
+  const legacyRaw = process.env.SKILL_MEMORY_FILE;
+  if (legacyRaw && legacyRaw.trim()) {
+    const legacyPath = path.resolve(legacyRaw);
+    return legacyPath.replace(/\.[^.\/]+$/, '') + '.sqlite';
+  }
+
   return dataPath(DEFAULT_MEMORY_DB);
 }
 

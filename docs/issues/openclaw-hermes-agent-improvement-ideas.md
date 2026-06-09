@@ -152,7 +152,7 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 - Memory nudging、semantic search、SkillProposal は Phase 2 の学習・改善ループとして継続する。
 - Tool Policy Engine の dry-run 差分表示、組織固有 redaction rule、セッション単位 allowForSession の期限管理は Phase 2 / 3 の運用 UX として拡張する。
-- MemoryStore は Node.js `node:sqlite` / FTS5 を前提にしているため、Node 24 未満の runtime では代替 SQLite backend が必要。
+- MemoryStore は Node.js `node:sqlite` / FTS5 を前提にしているため、Node 24 未満の runtime では代替 SQLite backend が必要。既存テストや運用が `SKILL_MEMORY_FILE` で分離している場合は、同じディレクトリに `.sqlite` 拡張子の DB を作る互換動作で隔離する。
 
 #### テスト / 検証
 

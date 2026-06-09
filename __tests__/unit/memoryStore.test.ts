@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { MemoryStore } from '../../lib/memory/store';
-import { memoryForget, memoryGet, memorySearch, memorySet, memoryUpsert } from '../../lib/skills/memory';
+import { memoryForget, memoryGet, memoryList, memorySearch, memorySet, memoryUpsert } from '../../lib/skills/memory';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
 
 describe('MemoryStore SQLite + FTS5', () => {
@@ -41,6 +41,22 @@ describe('MemoryStore SQLite + FTS5', () => {
       expect(store.explain('project:phase1')).toContain('sourceSessionId=session-1');
     } finally {
       store.close();
+    }
+  });
+
+  it('honors SKILL_MEMORY_FILE for legacy per-test isolation while using SQLite', async () => {
+    const firstDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copharness-legacy-memory-a-'));
+    const secondDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copharness-legacy-memory-b-'));
+    try {
+      process.env.SKILL_MEMORY_FILE = path.join(firstDir, 'memory.json');
+      await memorySet.handler({ key: 'name', value: 'Alice' });
+
+      process.env.SKILL_MEMORY_FILE = path.join(secondDir, 'memory.json');
+      await expect(memoryList.handler({})).resolves.toMatchObject({ content: '(memory is empty)' });
+    } finally {
+      delete process.env.SKILL_MEMORY_FILE;
+      fs.rmSync(firstDir, { recursive: true, force: true });
+      fs.rmSync(secondDir, { recursive: true, force: true });
     }
   });
 
