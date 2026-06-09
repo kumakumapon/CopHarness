@@ -100,6 +100,13 @@ interface SkillExecutionMetrics {
   lastErrorPreview?: string;
 }
 
+interface SkillApprovalPolicy {
+  mode: 'alwaysAllow' | 'allowWithDryRun' | 'requireApproval' | 'deny' | 'allowForSession';
+  decision: 'allowed' | 'dry_run_allowed' | 'approval_required' | 'denied';
+  ruleId?: string;
+  reason: string;
+}
+
 interface Skill {
   name: string;
   description: string;
@@ -107,6 +114,7 @@ interface Skill {
   riskLevel: 'low' | 'medium' | 'high';
   requiresEnv: string[];
   enabled: boolean;
+  approvalPolicy?: SkillApprovalPolicy;
   metrics: SkillExecutionMetrics;
 }
 
@@ -969,6 +977,14 @@ const RISK_STYLES: Record<string, { bg: string; text: string; label: string }> =
   high:   { bg: 'bg-red-100',   text: 'text-red-700',   label: '高' },
 };
 
+const APPROVAL_POLICY_LABELS: Record<string, string> = {
+  alwaysAllow: '常に許可',
+  allowForSession: 'セッション許可',
+  allowWithDryRun: 'Dry-run許可',
+  requireApproval: '承認必須',
+  deny: '拒否',
+};
+
 function SkillsPanel({
   data,
   executionsData,
@@ -1031,6 +1047,12 @@ function SkillsPanel({
                   </div>
                 </div>
                 <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{skill.description}</div>
+                {skill.approvalPolicy && (
+                  <div className="text-[11px] rounded px-2 py-1" style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                    承認ポリシー: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{APPROVAL_POLICY_LABELS[skill.approvalPolicy.mode] ?? skill.approvalPolicy.mode}</span>
+                    {skill.approvalPolicy.ruleId ? <span className="ml-1 font-mono">({skill.approvalPolicy.ruleId})</span> : null}
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-2 rounded-lg p-2 text-xs" style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)' }}>
                   <div>
                     <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{skill.metrics.totalRuns}</div>
