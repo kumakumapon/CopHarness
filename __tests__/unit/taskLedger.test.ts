@@ -7,6 +7,7 @@ import {
   finishTask,
   getTask,
   listTasks,
+  queryTasks,
   startTask,
 } from '../../lib/tasks/ledger';
 
@@ -61,5 +62,15 @@ describe('task ledger', () => {
       status: 'failed',
       errorPreview: 'boom',
     });
+  });
+
+  it('filters tasks by status, kind, person, channel, and updated date', async () => {
+    const apiTask = await startTask({ id: 'api-task', kind: 'api', personId: 'person_ada', channelKey: 'api:ada' });
+    await finishTask(apiTask.id, 'succeeded');
+    const scheduleTask = await startTask({ id: 'schedule-task', kind: 'schedule', personId: 'person_bob', channelKey: 'discord-channel:general' });
+
+    expect(queryTasks({ status: 'running' }).tasks.map((task) => task.id)).toEqual([scheduleTask.id]);
+    expect(queryTasks({ kindQuery: 'api', personQuery: 'ada', channelQuery: 'api:' }).tasks.map((task) => task.id)).toEqual([apiTask.id]);
+    expect(queryTasks({ from: new Date('2999-01-01T00:00:00Z') })).toMatchObject({ tasks: [], total: 0 });
   });
 });

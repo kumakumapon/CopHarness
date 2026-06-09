@@ -466,7 +466,9 @@ npm run dev
 | `POST` | `/api/dashboard/schedules/[id]/fire` | 指定スケジュールをデーモンに即時実行させる |
 | `POST` | `/api/dashboard/schedules/[id]/stop` | 指定スケジュールの実行中プロンプトを中断させる |
 | `GET` | `/api/dashboard/logs` | 実行ログを返す（`?limit=N` で件数指定、最大 200） |
-| `GET` | `/api/dashboard/skills` | 登録済みスキルの名前と説明一覧を返す |
+| `GET` | `/api/dashboard/skills` | 登録済みスキルの名前、説明、リスク、実行メトリクスを返す |
+| `GET` | `/api/dashboard/skill-executions` | スキル実行履歴を返す（`status`、`riskLevel`、`personQuery`、`channelQuery`、`taskQuery`、期間で絞り込み可能） |
+| `GET` | `/api/dashboard/tasks` | TaskLedger のタスク一覧を返す（`status`、`kindQuery`、`personQuery`、`channelQuery`、期間で絞り込み可能） |
 | `GET` | `/api/dashboard/telemetry` | 直近の OTel スパン一覧を返す（`?limit=N` で件数指定） |
 | `GET` | `/api/dashboard/approvals` | 承認待ちスキル実行リストを返す |
 | `POST` | `/api/dashboard/approvals/[id]/approve` | 指定リクエストを承認する |
