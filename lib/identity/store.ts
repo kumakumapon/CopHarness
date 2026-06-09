@@ -195,6 +195,10 @@ export function listPeople(): PersonIdentity[] {
   return Object.values(getStore().people).map((person) => ({ ...person, channelKeys: [...person.channelKeys] }));
 }
 
+export function listChannelIdentities(): ChannelIdentity[] {
+  return Object.values(getStore().channelIdentities).map((identity) => ({ ...identity }));
+}
+
 export function personConversationKey(personId: string): string {
   return `person:${personId}`;
 }
