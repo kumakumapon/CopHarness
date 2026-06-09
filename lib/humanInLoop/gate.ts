@@ -1,6 +1,7 @@
 import type { SkillDefinition } from '../skill';
 import { createApprovalRequest, waitForApproval } from './store';
 import { getSkillExecutionContext, updateSkillExecutionContext } from '../skills/executionContext';
+import { evaluateToolPolicy } from '../toolPolicy/policy';
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -13,7 +14,6 @@ export function isHilEnabled(): boolean {
 export function wrapWithGate(skill: SkillDefinition): SkillDefinition {
   // Prevent double-wrapping
   if ((skill as unknown as Record<string, unknown>)[GATED_MARKER]) return skill;
-  if (!isHilEnabled() || skill.riskLevel !== 'high') return skill;
 
   const timeoutMs =
     Number(process.env.HIL_APPROVAL_TIMEOUT_MS) || DEFAULT_APPROVAL_TIMEOUT_MS;
@@ -21,8 +21,19 @@ export function wrapWithGate(skill: SkillDefinition): SkillDefinition {
   const gated: SkillDefinition = {
     ...skill,
     handler: async (args) => {
+      const policy = evaluateToolPolicy(skill, args);
+      updateSkillExecutionContext({ policyDecision: policy.decision });
+
+      if (policy.decision === 'denied') {
+        return { content: `スキル "${skill.name}" の実行はポリシーにより拒否されました。${policy.ruleId ? ` (rule=${policy.ruleId})` : ''}`, isError: true };
+      }
+
+      if (policy.decision !== 'approval_required') {
+        return skill.handler(args);
+      }
+
       const context = getSkillExecutionContext();
-      const req = createApprovalRequest(skill.name, args, context?.personId ?? context?.channelKey);
+      const req = createApprovalRequest(skill.name, args, context?.personId ?? context?.channelKey, policy.ruleId);
       updateSkillExecutionContext({ approvalId: req.id, policyDecision: 'approval_required' });
       console.info(`[HIL] Awaiting approval for "${skill.name}" (id=${req.id})`);
 
@@ -51,6 +62,5 @@ export function wrapWithGate(skill: SkillDefinition): SkillDefinition {
 }
 
 export function applyGatesToRegistry(skills: SkillDefinition[]): SkillDefinition[] {
-  if (!isHilEnabled()) return skills;
   return skills.map((s) => wrapWithGate(s));
 }

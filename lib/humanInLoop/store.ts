@@ -7,6 +7,7 @@ export function createApprovalRequest(
   skillName: string,
   args: Record<string, unknown>,
   requestedBy?: string,
+  policyRuleId?: string,
 ): ApprovalRequest {
   const id = crypto.randomBytes(8).toString('hex');
   const req: ApprovalRequest = {
@@ -16,6 +17,7 @@ export function createApprovalRequest(
     createdAt: Date.now(),
     status: 'pending',
     requestedBy,
+    policyRuleId,
   };
   store.set(id, req);
   return req;
