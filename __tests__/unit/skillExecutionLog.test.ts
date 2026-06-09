@@ -63,6 +63,33 @@ describe('skill execution logging', () => {
     });
   });
 
+  it('redacts sensitive fields and inline tokens from previews', async () => {
+    await recordSkillExecution({
+      skillName: '__redaction_skill__',
+      startedAt: new Date('2026-06-08T10:00:00Z'),
+      finishedAt: new Date('2026-06-08T10:00:01Z'),
+      durationMs: 12,
+      status: 'success',
+      args: {
+        username: 'alice',
+        password: 'super-secret-password',
+        nested: { apiKey: 'sk-test-secret-value-1234567890' },
+        headers: { Authorization: 'Bearer abcdefghijklmnopqrstuvwxyz' },
+      },
+      resultContent: 'created token=plain-token-secret and Authorization: Bearer another-secret-token',
+    });
+
+    const record = listSkillExecutions(1)[0];
+    expect(record.argsPreview).toContain('alice');
+    expect(record.argsPreview).toContain('[REDACTED]');
+    expect(record.resultPreview).toContain('[REDACTED]');
+    expect(record.argsPreview).not.toContain('super-secret-password');
+    expect(record.argsPreview).not.toContain('sk-test-secret-value');
+    expect(record.argsPreview).not.toContain('abcdefghijklmnopqrstuvwxyz');
+    expect(record.resultPreview).not.toContain('plain-token-secret');
+    expect(record.resultPreview).not.toContain('another-secret-token');
+  });
+
   it('records execution context fields when provided', async () => {
     const skill: SkillDefinition = {
       name: '__context_skill__',

@@ -137,6 +137,31 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 ## 実装進捗
 
+### 2026-06-09: Phase 1 継続（スキル実行プレビューの秘匿）
+
+#### 完了
+
+- スキル実行ログの引数 / 結果 / エラープレビューに共通の redaction helper を適用し、`password`、`apiKey`、`Authorization`、`token` などのキー配下の値を保存前に `[REDACTED]` へ置換するようにした。
+- Bearer token、GitHub token、OpenAI-style `sk-...`、Slack `xox...`、`token=value` 形式など、文字列中に埋め込まれた代表的なシークレットもプレビュー保存前に秘匿するようにした。
+- マスキング処理を `lib/toolPolicy/redaction.ts` に切り出し、今後の Tool Policy Engine の dry-run / 承認画面でも同じルールを再利用できる形にした。
+- スキル実行ログの単体テストに、通常フィールドは残しつつ機密値が `argsPreview` / `resultPreview` に残らないことの検証を追加した。
+
+#### 未完了 / 次に小さく切る issue
+
+- redaction rule を `policy.json` または DB から拡張できるようにし、組織固有のキー名や送信先別の秘匿レベルを設定可能にする。
+- 承認画面 / dry-run 表示にも同じ redaction helper を適用し、外部送信先・ファイル変更予定のプレビューとルールを統一する。
+- 長期監査向けに、マスク済みプレビューと raw 実行データを保存しない設計を明文化し、必要ならば暗号化された別ストアを検討する。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/skillExecutionLog.test.ts` でスキル実行ログの単体テスト通過を確認する。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認する。
+
+#### リスク / 注意点
+
+- 現在の redaction はヒューリスティックであり、未知の秘密情報形式やドメイン固有キーを完全に検出するものではない。高リスクスキルの承認前には、ポリシー設定でキー名・引数スキーマ単位の明示マスクを追加する必要がある。
+- プレビューは保存前にマスクされるため、デバッグ用途では値の形状のみ確認できる。実値が必要な監査フローは別途、権限制御された安全な保管設計が必要。
+
 ### 2026-06-08: Phase 1 継続（スキル実行履歴フィルタ）
 
 #### 完了
@@ -148,7 +173,6 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 #### 未完了 / 次に小さく切る issue
 
-- 引数 / 結果プレビューの秘匿・マスキングルールを Tool Policy Engine と共有する。
 - OpenTelemetry span に `skill.name`、`policy.decision`、`approval.id`、`task.id` を付与し、JSON ログと外部テレメトリを相互参照できるようにする。
 - `taskId` の正式な発行元として TaskLedger を実装し、会話 / スケジュール / サブエージェント単位で自動採番する。
 
