@@ -37,7 +37,7 @@ import { getSystemInfo } from './getSystemInfo';
 import { getEnvVariable } from './getEnvVariable';
 
 // Phase 5: memory
-import { memorySet, memoryGet, memoryList } from './memory';
+import { memorySet, memoryGet, memoryList, memoryUpsert, memorySearch, memoryForget, memoryExplain } from './memory';
 
 // Phase 6: external API
 import { githubSearch } from './githubSearch';
@@ -99,6 +99,10 @@ const allSkills = [
   memorySet,
   memoryGet,
   memoryList,
+  memoryUpsert,
+  memorySearch,
+  memoryForget,
+  memoryExplain,
   githubSearch,
   translateText,
   sendNotification,
@@ -157,6 +161,10 @@ export {
   memorySet,
   memoryGet,
   memoryList,
+  memoryUpsert,
+  memorySearch,
+  memoryForget,
+  memoryExplain,
   githubSearch,
   translateText,
   sendNotification,

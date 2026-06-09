@@ -114,9 +114,9 @@ context compaction を会話要約だけで終わらせず、構造化された�
 ### Phase 1: 基盤強化
 
 - [x] IdentityStore によるチャネル横断ユーザー統合（初期実装完了。LINE / Discord / API の通常チャット履歴を `personId` ベースの会話キーへ接続し、ダッシュボードで人物・チャネル・最近のタスクを表示）
-- [ ] SQLite / FTS ベースの MemoryStore
+- [x] SQLite / FTS ベースの MemoryStore（`memory.sqlite` に typed memory と FTS5 index を保持し、`memorySearch` / `memoryUpsert` / `memoryForget` / `memoryExplain` を追加）
 - [x] スキル実行ログと成功率の可視化（初期実装完了。`skill_executions.json` に実行ログを保持し、ダッシュボードのスキル一覧で実行回数・成功率・平均時間・直近エラーを表示）
-- [ ] スキル承認ポリシーの JSON 化
+- [x] スキル承認ポリシーの JSON 化（`policy.json` / `TOOL_POLICY_FILE` による skill / risk / user / channel / argument / schedule 条件と approval mode 評価を追加）
 - [x] AgentPlan DAG 型の定義（`AgentPlan` / `AgentPlanProgress` の型定義を追加。Runner 実装は Phase 3 の「並列 Agent DAG runner」で継続）
 
 ### Phase 2: 学習・改善ループ
@@ -136,6 +136,33 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - [ ] モバイルチャットからの進捗確認・停止・承認
 
 ## 実装進捗
+
+### 2026-06-09: Phase 1 完了（MemoryStore / JSON Tool Policy）
+
+#### 完了
+
+- SQLite + FTS5 ベースの `MemoryStore` を追加し、`fact`、`preference`、`project`、`task`、`episodic` の種別、`importance`、`confidence`、`sourceSessionId`、`lastVerifiedAt`、`stale`、metadata を管理できるようにした。
+- 既存の `memorySet` / `memoryGet` / `memoryList` を SQLite store の互換 wrapper に切り替え、追加で `memoryUpsert`、`memorySearch`、`memoryForget`、`memoryExplain` スキルを登録した。
+- `policy.json` または `TOOL_POLICY_FILE` からスキル承認ポリシーを読み込み、skill、risk level、person、channel、argument pattern、UTC schedule 条件に応じて `alwaysAllow`、`allowWithDryRun`、`requireApproval`、`deny`、`allowForSession` を評価できるようにした。
+- Human-in-the-Loop gate を JSON policy 評価に接続し、HIL が未有効でも policy の `deny` を即時拒否、`requireApproval` を承認待ちとして扱えるようにした。
+- ダッシュボードのスキル一覧 API / UI に承認ポリシーの mode / rule を表示し、スキルごとのリスク、メトリクス、承認制御を同じカードで確認できるようにした。
+- Phase 1 の未完了チェック項目（MemoryStore とスキル承認ポリシー JSON 化）を完了に更新した。
+
+#### 未完了 / Phase 2 以降で継続
+
+- Memory nudging、semantic search、SkillProposal は Phase 2 の学習・改善ループとして継続する。
+- Tool Policy Engine の dry-run 差分表示、組織固有 redaction rule、セッション単位 allowForSession の期限管理は Phase 2 / 3 の運用 UX として拡張する。
+- MemoryStore は Node.js `node:sqlite` / FTS5 を優先利用する。`node:sqlite` がない runtime では互換 JSON backend にフォールバックするため CI は通るが、長期運用では SQLite 対応 Node または正式 DB backend を使う必要がある。
+
+#### テスト / 検証
+
+- `npm test -- --runTestsByPath __tests__/unit/memoryStore.test.ts __tests__/unit/toolPolicy.test.ts` で MemoryStore と JSON policy の単体テスト通過を確認する。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認する。
+
+#### リスク / 注意点
+
+- `allowWithDryRun` は現時点で decision と表示の土台であり、実際の dry-run 差分生成は各スキル / backend 側の対応が必要。
+- `allowForSession` は現時点では許可 decision として扱う。セッション単位の期限・取り消し管理は正式なセッション policy store が必要。
 
 ### 2026-06-09: Phase 1 継続（Identity ダッシュボード）
 
