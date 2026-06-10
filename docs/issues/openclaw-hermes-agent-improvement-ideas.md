@@ -130,12 +130,43 @@ context compaction を会話要約だけで終わらせず、構造化された�
 ### Phase 3: 常駐・自律実行
 
 - [x] event trigger / watcher（初期実装完了。WatcherStore / WatcherEngine / dashboard API / dashboard UI / 外部イベント dispatch API を追加し、manual / webhook / github / rss などのイベントを TaskLedger 経由で実行可能にした）
-- [ ] Docker / SSH backend
+- [x] Docker / SSH backend（`ExecutionBackend` 抽象を追加し、`runCommand` / `writeFile` を local / docker / ssh backend 経由の実行に切り替え。`EXECUTION_BACKEND` と backend 別 env で workdir / env allowlist / timeout を制御）
 - [x] 並列 Agent DAG runner（初期実装完了。`runAgentDag` で依存解決、ready ノードの並列実行、失敗依存の skip、TaskLedger 親タスク、ノード別 workspace を追加。TaskLedger metadata への DAG 進捗永続化、Dashboard の DAG 表示、失敗ノード retry を追加）
-- [ ] toolset / MCP hub
-- [ ] モバイルチャットからの進捗確認・停止・承認
+- [x] toolset / MCP hub（builtin + custom toolset、MCP サーバー別 tool filter とロード状況 registry、スケジュール / AgentTask / AgentPlan への toolset 指定、`/api/dashboard/toolsets` と Hub パネルを追加）
+- [x] モバイルチャットからの進捗確認・停止・承認（LINE / Discord 共通の agent command パーサで tasks / stop / approvals / approve / reject を実行可能にし、taskId キーの AbortController レジストリ経由で停止要求を扱う）
 
 ## 実装進捗
+
+### 2026-06-10: Phase 3 完了（ExecutionBackend / Toolset・MCP Hub / チャットコマンド）
+
+#### 完了
+
+- `ExecutionBackend` 抽象（`lib/execution/`）を追加し、`runCommand` / `writeFile` スキルを backend 経由の実行に切り替えた。スキル側の whitelist / 引数検証 / sandbox 検証は backend に依らず従来どおり実行する。
+- backend として `local`（従来の spawn / fs ロジックを抽出、挙動互換）、`docker`（`docker exec -w` + 一時ファイル経由の `docker cp`、env allowlist を `-e` で転送）、`ssh`（全トークンを shell quote した remote command 組み立て、stdin 経由の `cat > target`）を実装した。`EXECUTION_BACKEND` / `EXECUTION_ENV_ALLOWLIST` / `EXECUTION_TIMEOUT_MS` と backend 別の接続 env で制御する。
+- toolset（`lib/skills/toolsets.ts`）を追加した。builtin の `research` / `coding` / `office` / `personal` / `dangerous` と、`toolsets.json`（`TOOLSETS_FILE`）による custom 定義（同名 override 可）を `*` glob でスキル名に解決する。toolset 解決後も `resolveSkills` を通すため `ENABLED_SKILLS` ゲートは維持される。
+- スケジュール（`ScheduledPrompt.toolsets`）、サブエージェント（`AgentTask.toolsets`）、DAG ノード（`AgentPlan.toolsets`）で toolset を指定し、実行時のスキルを絞り込めるようにした。
+- MCP サーバー設定に `includeTools` / `excludeTools`（glob）を追加し、`loadMcpSkills` でフィルタするようにした。ロード結果（採用 / スキップしたツール、フィルタ、エラー）を registry に記録し、`/api/dashboard/toolsets` とダッシュボードの Toolsets / MCP Hub パネルで toolset 構成・リスク内訳・MCP サーバー状況を確認できるようにした。
+- LINE / Discord 共通の agent command（`lib/channels/agentCommands.ts`）を追加した。`tasks` / `task <id>` / `stop <id>` / `approvals` / `approve <id>` / `reject <id>`（日本語: タスク / 進捗 / 停止 / 承認待ち / 承認 / 却下 / 拒否）を完全一致アンカーで解釈し、TaskLedger と HIL 承認ストアに対して進捗確認・停止・承認をモバイルチャットから実行できるようにした。Discord は `!` プレフィックス、LINE は素のテキストで動作する。
+- `lib/tasks/cancellation.ts` に taskId キーの AbortController レジストリを追加した。登録済みタスクは即時 abort、未登録の実行中タスクは metadata に stop 要求を記録した上で `cancelled` として終了する。
+
+#### 未完了 / 継続
+
+- docker / ssh backend の append は未対応（local のみ）。remote backend での `readFile` 系スキルの統合、network policy / allowed paths の強制、生成スキル実行の backend 側への移譲は継続課題。
+- チャット経由の承認は identity による権限制限がなく、Bot と会話できる人は誰でも承認・却下できる。運用ではポリシー側の制御または承認者 allowlist の追加が必要。
+- チャットの通常会話タスクはまだ AbortController を登録しないため、`stop` は台帳上の cancelled 化（marked）が中心。実行中 LLM 呼び出しの即時中断はスケジューラー / DAG 側の接続が継続課題。
+- DAG metadata の保存 plan には `toolsets` を含めていないため、retry 時の再構築では toolset 指定が引き継がれない。
+- スケジュール API の PATCH は enable/disable のみで、`toolsets` の更新は作成（POST）時のみ。
+
+#### テスト / 検証
+
+- 新規スイート: `executionBackend`（ssh の tilde 展開回帰テスト含む）/ `toolsets` / `mcpToolFilter` / `schedulerToolsets` / `dashboardToolsets` / `agentCommands` / `taskCancellation`。
+- `npm test` で Jest 全体（43 スイート / 724 件）の通過、`npx tsc --noEmit` の型チェック通過を確認した。
+
+#### リスク / 注意点
+
+- ssh backend は composite shell command を前提とするため、restricted shell のリモートでは writeFile が失敗しうる。workdir `~` / `~/...` はリモートのホームディレクトリ相対（`.` / 相対パス）として解釈し、literal quote による tilde 展開不能を回避している。
+- docker writeFile はコンテナ内に `mkdir`、ssh writeFile はリモートに `mkdir` / `cat` が必要。
+- toolset の glob で `?` はリテラル文字として扱う（ワイルドカードは `*` のみ）。
 
 ### 2026-06-10: Phase 3 継続（DAG retry）
 
