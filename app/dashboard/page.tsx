@@ -22,6 +22,7 @@ import {
   Trash2,
   Pencil,
   X,
+  Radio,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,25 @@ interface Schedule {
 
 interface SchedulesData {
   schedules: Schedule[];
+}
+
+interface Watcher {
+  id: string;
+  name: string;
+  type: string;
+  prompt: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastTriggeredAt?: string;
+  triggerCount: number;
+  eventPattern?: string;
+  discordChannelId?: string;
+  lineUserId?: string;
+}
+
+interface WatchersData {
+  watchers: Watcher[];
 }
 
 interface LogEntry {
@@ -168,6 +188,31 @@ interface DashboardTask {
   finishedAt?: string;
   errorPreview?: string;
   metadata?: Record<string, unknown>;
+}
+
+interface DashboardAgentDagPlan {
+  id: string;
+  role: string;
+  dependsOn?: string[];
+  skills?: string[];
+  timeoutMs?: number;
+  workspace?: string;
+}
+
+interface DashboardAgentDagProgress {
+  planId: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+}
+
+interface DashboardAgentDag {
+  runId: string;
+  status: 'running' | 'succeeded' | 'failed';
+  plans: DashboardAgentDagPlan[];
+  progress: DashboardAgentDagProgress[];
+  updatedAt?: string;
 }
 
 interface TasksData {
@@ -857,6 +902,132 @@ function SchedulerPanel({ data, onMutate }: { data: SchedulesData | undefined; o
 }
 
 // ---------------------------------------------------------------------------
+// Section: Watchers Panel
+// ---------------------------------------------------------------------------
+
+function WatchersPanel({ data, onMutate }: { data: WatchersData | undefined; onMutate: () => void }) {
+  const [loading, setLoading] = useState<Record<string, string>>({});
+
+  async function apiCall(url: string, method: string, body?: object) {
+    const res = await dashboardFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res.ok;
+  }
+
+  async function toggleEnabled(watcher: Watcher) {
+    setLoading((l) => ({ ...l, [watcher.id]: 'toggle' }));
+    await apiCall(`/api/dashboard/watchers/${watcher.id}`, 'PATCH', { enabled: !watcher.enabled });
+    onMutate();
+    setLoading((l) => { const n = { ...l }; delete n[watcher.id]; return n; });
+  }
+
+  async function trigger(watcher: Watcher) {
+    setLoading((l) => ({ ...l, [watcher.id]: 'trigger' }));
+    await apiCall(`/api/dashboard/watchers/${watcher.id}/trigger`, 'POST', {
+      source: 'dashboard',
+      type: 'manual',
+      subject: watcher.name,
+    });
+    onMutate();
+    setLoading((l) => { const n = { ...l }; delete n[watcher.id]; return n; });
+  }
+
+  return (
+    <section className="mb-6">
+      <h2 className="text-sm font-semibold uppercase tracking-widest mb-3 flex items-center gap-2"
+        style={{ color: 'var(--text-secondary)' }}>
+        <Radio className="w-4 h-4" /> Watchers
+        {data && (
+          <span className="ml-auto text-xs font-normal normal-case" style={{ color: 'var(--text-secondary)' }}>
+            {data.watchers.filter((watcher) => watcher.enabled).length} / {data.watchers.length} 件有効
+          </span>
+        )}
+      </h2>
+
+      {!data ? (
+        <div className="h-24 rounded-xl animate-pulse" style={{ background: 'var(--secondary-bg)' }} />
+      ) : data.watchers.length === 0 ? (
+        <div className="rounded-xl p-6 text-center text-sm" style={{ background: 'var(--secondary-bg)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+          Watcher はまだ登録されていません。
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--border-color)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: 'var(--secondary-bg)', borderBottom: '1px solid var(--border-color)' }}>
+                {['名前', '種別', '条件', '最終発火', '回数', '状態', '操作'].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-secondary)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.watchers.map((watcher, i) => {
+                const isLoading = !!loading[watcher.id];
+                return (
+                  <tr
+                    key={watcher.id}
+                    style={{
+                      background: i % 2 === 0 ? 'var(--primary-bg)' : 'var(--secondary-bg)',
+                      borderBottom: '1px solid var(--border-color)',
+                    }}
+                  >
+                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
+                      <div>{watcher.name}</div>
+                      <div className="text-xs font-mono truncate max-w-[220px]" style={{ color: 'var(--text-secondary)' }} title={watcher.prompt}>
+                        {watcher.prompt}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{watcher.type}</td>
+                    <td className="px-4 py-3 font-mono text-xs max-w-[180px] truncate" style={{ color: 'var(--text-secondary)' }}>{watcher.eventPattern || '—'}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{fmtDate(watcher.lastTriggeredAt)}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{watcher.triggerCount}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${watcher.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {watcher.enabled ? '有効' : '無効'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          disabled={isLoading}
+                          onClick={() => toggleEnabled(watcher)}
+                          className="p-1.5 rounded-lg transition-colors hover:opacity-80 disabled:opacity-40"
+                          style={{ background: 'var(--accent-warm)' }}
+                          title={watcher.enabled ? '無効化' : '有効化'}
+                        >
+                          {watcher.enabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                        </button>
+                        <button
+                          disabled={isLoading || !watcher.enabled}
+                          onClick={() => trigger(watcher)}
+                          className="p-1.5 rounded-lg transition-colors hover:opacity-80 disabled:opacity-40"
+                          style={{ background: 'var(--accent-peachy)' }}
+                          title="手動発火"
+                        >
+                          {loading[watcher.id] === 'trigger' ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Play className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Section: Activity Log Feed
 // ---------------------------------------------------------------------------
 
@@ -1307,6 +1478,71 @@ function taskMetadataPreview(metadata?: Record<string, unknown>): string {
   return text.length > 120 ? `${text.slice(0, 120)}…` : text;
 }
 
+const DAG_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  pending: { bg: 'bg-gray-100', text: 'text-gray-600', label: '待機' },
+  running: { bg: 'bg-blue-100', text: 'text-blue-700', label: '実行中' },
+  succeeded: { bg: 'bg-green-100', text: 'text-green-700', label: '成功' },
+  failed: { bg: 'bg-red-100', text: 'text-red-700', label: '失敗' },
+  skipped: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'スキップ' },
+};
+
+function isAgentDag(value: unknown): value is DashboardAgentDag {
+  if (!value || typeof value !== 'object') return false;
+  const dag = value as Partial<DashboardAgentDag>;
+  return typeof dag.runId === 'string' && Array.isArray(dag.plans) && Array.isArray(dag.progress);
+}
+
+function agentDagFromTask(task: DashboardTask): DashboardAgentDag | undefined {
+  const value = task.metadata?.agentDag;
+  return isAgentDag(value) ? value : undefined;
+}
+
+function AgentDagMiniGraph({ dag }: { dag: DashboardAgentDag }) {
+  const progressById = new Map(dag.progress.map((entry) => [entry.planId, entry]));
+  const completed = dag.progress.filter((entry) => entry.status === 'succeeded').length;
+  const failed = dag.progress.filter((entry) => entry.status === 'failed').length;
+  const skipped = dag.progress.filter((entry) => entry.status === 'skipped').length;
+
+  return (
+    <div className="mt-2 rounded-lg p-2 space-y-2" style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)' }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[11px]" style={{ color: 'var(--text-primary)' }}>{dag.runId}</span>
+        <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+          {completed}/{dag.plans.length} 完了
+          {failed > 0 ? ` / 失敗 ${failed}` : ''}
+          {skipped > 0 ? ` / skip ${skipped}` : ''}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {dag.plans.map((plan) => {
+          const progress = progressById.get(plan.id);
+          const st = DAG_STATUS_STYLES[progress?.status ?? 'pending'] ?? DAG_STATUS_STYLES.pending;
+          const deps = plan.dependsOn?.length ? plan.dependsOn.join(', ') : 'root';
+          return (
+            <div
+              key={plan.id}
+              className="min-w-[160px] max-w-[220px] rounded-md p-2"
+              style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}
+              title={progress?.error || plan.workspace || plan.id}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>{plan.id}</span>
+                <span className={`shrink-0 px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span>
+              </div>
+              <div className="truncate mt-1" style={{ color: 'var(--text-secondary)' }}>{plan.role}</div>
+              <div className="truncate font-mono mt-1" style={{ color: 'var(--text-secondary)' }}>deps: {deps}</div>
+              {progress?.error ? <div className="truncate mt-1 text-red-600">error: {progress.error}</div> : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[11px] font-mono truncate" style={{ color: 'var(--text-secondary)' }}>
+        updated: {fmtDate(dag.updatedAt)}
+      </div>
+    </div>
+  );
+}
+
 function TasksPanel({
   data,
   filters,
@@ -1443,6 +1679,7 @@ function TasksPanel({
               <tbody>
                 {data.tasks.map((task) => {
                   const st = TASK_STATUS_STYLES[task.status] ?? TASK_STATUS_STYLES.running;
+                  const agentDag = agentDagFromTask(task);
                   return (
                     <tr key={task.id} style={{ borderTop: '1px solid var(--border-color)' }}>
                       <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{fmtDate(task.updatedAt)}</td>
@@ -1462,7 +1699,11 @@ function TasksPanel({
                       </td>
                       <td className="px-3 py-2 max-w-[300px]" style={{ color: 'var(--text-secondary)' }}>
                         {task.errorPreview ? <div className="truncate text-red-600">error: {task.errorPreview}</div> : null}
-                        <div className="font-mono truncate" title={taskMetadataPreview(task.metadata)}>{taskMetadataPreview(task.metadata)}</div>
+                        {agentDag ? (
+                          <AgentDagMiniGraph dag={agentDag} />
+                        ) : (
+                          <div className="font-mono truncate" title={taskMetadataPreview(task.metadata)}>{taskMetadataPreview(task.metadata)}</div>
+                        )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <button type="button" className="text-xs underline" style={{ color: 'var(--text-primary)' }} onClick={() => showSkillExecutionsForTask(task)}>
@@ -2238,6 +2479,8 @@ export default function DashboardPage() {
     useSWR<StatusData>('/api/dashboard/status', fetcher, { refreshInterval });
   const { data: schedulesData, mutate: mutateSchedules } =
     useSWR<SchedulesData>('/api/dashboard/schedules', fetcher, { refreshInterval });
+  const { data: watchersData, mutate: mutateWatchers } =
+    useSWR<WatchersData>('/api/dashboard/watchers', fetcher, { refreshInterval });
   const { data: logsData, mutate: mutateLogs } =
     useSWR<LogsData>('/api/dashboard/logs?limit=20', fetcher, { refreshInterval });
   const { data: skillsData } =
@@ -2260,6 +2503,7 @@ export default function DashboardPage() {
   function refreshAll() {
     void mutateStatus();
     void mutateSchedules();
+    void mutateWatchers();
     void mutateLogs();
     void mutateApprovals();
     void mutateIdentities();
@@ -2278,6 +2522,7 @@ export default function DashboardPage() {
         />
         <StatusCards data={statusData} />
         <SchedulerPanel data={schedulesData} onMutate={() => { void mutateSchedules(); void mutateLogs(); }} />
+        <WatchersPanel data={watchersData} onMutate={() => { void mutateWatchers(); void mutateLogs(); void mutateTasks(); }} />
         <LogFeed data={logsData} />
         <ApprovalsPanel data={approvalsData} onMutate={() => void mutateApprovals()} />
         <SkillProposalsPanel
