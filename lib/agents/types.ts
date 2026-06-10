@@ -18,6 +18,8 @@ export interface AgentTask {
   conversationKey?: string;
   /** Parent TaskLedger id when this task is a sub-agent spawned by another run. */
   parentTaskId?: string;
+  /** Workspace directory reserved for this agent execution. */
+  workspace?: string;
 }
 
 /**
@@ -60,4 +62,23 @@ export interface AgentResult {
   provider?: string;
   durationMs: number;
   error?: string;
+}
+
+export interface AgentDagNodeResult {
+  planId: string;
+  status: AgentPlanStatus;
+  result?: AgentResult;
+  error?: string;
+  workspace?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface AgentDagRunResult {
+  runId: string;
+  taskId?: string;
+  status: 'succeeded' | 'failed';
+  progress: AgentPlanProgress[];
+  results: AgentDagNodeResult[];
+  durationMs: number;
 }

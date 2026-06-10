@@ -60,6 +60,7 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
       role: roleName,
       parentTaskId: task.parentTaskId ?? inheritedContext?.taskId,
       requestedSkills: task.skills,
+      workspace: task.workspace,
       model,
       provider,
     },
