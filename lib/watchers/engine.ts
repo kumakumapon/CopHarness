@@ -1,0 +1,122 @@
+import { runPrompt } from '../scheduler/engine';
+import { markWatcherTriggered, getWatcher, listWatchers } from './store';
+import type { WatcherDefinition, WatcherEvent } from './types';
+
+export type WatcherPromptRunner = (
+  prompt: string,
+  abortSignal: AbortSignal | undefined,
+  context: {
+    watcher: Pick<WatcherDefinition, 'id' | 'name' | 'type' | 'discordChannelId' | 'lineUserId'>;
+    reason: string;
+    event: WatcherEvent;
+  },
+) => Promise<string>;
+
+function stableStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+export function buildWatcherPrompt(watcher: WatcherDefinition, event: WatcherEvent): string {
+  const receivedAt = event.receivedAt ?? new Date().toISOString();
+  return `${watcher.prompt}
+
+Watcher event:
+${stableStringify({ ...event, receivedAt })}`;
+}
+
+export function watcherMatchesEvent(
+  watcher: WatcherDefinition,
+  event: WatcherEvent,
+  options: { manualOverride?: boolean } = {},
+): boolean {
+  if (options.manualOverride && event.type === 'manual') return true;
+  if (watcher.type !== 'manual' && event.source !== watcher.type) return false;
+
+  const pattern = watcher.eventPattern?.trim();
+  if (!pattern) return true;
+  const haystack = [
+    event.source,
+    event.type,
+    event.subject,
+    typeof event.payload === 'string' ? event.payload : stableStringify(event.payload),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase();
+  return haystack.includes(pattern.toLowerCase());
+}
+
+export function findMatchingWatchers(event: WatcherEvent): WatcherDefinition[] {
+  return listWatchers().filter((watcher) => watcher.enabled && watcherMatchesEvent(watcher, event));
+}
+
+export async function triggerWatcher(
+  id: string,
+  event: WatcherEvent,
+  options: {
+    abortSignal?: AbortSignal;
+    runner?: WatcherPromptRunner;
+  } = {},
+): Promise<{ ok: true; result: string; watcher: WatcherDefinition } | { ok: false; reason: 'not_found' | 'disabled' | 'event_not_matched' }> {
+  const watcher = getWatcher(id);
+  if (!watcher) return { ok: false, reason: 'not_found' };
+  if (!watcher.enabled) return { ok: false, reason: 'disabled' };
+  if (!watcherMatchesEvent(watcher, event, { manualOverride: true })) return { ok: false, reason: 'event_not_matched' };
+
+  const triggered = markWatcherTriggered(watcher.id) ?? watcher;
+  const prompt = buildWatcherPrompt(triggered, event);
+  const runner = options.runner ?? runPrompt;
+  const result = await runner(prompt, options.abortSignal, {
+    watcher: triggered,
+    reason: `watcher:${event.source}`,
+    event: { ...event, receivedAt: event.receivedAt ?? new Date().toISOString() },
+  });
+  return { ok: true, result, watcher: triggered };
+}
+
+export async function dispatchWatcherEvent(
+  event: WatcherEvent,
+  options: {
+    abortSignal?: AbortSignal;
+    runner?: WatcherPromptRunner;
+  } = {},
+): Promise<{
+  event: WatcherEvent;
+  matched: number;
+  results: Array<
+    | { ok: true; watcher: WatcherDefinition; result: string }
+    | { ok: false; watcher: WatcherDefinition; error: string }
+  >;
+}> {
+  const normalizedEvent = {
+    ...event,
+    receivedAt: event.receivedAt ?? new Date().toISOString(),
+  };
+  const watchers = findMatchingWatchers(normalizedEvent);
+  const settled = await Promise.allSettled(
+    watchers.map(async (watcher) => {
+      const result = await triggerWatcher(watcher.id, normalizedEvent, options);
+      if (!result.ok) {
+        throw new Error(result.reason);
+      }
+      return result;
+    }),
+  );
+
+  return {
+    event: normalizedEvent,
+    matched: watchers.length,
+    results: settled.map((entry, index) => {
+      const watcher = watchers[index];
+      if (entry.status === 'fulfilled') {
+        return { ok: true, watcher: entry.value.watcher, result: entry.value.result };
+      }
+      const reason = entry.reason instanceof Error ? entry.reason.message : String(entry.reason);
+      return { ok: false, watcher, error: reason };
+    }),
+  };
+}

@@ -37,14 +37,57 @@ async function sendLinePush(userId: string, text: string): Promise<void> {
 }
 
 export interface ScheduledPromptRunContext {
-  schedule: Pick<ScheduledPrompt, 'id' | 'name' | 'discordChannelId' | 'lineUserId'>;
+  schedule?: Pick<ScheduledPrompt, 'id' | 'name' | 'discordChannelId' | 'lineUserId'>;
+  watcher?: {
+    id: string;
+    name: string;
+    type: string;
+    discordChannelId?: string;
+    lineUserId?: string;
+  };
   reason: 'manual fire' | 'cron' | string;
+  event?: unknown;
 }
 
-function scheduleChannelKey(schedule: Pick<ScheduledPrompt, 'discordChannelId' | 'lineUserId'>): string | undefined {
-  if (schedule.lineUserId) return `line:${schedule.lineUserId}`;
-  if (schedule.discordChannelId) return `discord-channel:${schedule.discordChannelId}`;
+function automationChannelKey(target: Pick<ScheduledPrompt, 'discordChannelId' | 'lineUserId'>): string | undefined {
+  if (target.lineUserId) return `line:${target.lineUserId}`;
+  if (target.discordChannelId) return `discord-channel:${target.discordChannelId}`;
   return undefined;
+}
+
+function automationTaskInput(context: ScheduledPromptRunContext): {
+  kind: 'schedule' | 'watcher';
+  channelKey?: string;
+  title: string;
+  metadata: Record<string, unknown>;
+} {
+  if (context.watcher) {
+    return {
+      kind: 'watcher',
+      channelKey: automationChannelKey(context.watcher),
+      title: context.watcher.name,
+      metadata: {
+        watcherId: context.watcher.id,
+        watcherName: context.watcher.name,
+        watcherType: context.watcher.type,
+        reason: context.reason,
+        event: context.event,
+      },
+    };
+  }
+
+  const schedule = context.schedule;
+  if (!schedule) throw new Error('scheduledContext requires either schedule or watcher');
+  return {
+    kind: 'schedule',
+    channelKey: automationChannelKey(schedule),
+    title: schedule.name,
+    metadata: {
+      scheduleId: schedule.id,
+      scheduleName: schedule.name,
+      reason: context.reason,
+    },
+  };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -88,16 +131,7 @@ export async function runPrompt(
   try {
     if (!scheduledContext) return await execute();
 
-    const task = await startTask({
-      kind: 'schedule',
-      channelKey: scheduleChannelKey(scheduledContext.schedule),
-      title: scheduledContext.schedule.name,
-      metadata: {
-        scheduleId: scheduledContext.schedule.id,
-        scheduleName: scheduledContext.schedule.name,
-        reason: scheduledContext.reason,
-      },
-    });
+    const task = await startTask(automationTaskInput(scheduledContext));
 
     try {
       const result = await withSkillExecutionContext(
