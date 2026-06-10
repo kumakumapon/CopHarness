@@ -92,13 +92,19 @@ export function needsCompaction(messages: LLMMessage[]): boolean {
 /**
  * Write a minimal progress artefact to the workspace.
  * This externalises task state so it survives context resets.
+ *
+ * Writes both progress.md and progress.json.
+ * The workspace directory defaults to ./workspace but may be overridden via WORKSPACE_DIR.
  */
-export async function writeProgressArtifact(goal: string, summary: string): Promise<void> {
+export async function writeProgressArtifact(goal: string, summary: string, taskId?: string): Promise<void> {
   try {
     const { promises: fsp } = await import('fs');
     const path = await import('path');
-    const dir = path.resolve('./workspace');
+    const dir = process.env.WORKSPACE_DIR
+      ? path.resolve(process.env.WORKSPACE_DIR)
+      : path.resolve('./workspace');
     await fsp.mkdir(dir, { recursive: true });
+    const updatedAt = new Date().toISOString();
     const content = [
       `# Task Progress`,
       `**Goal:** ${goal}`,
@@ -106,9 +112,12 @@ export async function writeProgressArtifact(goal: string, summary: string): Prom
       `## Summary`,
       summary,
       ``,
-      `_Updated: ${new Date().toISOString()}_`,
+      `_Updated: ${updatedAt}_`,
     ].join('\n');
     await fsp.writeFile(path.join(dir, 'progress.md'), content, 'utf-8');
+    const jsonPayload: Record<string, unknown> = { goal, summary, updatedAt };
+    if (taskId !== undefined) jsonPayload.taskId = taskId;
+    await fsp.writeFile(path.join(dir, 'progress.json'), JSON.stringify(jsonPayload, null, 2) + '\n', 'utf-8');
   } catch {
     // Non-critical
   }

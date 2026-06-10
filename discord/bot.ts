@@ -105,6 +105,7 @@ import {
   promptTemplates,
 } from '../lib/promptWizardSession';
 import { consumePendingNudge, maybeCreateNudge } from '../lib/memory/nudge';
+import { runWithRalphLoop } from '../lib/context/ralphLoop';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';
@@ -668,7 +669,7 @@ async function handleMessage(
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     const resp = await withSkillExecutionContext(
       { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
-      () => adapter.complete({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() }),
+      () => runWithRalphLoop({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() }, adapter, { taskId: task.id }),
     );
     let replyText = resp.content || '（応答がありませんでした）';
     try {

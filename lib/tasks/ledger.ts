@@ -159,6 +159,23 @@ export function getTask(id: string): TaskRecord | undefined {
   return task ? { ...task, metadata: task.metadata ? { ...task.metadata } : undefined } : undefined;
 }
 
+export async function updateTaskMetadata(
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<TaskRecord | undefined> {
+  const ledger = getLedger();
+  const task = ledger.tasks[id];
+  if (!task) return undefined;
+  const now = new Date().toISOString();
+  task.metadata = { ...(task.metadata ?? {}), ...patch };
+  task.updatedAt = now;
+  await scheduleWrite();
+  const result = { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  // Index failure must never affect updateTaskMetadata behaviour
+  indexTaskRecord(result);
+  return result;
+}
+
 
 export interface TaskQueryOptions {
   limit?: number;

@@ -38,6 +38,7 @@ import {
   continueWizard as wizContinue,
 } from '../../../lib/promptWizardSession';
 import { consumePendingNudge, maybeCreateNudge } from '../../../lib/memory/nudge';
+import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.LINE_MAX_HISTORY) || 20);
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
@@ -464,7 +465,7 @@ export async function POST(req: NextRequest) {
     try {
       const resp = await withSkillExecutionContext(
         { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
-        () => adapter.complete({ messages: [...history], timeoutMs }),
+        () => runWithRalphLoop({ messages: [...history], timeoutMs }, adapter, { taskId: task.id }),
       );
       let replyText = resp.content || '（応答がありませんでした）';
       try {
