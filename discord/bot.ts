@@ -106,6 +106,7 @@ import {
 } from '../lib/promptWizardSession';
 import { consumePendingNudge, maybeCreateNudge } from '../lib/memory/nudge';
 import { runWithRalphLoop } from '../lib/context/ralphLoop';
+import { parseAgentCommand, executeAgentCommand } from '../lib/channels/agentCommands';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';
@@ -543,6 +544,28 @@ async function handleMessage(
     const args = userText.slice(scheduleCmd.length).trim();
     await handleScheduleCommand(message, args);
     return;
+  }
+
+  // ── Agent commands: !tasks, !task <id>, !stop <id>, !approvals, !approve <id>, !reject <id>, !agent help ──
+  // Strip the prefix and re-parse so we reuse the channel-agnostic parser/executor.
+  {
+    const stripped = userText.startsWith(DISCORD_PREFIX)
+      ? userText.slice(DISCORD_PREFIX.length).trim()
+      : null;
+    if (stripped !== null) {
+      const agentCmd = parseAgentCommand(stripped);
+      if (agentCmd) {
+        const agentIdentity = await resolveConversationKey('discord', message.author.id, {
+          displayName: message.author.username,
+        });
+        const reply = await executeAgentCommand(agentCmd, {
+          personId: agentIdentity.personId,
+          channelKey: agentIdentity.channelKey,
+        });
+        await sendInChunks(message, reply);
+        return;
+      }
+    }
   }
 
   // ── !wizard commands ──
