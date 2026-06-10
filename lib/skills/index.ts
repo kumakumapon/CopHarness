@@ -73,6 +73,9 @@ import { spawnAgent } from './spawnAgent';
 // Phase 2: Skill proposal
 import { proposeSkill } from './proposeSkill';
 
+// Phase 2: conversation / task search
+import { searchHistory } from './searchHistory';
+
 // Human-in-the-loop gate
 import { applyGatesToRegistry } from '../humanInLoop/gate';
 
@@ -135,6 +138,7 @@ const allSkills = [
   buildPromptFromTemplate,
   spawnAgent,
   proposeSkill,
+  searchHistory,
 ];
 
 const gatedSkills = applyGatesToRegistry(allSkills);
@@ -205,4 +209,5 @@ export {
   buildPromptFromTemplate,
   spawnAgent,
   proposeSkill,
+  searchHistory,
 };
