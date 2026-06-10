@@ -1,7 +1,5 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { type SkillDefinition } from '../skill';
-import { resolveSafe } from './fileSandbox';
+import { getExecutionBackend } from '../execution';
 
 export const writeFile: SkillDefinition = {
   name: 'writeFile',
@@ -34,13 +32,8 @@ export const writeFile: SkillDefinition = {
     const append = args.append === true;
     if (!userPath) return { content: 'Error: path is required', isError: true };
     try {
-      const resolved = await resolveSafe(userPath);
-      await fs.mkdir(path.dirname(resolved), { recursive: true });
-      if (append) {
-        await fs.appendFile(resolved, content, 'utf8');
-      } else {
-        await fs.writeFile(resolved, content, 'utf8');
-      }
+      const backend = getExecutionBackend();
+      await backend.writeFile({ relativePath: userPath, content, append });
       return { content: `Successfully ${append ? 'appended to' : 'wrote'} "${userPath}" (${content.length} characters).` };
     } catch (err) {
       return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
