@@ -2,10 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { getSkillExecutionContext } from '../skills/executionContext';
-import { finishTask, startTask, updateTaskMetadata } from '../tasks/ledger';
+import { finishTask, getTask, startTask, updateTaskMetadata } from '../tasks/ledger';
 import { dataPath } from '../utils/dataDir';
 import { runAgentTask } from './orchestrator';
 import type {
+  AgentDagMetadata,
   AgentDagNodeResult,
   AgentDagRunResult,
   AgentPlan,
@@ -85,6 +86,19 @@ function initialProgress(plans: AgentPlan[]): AgentPlanProgress[] {
   return plans.map((plan) => ({ planId: plan.id, status: 'pending' }));
 }
 
+function storedPlans(runId: string, plans: AgentPlan[]) {
+  return plans.map((plan) => ({
+    id: plan.id,
+    role: roleName(plan.role),
+    prompt: plan.prompt,
+    dependsOn: plan.dependsOn ?? [],
+    skills: plan.skills ?? [],
+    timeoutMs: plan.timeoutMs,
+    budget: plan.budget,
+    workspace: planWorkspace(runId, plan),
+  }));
+}
+
 function progressSnapshot(
   plans: AgentPlan[],
   results: Map<string, AgentDagNodeResult>,
@@ -104,27 +118,68 @@ async function recordDagProgress(
   results: Map<string, AgentDagNodeResult>,
   status: 'running' | 'succeeded' | 'failed',
   running = new Set<string>(),
+  retry?: AgentDagMetadata['retry'],
 ): Promise<void> {
   await updateTaskMetadata(taskId, {
     agentDag: {
       runId,
       status,
-      plans: plans.map((plan) => ({
-        id: plan.id,
-        role: roleName(plan.role),
-        dependsOn: plan.dependsOn ?? [],
-        skills: plan.skills ?? [],
-        timeoutMs: plan.timeoutMs,
-        budget: plan.budget,
-        workspace: planWorkspace(runId, plan),
-      })),
+      plans: storedPlans(runId, plans),
       progress: progressSnapshot(plans, results, running),
       results: plans
         .map((plan) => results.get(plan.id))
         .filter((result): result is AgentDagNodeResult => Boolean(result)),
       updatedAt: new Date().toISOString(),
+      retry,
     },
   });
+}
+
+function isAgentDagMetadata(value: unknown): value is AgentDagMetadata {
+  if (!value || typeof value !== 'object') return false;
+  const dag = value as Partial<AgentDagMetadata>;
+  return typeof dag.runId === 'string' && Array.isArray(dag.plans) && Array.isArray(dag.results);
+}
+
+function plansFromMetadata(dag: AgentDagMetadata): AgentPlan[] {
+  return dag.plans.map((plan) => {
+    if (!plan.prompt) {
+      throw new Error(`AgentPlan ${plan.id} cannot be retried because its prompt was not stored`);
+    }
+    return {
+      id: plan.id,
+      role: plan.role,
+      prompt: plan.prompt,
+      dependsOn: plan.dependsOn,
+      skills: plan.skills,
+      timeoutMs: plan.timeoutMs,
+      budget: plan.budget,
+      workspace: plan.workspace,
+    };
+  });
+}
+
+function descendantPlanIds(plans: AgentPlan[], rootId: string): Set<string> {
+  const descendants = new Set<string>([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const plan of plans) {
+      if (descendants.has(plan.id)) continue;
+      if ((plan.dependsOn ?? []).some((dep) => descendants.has(dep))) {
+        descendants.add(plan.id);
+        changed = true;
+      }
+    }
+  }
+  return descendants;
+}
+
+function runStatusFromResults(plans: AgentPlan[], results: Map<string, AgentDagNodeResult>): 'succeeded' | 'failed' {
+  return plans.some((plan) => {
+    const result = results.get(plan.id);
+    return !result || result.status === 'failed' || result.status === 'skipped';
+  }) ? 'failed' : 'succeeded';
 }
 
 export async function runAgentDag(
@@ -151,15 +206,7 @@ export async function runAgentDag(
       agentDag: {
         runId,
         status: 'running',
-        plans: plans.map((plan) => ({
-          id: plan.id,
-          role: roleName(plan.role),
-          dependsOn: plan.dependsOn ?? [],
-          skills: plan.skills ?? [],
-          timeoutMs: plan.timeoutMs,
-          budget: plan.budget,
-          workspace: planWorkspace(runId, plan),
-        })),
+        plans: storedPlans(runId, plans),
         progress: initialProgress(plans),
         results: [],
         updatedAt: new Date().toISOString(),
@@ -263,6 +310,161 @@ export async function runAgentDag(
       taskId: parentTask.id,
       status: failed ? 'failed' : 'succeeded',
       progress: orderedResults.map(progressFromResult),
+      results: orderedResults,
+      durationMs: Date.now() - start,
+    };
+  } catch (err) {
+    await finishTask(parentTask.id, 'failed', err);
+    throw err;
+  }
+}
+
+export async function retryAgentDagNode(
+  taskId: string,
+  planId: string,
+  options: {
+    runner?: AgentPlanRunner;
+  } = {},
+): Promise<AgentDagRunResult> {
+  const parentTask = getTask(taskId);
+  if (!parentTask) throw new Error(`Task not found: ${taskId}`);
+  const dag = parentTask.metadata?.agentDag;
+  if (!isAgentDagMetadata(dag)) throw new Error(`Task ${taskId} does not contain Agent DAG metadata`);
+
+  const plans = plansFromMetadata(dag);
+  assertValidDag(plans);
+  const target = plans.find((plan) => plan.id === planId);
+  if (!target) throw new Error(`AgentPlan not found in DAG: ${planId}`);
+
+  const currentProgress = dag.progress.find((entry) => entry.planId === planId);
+  if (currentProgress?.status === 'succeeded' || currentProgress?.status === 'running') {
+    throw new Error(`AgentPlan ${planId} is ${currentProgress.status} and cannot be retried`);
+  }
+
+  const retryIds = descendantPlanIds(plans, planId);
+  const results = new Map<string, AgentDagNodeResult>();
+  for (const result of dag.results ?? []) {
+    if (!retryIds.has(result.planId)) results.set(result.planId, result);
+  }
+
+  for (const plan of plans.filter((entry) => retryIds.has(entry.id))) {
+    for (const dep of plan.dependsOn ?? []) {
+      if (retryIds.has(dep)) continue;
+      if (results.get(dep)?.status !== 'succeeded') {
+        throw new Error(`AgentPlan ${plan.id} cannot be retried until dependency ${dep} has succeeded`);
+      }
+    }
+  }
+
+  const retry = {
+    planId,
+    requestedAt: new Date().toISOString(),
+    retryPlanIds: Array.from(retryIds),
+  };
+  const start = Date.now();
+  const runner = options.runner ?? runAgentTask;
+  await startTask({
+    id: parentTask.id,
+    kind: parentTask.kind,
+    personId: parentTask.personId,
+    channelKey: parentTask.channelKey,
+    conversationKey: parentTask.conversationKey,
+    title: parentTask.title,
+    metadata: parentTask.metadata,
+  });
+
+  const pending = new Map(plans.filter((plan) => retryIds.has(plan.id)).map((plan) => [plan.id, plan]));
+  await recordDagProgress(parentTask.id, dag.runId, plans, results, 'running', new Set([planId]), retry);
+
+  try {
+    while (pending.size > 0) {
+      const skipped = Array.from(pending.values()).filter((plan) =>
+        (plan.dependsOn ?? []).some((dep) => {
+          const depResult = results.get(dep);
+          return depResult?.status === 'failed' || depResult?.status === 'skipped';
+        }),
+      );
+
+      for (const plan of skipped) {
+        results.set(plan.id, {
+          planId: plan.id,
+          status: 'skipped',
+          error: 'Skipped because a dependency failed or was skipped',
+          completedAt: new Date().toISOString(),
+          workspace: planWorkspace(dag.runId, plan),
+        });
+        pending.delete(plan.id);
+      }
+      if (skipped.length > 0) {
+        await recordDagProgress(parentTask.id, dag.runId, plans, results, 'running', new Set(), retry);
+      }
+
+      if (pending.size === 0) break;
+
+      const ready = Array.from(pending.values()).filter((plan) =>
+        (plan.dependsOn ?? []).every((dep) => results.get(dep)?.status === 'succeeded'),
+      );
+      if (ready.length === 0) {
+        throw new Error('AgentPlan retry made no progress; dependencies are not satisfiable');
+      }
+
+      await recordDagProgress(parentTask.id, dag.runId, plans, results, 'running', new Set(ready.map((plan) => plan.id)), retry);
+      const retrySuffix = `retry_${Date.now()}`;
+      const settled = await Promise.allSettled(
+        ready.map(async (plan) => {
+          const workspace = planWorkspace(dag.runId, plan);
+          fs.mkdirSync(workspace, { recursive: true });
+          const startedAt = new Date().toISOString();
+          const result = await runner({
+            id: `${dag.runId}_${plan.id}_${retrySuffix}`,
+            role: plan.role,
+            userPrompt: `${plan.prompt}${dependencySummary(results, plan)}`,
+            skills: plan.skills,
+            timeoutMs: plan.timeoutMs,
+            parentTaskId: parentTask.id,
+            workspace,
+          }, plan);
+          return {
+            planId: plan.id,
+            status: result.error ? 'failed' : 'succeeded',
+            result,
+            error: result.error,
+            workspace,
+            startedAt,
+            completedAt: new Date().toISOString(),
+          } satisfies AgentDagNodeResult;
+        }),
+      );
+
+      ready.forEach((plan, index) => {
+        const entry = settled[index];
+        pending.delete(plan.id);
+        if (entry.status === 'fulfilled') {
+          results.set(plan.id, entry.value);
+          return;
+        }
+        results.set(plan.id, {
+          planId: plan.id,
+          status: 'failed',
+          error: entry.reason instanceof Error ? entry.reason.message : String(entry.reason),
+          workspace: planWorkspace(dag.runId, plan),
+          completedAt: new Date().toISOString(),
+        });
+      });
+      await recordDagProgress(parentTask.id, dag.runId, plans, results, 'running', new Set(), retry);
+    }
+
+    const status = runStatusFromResults(plans, results);
+    await recordDagProgress(parentTask.id, dag.runId, plans, results, status, new Set(), retry);
+    await finishTask(parentTask.id, status);
+    const orderedResults = plans
+      .map((plan) => results.get(plan.id))
+      .filter((result): result is AgentDagNodeResult => Boolean(result));
+    return {
+      runId: dag.runId,
+      taskId: parentTask.id,
+      status,
+      progress: progressSnapshot(plans, results),
       results: orderedResults,
       durationMs: Date.now() - start,
     };

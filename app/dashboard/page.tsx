@@ -193,6 +193,7 @@ interface DashboardTask {
 interface DashboardAgentDagPlan {
   id: string;
   role: string;
+  prompt?: string;
   dependsOn?: string[];
   skills?: string[];
   timeoutMs?: number;
@@ -1497,7 +1498,17 @@ function agentDagFromTask(task: DashboardTask): DashboardAgentDag | undefined {
   return isAgentDag(value) ? value : undefined;
 }
 
-function AgentDagMiniGraph({ dag }: { dag: DashboardAgentDag }) {
+function AgentDagMiniGraph({
+  dag,
+  taskId,
+  retryingPlanId,
+  onRetry,
+}: {
+  dag: DashboardAgentDag;
+  taskId: string;
+  retryingPlanId?: string;
+  onRetry: (taskId: string, planId: string) => void;
+}) {
   const progressById = new Map(dag.progress.map((entry) => [entry.planId, entry]));
   const completed = dag.progress.filter((entry) => entry.status === 'succeeded').length;
   const failed = dag.progress.filter((entry) => entry.status === 'failed').length;
@@ -1518,6 +1529,8 @@ function AgentDagMiniGraph({ dag }: { dag: DashboardAgentDag }) {
           const progress = progressById.get(plan.id);
           const st = DAG_STATUS_STYLES[progress?.status ?? 'pending'] ?? DAG_STATUS_STYLES.pending;
           const deps = plan.dependsOn?.length ? plan.dependsOn.join(', ') : 'root';
+          const canRetry = progress?.status === 'failed' || progress?.status === 'skipped';
+          const isRetrying = retryingPlanId === plan.id;
           return (
             <div
               key={plan.id}
@@ -1532,6 +1545,18 @@ function AgentDagMiniGraph({ dag }: { dag: DashboardAgentDag }) {
               <div className="truncate mt-1" style={{ color: 'var(--text-secondary)' }}>{plan.role}</div>
               <div className="truncate font-mono mt-1" style={{ color: 'var(--text-secondary)' }}>deps: {deps}</div>
               {progress?.error ? <div className="truncate mt-1 text-red-600">error: {progress.error}</div> : null}
+              {canRetry ? (
+                <button
+                  type="button"
+                  disabled={isRetrying || dag.status === 'running'}
+                  onClick={() => onRetry(taskId, plan.id)}
+                  className="mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium disabled:opacity-50"
+                  style={{ background: 'var(--accent-warm)', color: 'var(--text-primary)' }}
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                  再実行
+                </button>
+              ) : null}
             </div>
           );
         })}
@@ -1548,12 +1573,15 @@ function TasksPanel({
   filters,
   onFiltersChange,
   onSkillExecutionFiltersChange,
+  onTasksMutate,
 }: {
   data: TasksData | undefined;
   filters: TaskFilters;
   onFiltersChange: (filters: TaskFilters) => void;
   onSkillExecutionFiltersChange: (filters: SkillExecutionFilters) => void;
+  onTasksMutate: () => void;
 }) {
+  const [retrying, setRetrying] = useState<Record<string, string>>({});
   const updateFilter = (key: keyof TaskFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
   };
@@ -1570,6 +1598,28 @@ function TasksPanel({
       from: '',
       to: '',
     });
+  };
+
+  const retryAgentDagPlan = async (taskId: string, planId: string) => {
+    setRetrying((current) => ({ ...current, [taskId]: planId }));
+    try {
+      const res = await dashboardFetch(`/api/dashboard/tasks/${taskId}/agent-dag/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        window.alert(data.error ?? 'Retry failed');
+      }
+      onTasksMutate();
+    } finally {
+      setRetrying((current) => {
+        const next = { ...current };
+        delete next[taskId];
+        return next;
+      });
+    }
   };
 
   return (
@@ -1700,7 +1750,12 @@ function TasksPanel({
                       <td className="px-3 py-2 max-w-[300px]" style={{ color: 'var(--text-secondary)' }}>
                         {task.errorPreview ? <div className="truncate text-red-600">error: {task.errorPreview}</div> : null}
                         {agentDag ? (
-                          <AgentDagMiniGraph dag={agentDag} />
+                          <AgentDagMiniGraph
+                            dag={agentDag}
+                            taskId={task.id}
+                            retryingPlanId={retrying[task.id]}
+                            onRetry={retryAgentDagPlan}
+                          />
                         ) : (
                           <div className="font-mono truncate" title={taskMetadataPreview(task.metadata)}>{taskMetadataPreview(task.metadata)}</div>
                         )}
@@ -2538,6 +2593,7 @@ export default function DashboardPage() {
           filters={taskFilters}
           onFiltersChange={setTaskFilters}
           onSkillExecutionFiltersChange={setSkillExecutionFilters}
+          onTasksMutate={() => void mutateTasks()}
         />
         <TelemetryPanel data={telemetryData} />
         <ViolationsPanel data={violationsData} />

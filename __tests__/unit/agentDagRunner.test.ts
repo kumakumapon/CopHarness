@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runAgentDag } from '../../lib/agents/dagRunner';
+import { retryAgentDagNode, runAgentDag } from '../../lib/agents/dagRunner';
 import type { AgentPlanRunner } from '../../lib/agents/dagRunner';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
 import { _resetTaskLedgerForTests, getTask, listTasks } from '../../lib/tasks/ledger';
@@ -93,6 +93,51 @@ describe('agent DAG runner', () => {
     expect(listTasks(10)[0]).toMatchObject({
       id: result.taskId,
       status: 'failed',
+    });
+  });
+
+  it('retries a failed node and downstream skipped nodes from stored DAG metadata', async () => {
+    const initialRunner: AgentPlanRunner = jest.fn(async (task, plan) => ({
+      taskId: task.id,
+      role: String(plan.role),
+      content: plan.id === 'build' ? '' : `output:${plan.id}`,
+      durationMs: 1,
+      error: plan.id === 'build' ? 'build failed' : undefined,
+    }));
+    const initial = await runAgentDag([
+      { id: 'build', role: 'coder', prompt: 'Build it' },
+      { id: 'test', role: 'reviewer', prompt: 'Test it', dependsOn: ['build'] },
+    ], { runId: 'run_retry', runner: initialRunner });
+    expect(initial.status).toBe('failed');
+
+    const retryCalls: Array<{ id: string; prompt: string }> = [];
+    const retryRunner: AgentPlanRunner = jest.fn(async (task, plan) => {
+      retryCalls.push({ id: plan.id, prompt: task.userPrompt });
+      return {
+        taskId: task.id,
+        role: String(plan.role),
+        content: `retry-output:${plan.id}`,
+        durationMs: 1,
+      };
+    });
+
+    const retried = await retryAgentDagNode(initial.taskId!, 'build', { runner: retryRunner });
+
+    expect(retried.status).toBe('succeeded');
+    expect(retryCalls.map((call) => call.id)).toEqual(['build', 'test']);
+    expect(retryCalls[1].prompt).toContain('Dependency build (succeeded)');
+    expect(retryCalls[1].prompt).toContain('retry-output:build');
+    expect(getTask(initial.taskId!)?.status).toBe('succeeded');
+    expect(getTask(initial.taskId!)?.metadata?.agentDag).toMatchObject({
+      status: 'succeeded',
+      retry: {
+        planId: 'build',
+        retryPlanIds: ['build', 'test'],
+      },
+      progress: [
+        expect.objectContaining({ planId: 'build', status: 'succeeded' }),
+        expect.objectContaining({ planId: 'test', status: 'succeeded' }),
+      ],
     });
   });
 
