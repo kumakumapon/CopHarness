@@ -15,6 +15,8 @@
 
 import type { LLMAdapter, LLMMessage, LLMRequest, LLMResponse } from '../adapter';
 import { compactMessages, needsCompaction, writeProgressArtifact } from './compactor';
+import { getSkillExecutionContext } from '../skills/executionContext';
+import { updateTaskMetadata } from '../tasks/ledger';
 
 export interface RalphLoopOptions {
   /**
@@ -26,6 +28,11 @@ export interface RalphLoopOptions {
   writeArtifact?: boolean;
   /** Maximum compaction rounds before giving up. Defaults to 2. */
   maxCompactionRounds?: number;
+  /**
+   * Task ID for ledger integration. Resolution order:
+   * explicit option → getSkillExecutionContext()?.taskId → undefined.
+   */
+  taskId?: string;
 }
 
 /**
@@ -49,8 +56,43 @@ export async function runWithRalphLoop(
     maxCompactionRounds = 2,
   } = options;
 
+  // Resolve taskId: explicit option → execution context → undefined
+  const resolvedTaskId: string | undefined =
+    options.taskId ?? getSkillExecutionContext()?.taskId;
+
   let messages = [...request.messages];
   let compactionRounds = 0;
+
+  /**
+   * Helper: after a compaction has produced a new message list, update
+   * the ledger and (optionally) write the progress artifact.
+   * All errors are swallowed so they never affect the main call flow.
+   */
+  async function afterCompaction(compacted: LLMMessage[]): Promise<void> {
+    const summaryMsg = compacted.find((m) => m.content.startsWith('[CONTEXT SUMMARY'));
+    const summaryContent = summaryMsg?.content ?? '';
+
+    if (resolvedTaskId) {
+      try {
+        await updateTaskMetadata(resolvedTaskId, {
+          ralphLoop: {
+            compactionRounds,
+            lastCompactedAt: new Date().toISOString(),
+            ...(originalGoal !== undefined
+              ? { goalPreview: originalGoal.slice(0, 200) }
+              : {}),
+            lastSummaryPreview: summaryContent.slice(0, 300),
+          },
+        });
+      } catch (err) {
+        console.warn('[ralphLoop] updateTaskMetadata failed:', err);
+      }
+    }
+
+    if (writeArtifact && originalGoal) {
+      await writeProgressArtifact(originalGoal, summaryContent, resolvedTaskId);
+    }
+  }
 
   while (compactionRounds <= maxCompactionRounds) {
     if (needsCompaction(messages) && compactionRounds < maxCompactionRounds) {
@@ -67,10 +109,7 @@ export async function runWithRalphLoop(
         });
       }
 
-      if (writeArtifact && originalGoal) {
-        const summary = compacted.find((m) => m.content.startsWith('[CONTEXT SUMMARY'))?.content ?? '';
-        await writeProgressArtifact(originalGoal, summary);
-      }
+      await afterCompaction(compacted);
 
       messages = compacted;
     }
@@ -97,6 +136,7 @@ export async function runWithRalphLoop(
             content: `[GOAL REMINDER — context was compacted due to length error]\n${originalGoal}`,
           });
         }
+        await afterCompaction(messages);
         continue;
       }
 
