@@ -82,3 +82,28 @@ export interface AgentDagRunResult {
   results: AgentDagNodeResult[];
   durationMs: number;
 }
+
+export interface AgentDagStoredPlan {
+  id: string;
+  role: string;
+  prompt?: string;
+  dependsOn: string[];
+  skills: string[];
+  timeoutMs?: number;
+  budget?: AgentPlan['budget'];
+  workspace?: string;
+}
+
+export interface AgentDagMetadata {
+  runId: string;
+  status: 'running' | 'succeeded' | 'failed';
+  plans: AgentDagStoredPlan[];
+  progress: AgentPlanProgress[];
+  results: AgentDagNodeResult[];
+  updatedAt: string;
+  retry?: {
+    planId: string;
+    requestedAt: string;
+    retryPlanIds: string[];
+  };
+}

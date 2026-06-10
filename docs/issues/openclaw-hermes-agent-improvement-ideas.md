@@ -131,11 +131,32 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 - [x] event trigger / watcher（初期実装完了。WatcherStore / WatcherEngine / dashboard API / dashboard UI / 外部イベント dispatch API を追加し、manual / webhook / github / rss などのイベントを TaskLedger 経由で実行可能にした）
 - [ ] Docker / SSH backend
-- [x] 並列 Agent DAG runner（初期実装完了。`runAgentDag` で依存解決、ready ノードの並列実行、失敗依存の skip、TaskLedger 親タスク、ノード別 workspace を追加。TaskLedger metadata への DAG 進捗永続化と Dashboard の DAG 表示を追加。retry は継続）
+- [x] 並列 Agent DAG runner（初期実装完了。`runAgentDag` で依存解決、ready ノードの並列実行、失敗依存の skip、TaskLedger 親タスク、ノード別 workspace を追加。TaskLedger metadata への DAG 進捗永続化、Dashboard の DAG 表示、失敗ノード retry を追加）
 - [ ] toolset / MCP hub
 - [ ] モバイルチャットからの進捗確認・停止・承認
 
 ## 実装進捗
+
+### 2026-06-10: Phase 3 継続（DAG retry）
+
+#### 完了
+
+- DAG metadata の plan に `prompt` を保存し、Dashboard/API から失敗ノードを再実行できる土台を追加した。
+- `retryAgentDagNode` を追加し、TaskLedger 上の既存 DAG 実行から対象ノードと downstream ノードを再実行できるようにした。
+- retry 時は既に成功済みの依存結果を再利用し、対象ノードが成功した場合は依存して `skipped` になっていた後続ノードも再評価するようにした。
+- `/api/dashboard/tasks/:id/agent-dag/retry` を追加し、Dashboard から `taskId` と `planId` で retry を実行できるようにした。
+- Dashboard の DAG ミニビューに failed / skipped ノードの Retry ボタンを追加した。
+
+#### 未完了 / Phase 3 で継続
+
+- retry は prompt が保存される今後の DAG 実行が対象。既存の古い DAG metadata には prompt がないため retry できない。
+- retry の対象選択はノード単位。任意の partial DAG 再実行、retry 履歴の詳細表示、差分比較は未実装。
+- 実行中 DAG の cancellation / concurrent retry 制御は最低限の UI disable のみ。プロセス間ロックは未実装。
+
+#### テスト / 検証
+
+- `agentDagRunner` の単体テストに、失敗ノード retry と downstream skipped ノード再実行の検証を追加した。
+- Dashboard retry API のテストを追加し、成功、入力検証、競合エラー、API key 必須設定を検証する。
 
 ### 2026-06-10: Phase 3 継続（DAG Dashboard 表示）
 
@@ -147,7 +168,6 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 #### 未完了 / Phase 3 で継続
 
-- 失敗ノードの retry 操作は未実装。retry するには元の plan prompt / runner 入力を保存し、依存済み結果を再利用する API が必要。
 - Dashboard 表示は TaskLedger の最新 50 件に乗る簡易ビュー。専用の DAG 詳細ページ、グラフレイアウト、リアルタイム SSE は未実装。
 
 #### テスト / 検証
