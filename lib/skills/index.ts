@@ -70,8 +70,14 @@ import { listPromptTemplates, buildPromptFromTemplate } from './promptWizard';
 // Multi-agent
 import { spawnAgent } from './spawnAgent';
 
+// Phase 2: Skill proposal
+import { proposeSkill } from './proposeSkill';
+
 // Human-in-the-loop gate
 import { applyGatesToRegistry } from '../humanInLoop/gate';
+
+// Generated skills loader
+import { registerGeneratedSkills } from './generated';
 
 const allSkills = [
   currentDateTime,
@@ -128,11 +134,19 @@ const allSkills = [
   listPromptTemplates,
   buildPromptFromTemplate,
   spawnAgent,
+  proposeSkill,
 ];
 
 const gatedSkills = applyGatesToRegistry(allSkills);
 for (const skill of gatedSkills) {
   registerSkill(skill);
+}
+
+// Register approved generated skills after built-ins so collision check sees them
+try {
+  registerGeneratedSkills();
+} catch {
+  // A corrupt proposal store must never break startup
 }
 
 export {
@@ -190,4 +204,5 @@ export {
   listPromptTemplates,
   buildPromptFromTemplate,
   spawnAgent,
+  proposeSkill,
 };
