@@ -11,6 +11,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
+import { indexTaskRecord } from '../search/index';
 
 export type TaskKind = 'conversation' | 'api' | 'wizard' | 'schedule' | 'agent' | string;
 export type TaskStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
@@ -127,7 +128,10 @@ export async function startTask(input: {
   if (!ledger.order.includes(id)) ledger.order.push(id);
   trimLedger(ledger);
   await scheduleWrite();
-  return { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  const result = { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  // Index failure must never affect startTask behaviour
+  indexTaskRecord(result);
+  return result;
 }
 
 export async function finishTask(
@@ -144,12 +148,32 @@ export async function finishTask(
   task.finishedAt = now;
   task.errorPreview = previewError(error);
   await scheduleWrite();
-  return { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  const finished = { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  // Index failure must never affect finishTask behaviour
+  indexTaskRecord(finished);
+  return finished;
 }
 
 export function getTask(id: string): TaskRecord | undefined {
   const task = getLedger().tasks[id];
   return task ? { ...task, metadata: task.metadata ? { ...task.metadata } : undefined } : undefined;
+}
+
+export async function updateTaskMetadata(
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<TaskRecord | undefined> {
+  const ledger = getLedger();
+  const task = ledger.tasks[id];
+  if (!task) return undefined;
+  const now = new Date().toISOString();
+  task.metadata = { ...(task.metadata ?? {}), ...patch };
+  task.updatedAt = now;
+  await scheduleWrite();
+  const result = { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  // Index failure must never affect updateTaskMetadata behaviour
+  indexTaskRecord(result);
+  return result;
 }
 
 

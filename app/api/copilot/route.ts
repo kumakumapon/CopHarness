@@ -6,6 +6,7 @@ import { requireApiKey } from '../../../lib/apiAuth';
 import { resolveConversationKey } from '../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
 import { finishTask, startTask } from '../../../lib/tasks/ledger';
+import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
 import '../../../lib/skills/index';
 
 
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
           channelKey: identity.channelKey,
           taskId: task.id,
         },
-        () => adapter.complete({ messages, attachments, timeoutMs, abortSignal: req.signal, skills }),
+        () => runWithRalphLoop({ messages, attachments, timeoutMs, abortSignal: req.signal, skills }, adapter, { taskId: task.id }),
       );
       await finishTask(task.id, 'succeeded');
       return NextResponse.json({ reply: resp.content, taskId: task.id });
