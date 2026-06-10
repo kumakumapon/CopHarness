@@ -1,5 +1,6 @@
 import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
 import { resolveSkills } from '../skill';
+import { resolveToolsetSkillNames } from '../skills/toolsets';
 import { getSkillExecutionContext, withSkillExecutionContext } from '../skills/executionContext';
 import { finishTask, startTask } from '../tasks/ledger';
 import type { LLMAdapter } from '../adapter';
@@ -70,7 +71,15 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
   const start = Date.now();
   try {
     adapter = createAdapter({ provider, model, apiKey, timeoutMs });
-    const skills = task.skills ? resolveSkills(task.skills) : undefined;
+    const toolsetSkillNames = task.toolsets && task.toolsets.length > 0
+      ? resolveToolsetSkillNames(task.toolsets)
+      : [];
+    const allSkillNames = [
+      ...(task.skills ?? []),
+      ...toolsetSkillNames,
+    ];
+    const dedupedSkillNames = Array.from(new Set(allSkillNames));
+    const skills = dedupedSkillNames.length > 0 ? resolveSkills(dedupedSkillNames) : undefined;
     const resp = await withSkillExecutionContext(
       {
         ...inheritedContext,
