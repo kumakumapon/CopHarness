@@ -10,6 +10,8 @@ export interface AgentTask {
   role: AgentRole | string;
   userPrompt: string;
   skills?: string[];
+  /** Named toolsets whose resolved skills are merged with `skills`. */
+  toolsets?: string[];
   timeoutMs?: number;
   model?: string;
   /** Optional caller identity context for TaskLedger and nested skill logs. */
@@ -35,6 +37,8 @@ export interface AgentPlan {
   prompt: string;
   dependsOn?: string[];
   skills?: string[];
+  /** Named toolsets whose resolved skills are merged with `skills`. */
+  toolsets?: string[];
   timeoutMs?: number;
   budget?: {
     maxTokens?: number;

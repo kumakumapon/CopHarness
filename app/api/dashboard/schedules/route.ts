@@ -20,13 +20,13 @@ export async function POST(req: NextRequest) {
   const unauthorized = requireApiKey(req);
   if (unauthorized) return unauthorized;
 
-  let body: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string };
+  let body: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string; toolsets?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { name, cron, prompt, discordChannelId, lineUserId } = body;
+  const { name, cron, prompt, discordChannelId, lineUserId, toolsets } = body;
   if (typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'name (string) is required' }, { status: 400 });
   }
@@ -36,12 +36,16 @@ export async function POST(req: NextRequest) {
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return NextResponse.json({ error: 'prompt (string) is required' }, { status: 400 });
   }
+  if (toolsets !== undefined && (!Array.isArray(toolsets) || !toolsets.every((t) => typeof t === 'string'))) {
+    return NextResponse.json({ error: 'toolsets must be an array of strings' }, { status: 400 });
+  }
   const entry = addSchedule({
     name: name.trim(),
     cron: normalizeCron(cron.trim()),
     prompt: prompt.trim(),
     discordChannelId: typeof discordChannelId === 'string' ? discordChannelId.trim() || undefined : undefined,
     lineUserId: typeof lineUserId === 'string' ? lineUserId.trim() || undefined : undefined,
+    toolsets: Array.isArray(toolsets) ? (toolsets as string[]) : undefined,
   });
   const nextRun = nextRunDate(normalizeCron(entry.cron), new Date())?.toISOString() ?? null;
   return NextResponse.json({ schedule: { ...entry, nextRun } }, { status: 201 });
