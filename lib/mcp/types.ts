@@ -36,4 +36,8 @@ export interface McpServerConfig {
   url: string;
   name?: string;
   headers?: Record<string, string>;
+  /** If set, only MCP tools whose raw name matches at least one of these glob patterns are included. */
+  includeTools?: string[];
+  /** If set, MCP tools whose raw name matches any of these glob patterns are excluded. */
+  excludeTools?: string[];
 }

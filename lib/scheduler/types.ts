@@ -15,6 +15,8 @@ export interface ScheduledPrompt {
   discordChannelId?: string;
   /** LINE user ID to push the result to after execution. */
   lineUserId?: string;
+  /** Named toolsets to restrict available skills during execution. */
+  toolsets?: string[];
 }
 
 export interface ScheduleStore {

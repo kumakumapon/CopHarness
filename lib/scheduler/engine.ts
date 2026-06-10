@@ -8,7 +8,8 @@ import { withSkillExecutionContext } from '../skills/executionContext';
 import { finishTask, startTask } from '../tasks/ledger';
 import type { ScheduledPrompt } from './types';
 import '../skills/index';
-import { listActiveSkills } from '../skill';
+import { listActiveSkills, resolveSkills } from '../skill';
+import { resolveToolsetSkillNames } from '../skills/toolsets';
 
 /**
  * Optional callback invoked after a schedule successfully completes.
@@ -47,6 +48,8 @@ export interface ScheduledPromptRunContext {
   };
   reason: 'manual fire' | 'cron' | string;
   event?: unknown;
+  /** Named toolsets restricting which skills are available for this run. */
+  toolsets?: string[];
 }
 
 function automationChannelKey(target: Pick<ScheduledPrompt, 'discordChannelId' | 'lineUserId'>): string | undefined {
@@ -119,9 +122,15 @@ export async function runPrompt(
   if (sys) messages.push({ role: 'system', content: sys });
   messages.push({ role: 'user', content: prompt });
 
+  const toolsetNames = scheduledContext?.toolsets;
+  const skills =
+    toolsetNames && toolsetNames.length > 0
+      ? resolveSkills(resolveToolsetSkillNames(toolsetNames))
+      : listActiveSkills();
+
   const execute = async () => {
     const resp = await runWithRalphLoop(
-      { messages, timeoutMs, abortSignal, skills: listActiveSkills() },
+      { messages, timeoutMs, abortSignal, skills },
       adapter,
       { originalGoal: prompt },
     );
@@ -281,7 +290,7 @@ async function tick(): Promise<void> {
     });
 
     // Launch async without awaiting — daemon stays unblocked
-    runPrompt(schedule.prompt, controller.signal, { schedule, reason })
+    runPrompt(schedule.prompt, controller.signal, { schedule, reason, toolsets: schedule.toolsets })
       .then(async (result) => {
         finishLog(await logId, 'success', result);
         console.log(`[${ts}] Response from "${schedule.name}":\n${result}\n`);

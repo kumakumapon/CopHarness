@@ -39,6 +39,7 @@ import {
 } from '../../../lib/promptWizardSession';
 import { consumePendingNudge, maybeCreateNudge } from '../../../lib/memory/nudge';
 import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
+import { parseAgentCommand, executeAgentCommand } from '../../../lib/channels/agentCommands';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.LINE_MAX_HISTORY) || 20);
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
@@ -309,6 +310,43 @@ export async function POST(req: NextRequest) {
     const wizSess = getWizardSession(sessionKey);
     const lowerText = userText.toLowerCase();
 
+    // ── Memory nudge: consume pending nudge if user replied はい/いいえ ──
+    // (moved before agent commands per spec ordering: nudge > commands > wizard > chat)
+    try {
+      const nudgeResult = await consumePendingNudge(conversationKey, userText);
+      if (nudgeResult.consumed) {
+        const nudgeReply = nudgeResult.reply ?? '';
+        const history = getHistory(conversationKey);
+        history.push({ role: 'user', content: userText });
+        history.push({ role: 'assistant', content: nudgeReply });
+        trimHistory(history);
+        await persistHistory(conversationKey, history);
+        await scheduleReply(client, {
+          replyToken,
+          messages: [{ type: 'text', text: truncateMessage(nudgeReply) }],
+        });
+        continue;
+      }
+    } catch (nudgeErr) {
+      console.warn('[LINE Bot] Memory nudge error:', nudgeErr);
+    }
+
+    // ── Agent commands (tasks / approvals / stop / etc.) ──
+    {
+      const agentCmd = parseAgentCommand(userText);
+      if (agentCmd) {
+        const reply = await executeAgentCommand(agentCmd, {
+          personId: identity.personId,
+          channelKey: identity.channelKey,
+        });
+        await scheduleReply(client, {
+          replyToken,
+          messages: [{ type: 'text', text: truncateMessage(reply) }],
+        });
+        continue;
+      }
+    }
+
     // ── Wizard: cancel ──
     if (wizSess && (lowerText === 'キャンセル' || lowerText === 'cancel')) {
       clearWizardSession(sessionKey);
@@ -428,26 +466,6 @@ export async function POST(req: NextRequest) {
         });
       }
       continue;
-    }
-
-    // ── Memory nudge: consume pending nudge if user replied はい/いいえ ──
-    try {
-      const nudgeResult = await consumePendingNudge(conversationKey, userText);
-      if (nudgeResult.consumed) {
-        const nudgeReply = nudgeResult.reply ?? '';
-        const history = getHistory(conversationKey);
-        history.push({ role: 'user', content: userText });
-        history.push({ role: 'assistant', content: nudgeReply });
-        trimHistory(history);
-        await persistHistory(conversationKey, history);
-        await scheduleReply(client, {
-          replyToken,
-          messages: [{ type: 'text', text: truncateMessage(nudgeReply) }],
-        });
-        continue;
-      }
-    } catch (nudgeErr) {
-      console.warn('[LINE Bot] Memory nudge error:', nudgeErr);
     }
 
     // ── Normal LLM chat (existing) ──
