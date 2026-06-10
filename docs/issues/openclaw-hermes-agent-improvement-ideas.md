@@ -129,13 +129,75 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 ### Phase 3: 常駐・自律実行
 
-- [ ] event trigger / watcher
+- [x] event trigger / watcher（初期実装完了。WatcherStore / WatcherEngine / dashboard API / dashboard UI / 外部イベント dispatch API を追加し、manual / webhook / github / rss などのイベントを TaskLedger 経由で実行可能にした）
 - [ ] Docker / SSH backend
-- [ ] 並列 Agent DAG runner
+- [x] 並列 Agent DAG runner（初期実装完了。`runAgentDag` で依存解決、ready ノードの並列実行、失敗依存の skip、TaskLedger 親タスク、ノード別 workspace を追加。TaskLedger metadata への DAG 進捗永続化と Dashboard の DAG 表示を追加。retry は継続）
 - [ ] toolset / MCP hub
 - [ ] モバイルチャットからの進捗確認・停止・承認
 
 ## 実装進捗
+
+### 2026-06-10: Phase 3 継続（DAG Dashboard 表示）
+
+#### 完了
+
+- `runAgentDag` が TaskLedger metadata の `agentDag` に plan、dependency、workspace、進捗、結果を保存するようにした。
+- DAG 実行中は ready ノードを `running`、未実行ノードを `pending`、依存失敗ノードを `skipped` として逐次 metadata に反映するようにした。
+- Dashboard の TaskLedger 表で `agentDag` metadata を検出し、runId、完了数、失敗数、skip 数、ノードごとの role / dependency / status / error を表示するミニ DAG ビューを追加した。
+
+#### 未完了 / Phase 3 で継続
+
+- 失敗ノードの retry 操作は未実装。retry するには元の plan prompt / runner 入力を保存し、依存済み結果を再利用する API が必要。
+- Dashboard 表示は TaskLedger の最新 50 件に乗る簡易ビュー。専用の DAG 詳細ページ、グラフレイアウト、リアルタイム SSE は未実装。
+
+#### テスト / 検証
+
+- `agentDagRunner` の単体テストに、TaskLedger metadata の `agentDag` 永続化検証を追加した。
+
+### 2026-06-10: Phase 3 継続（並列 Agent DAG runner）
+
+#### 完了
+
+- `runAgentDag` を追加し、`AgentPlan[]` を依存関係付き DAG として実行できるようにした。
+- DAG 定義の事前検証として、空 ID、重複 ID、不明 dependency、自己依存、循環依存を検出するようにした。
+- 依存関係が満たされた ready ノードを wave ごとに `Promise.allSettled` で並列実行するようにした。
+- 依存ノードが `failed` / `skipped` になった後続ノードは実行せず `skipped` として記録するようにした。
+- 後続ノードの prompt に dependency results を付与し、planner / reviewer / summarizer のような統合ステップが前段成果を参照できるようにした。
+- DAG 実行全体を TaskLedger の親 `agent` task として記録し、各ノード実行には `parentTaskId` とノード別 workspace（`agent_workspaces/<runId>/<planId>/`）を割り当てるようにした。
+- `AgentDagRunResult` / `AgentDagNodeResult` を追加し、ノードごとの status、result、error、workspace、開始 / 完了時刻を返せるようにした。
+
+#### 未完了 / Phase 3 で継続
+
+- Dashboard での DAG グラフ、進捗、失敗ノード、retry 操作は未実装。
+- budget（maxTokens / maxCostUsd）は型定義のみで、実行時 gate には未接続。
+- workspace は割り当てと metadata 記録までで、ファイル系スキルの sandbox root としての強制は Remote Runtime / Isolated Workspace 側で継続する。
+
+#### テスト / 検証
+
+- `agentDagRunner` の単体テストを追加し、並列 wave、dependency output の伝搬、失敗依存の skip、不正 DAG 検出を検証する。
+- この環境では `npm test` と `npx tsc --noEmit` が `WSL 1 is not supported. Please upgrade to WSL 2 or above. Could not determine Node.js install directory` で起動できなかったため、実行確認は Node が動く環境で継続する。
+
+### 2026-06-10: Phase 3 着手（event trigger / watcher）
+
+#### 完了
+
+- `WatcherStore` を追加し、watcher の `name`、`type`、`prompt`、`enabled`、`eventPattern`、通知先、発火回数、最終発火時刻を `watchers.json` に永続化した。
+- `WatcherEngine` を追加し、イベント本文を watcher prompt に付与して `runPrompt` 経由で実行するようにした。実行は `TaskLedger` の kind `watcher` に記録され、スキル実行ログと紐付く。
+- `dispatchWatcherEvent` を追加し、`source` と `eventPattern` に一致する有効 watcher を `Promise.allSettled` で並列発火できるようにした。個別の手動発火は条件フィルタをバイパスして明示実行として扱う。
+- `/api/dashboard/watchers`、`/api/dashboard/watchers/:id`、`/api/dashboard/watchers/:id/trigger` を追加し、watcher の作成、一覧、更新、削除、手動発火を dashboard API から操作できるようにした。
+- `/api/watchers/events` を追加し、外部 webhook / GitHub / RSS などから共通 `WatcherEvent` を POST して該当 watcher を dispatch できる入口を用意した。
+- ダッシュボードに Watchers パネルを追加し、有効数、条件、最終発火、発火回数、ON/OFF、手動発火を確認・操作できるようにした。
+
+#### 未完了 / Phase 3 で継続
+
+- file changed / RSS polling / GitHub webhook signature verification など、イベント source ごとの具体的な adapter は未実装。現状は共通イベント API に POST する入口まで。
+- watcher の停止 / 再開は TaskLedger と実行状態の表示までで、実行中 watcher の cancellation API は未接続。
+- Discord / LINE への watcher 実行結果通知は scheduler の `runPrompt` / TaskLedger 統合の土台まで。チャネル別の完了通知 UX は追加実装が必要。
+
+#### テスト / 検証
+
+- `watcherStore` / `watcherEngine` / `dashboardWatchers` のテストを追加した。
+- この環境では `npm test` と `npx tsc --noEmit` が `WSL 1 is not supported. Please upgrade to WSL 2 or above. Could not determine Node.js install directory` で起動できなかったため、実行確認は Node が動く環境で継続する。
 
 ### 2026-06-10: Phase 2 完了（学習・改善ループ）
 
@@ -342,7 +404,7 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - API チャネル統合: HTTP / SSE API から `api:<subject>` を解決し、同じ `personId` / TaskLedger / memory に接続する。
 - Dashboard 表示: 人物、紐付いたチャネル、進行中タスク、最近の記憶を表示する。
 - 既存履歴移行: 旧 `line:<userId>` / `discord:<channelId>` 履歴を `person:<personId>` に移行または参照する互換レイヤーを検討する。
-- Agent DAG runner: 今回は型定義のみ。依存解決、`Promise.allSettled` 並列実行、workspace 割り当て、失敗ノードのリトライは未実装。
+- Agent DAG runner: 2026-06-10 の Phase 3 継続でコア runner は初期実装済み。Dashboard 表示、retry、budget gate は継続課題。
 
 #### テスト / 検証
 
