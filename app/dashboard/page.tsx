@@ -1857,11 +1857,22 @@ function SkillProposalsPanel({
   data,
   statusFilter,
   onStatusFilterChange,
+  onMutate,
 }: {
   data: SkillProposalsData | undefined;
   statusFilter: SkillProposalStatusFilter;
   onStatusFilterChange: (s: SkillProposalStatusFilter) => void;
+  onMutate: () => void;
 }) {
+  const [loading, setLoading] = useState<Record<string, string>>({});
+
+  async function proposalAction(id: string, action: 'test' | 'approve' | 'reject') {
+    setLoading((l) => ({ ...l, [id]: action }));
+    await dashboardFetch(`/api/dashboard/skill-proposals/${id}/${action}`, { method: 'POST' });
+    onMutate();
+    setLoading((l) => { const n = { ...l }; delete n[id]; return n; });
+  }
+
   return (
     <section className="mb-6">
       <h2
@@ -1909,7 +1920,7 @@ function SkillProposalsPanel({
             <table className="w-full text-xs">
               <thead style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)' }}>
                 <tr>
-                  {['名前', 'ステータス', 'リスク', '課題 (抜粋)', 'テスト結果', '作成日時', '更新日時'].map((h) => (
+                  {['名前', 'ステータス', 'リスク', '課題 (抜粋)', 'テスト結果', '作成日時', '更新日時', '操作'].map((h) => (
                     <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1924,6 +1935,7 @@ function SkillProposalsPanel({
                     p.problem.length > MAX_PROBLEM_LENGTH
                       ? `${p.problem.slice(0, MAX_PROBLEM_LENGTH)}…`
                       : p.problem;
+                  const isLoading = !!loading[p.id];
                   return (
                     <tr key={p.id} style={{ borderTop: '1px solid var(--border-color)' }}>
                       <td className="px-3 py-2 font-mono font-semibold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
@@ -1956,6 +1968,40 @@ function SkillProposalsPanel({
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
                         {fmtDate(p.updatedAt)}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          {(p.status === 'draft' || p.status === 'tests_failed') && (
+                            <button
+                              disabled={isLoading}
+                              onClick={() => void proposalAction(p.id, 'test')}
+                              className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-40 transition-colors"
+                            >
+                              {loading[p.id] === 'test' ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                              Test
+                            </button>
+                          )}
+                          {p.status === 'awaiting_approval' && (
+                            <>
+                              <button
+                                disabled={isLoading}
+                                onClick={() => void proposalAction(p.id, 'approve')}
+                                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-40 transition-colors"
+                              >
+                                {loading[p.id] === 'approve' ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                                Approve
+                              </button>
+                              <button
+                                disabled={isLoading}
+                                onClick={() => void proposalAction(p.id, 'reject')}
+                                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-40 transition-colors"
+                              >
+                                {loading[p.id] === 'reject' ? <RefreshCw className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2037,7 +2083,7 @@ export default function DashboardPage() {
     useSWR<TelemetryData>('/api/dashboard/telemetry?limit=50', fetcher, { refreshInterval });
   const { data: violationsData } =
     useSWR<ViolationsData>('/api/dashboard/violations?limit=50', fetcher, { refreshInterval });
-  const { data: skillProposalsData } =
+  const { data: skillProposalsData, mutate: mutateSkillProposals } =
     useSWR<SkillProposalsData>(skillProposalsUrl, fetcher, { refreshInterval });
 
   function refreshAll() {
@@ -2067,6 +2113,7 @@ export default function DashboardPage() {
           data={skillProposalsData}
           statusFilter={skillProposalStatusFilter}
           onStatusFilterChange={setSkillProposalStatusFilter}
+          onMutate={() => void mutateSkillProposals()}
         />
         <IdentitiesPanel data={identitiesData} />
         <TasksPanel
