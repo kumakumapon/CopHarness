@@ -104,6 +104,8 @@ import {
   continueWizard as wizContinue,
   promptTemplates,
 } from '../lib/promptWizardSession';
+import { consumePendingNudge, maybeCreateNudge } from '../lib/memory/nudge';
+import { runWithRalphLoop } from '../lib/context/ralphLoop';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';
@@ -632,6 +634,23 @@ async function handleMessage(
     }
   }
 
+  // ── Memory nudge: consume pending nudge if user replied はい/いいえ ──
+  try {
+    const nudgeResult = await consumePendingNudge(identity.conversationKey, userText);
+    if (nudgeResult.consumed) {
+      const nudgeReply = nudgeResult.reply ?? '';
+      const history = getHistory(identity.conversationKey);
+      history.push({ role: 'user', content: userText });
+      history.push({ role: 'assistant', content: nudgeReply });
+      trimHistory(history);
+      await persistChannelHistory(identity.conversationKey, history);
+      await sendInChunks(message, nudgeReply);
+      return;
+    }
+  } catch (nudgeErr) {
+    console.warn('[Discord Bot] Memory nudge error:', nudgeErr);
+  }
+
   // ── Normal LLM chat (existing) ──
   const history = getHistory(identity.conversationKey);
   history.push({ role: 'user', content: userText });
@@ -650,9 +669,15 @@ async function handleMessage(
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     const resp = await withSkillExecutionContext(
       { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
-      () => adapter.complete({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() }),
+      () => runWithRalphLoop({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() }, adapter, { taskId: task.id }),
     );
-    const replyText = resp.content || '（応答がありませんでした）';
+    let replyText = resp.content || '（応答がありませんでした）';
+    try {
+      const nudgeSuffix = maybeCreateNudge(identity.conversationKey, userText);
+      if (nudgeSuffix) replyText += nudgeSuffix;
+    } catch (nudgeErr) {
+      console.warn('[Discord Bot] Memory nudge suffix error:', nudgeErr);
+    }
 
     history.push({ role: 'assistant', content: replyText });
     trimHistory(history);

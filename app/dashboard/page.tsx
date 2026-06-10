@@ -254,6 +254,46 @@ interface ViolationsData {
   total: number;
 }
 
+interface SkillProposalTestResult {
+  index: number;
+  passed: boolean;
+  detail?: string;
+}
+
+interface DashboardSkillProposal {
+  id: string;
+  name: string;
+  description: string;
+  problem: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  status:
+    | 'draft'
+    | 'testing'
+    | 'tests_failed'
+    | 'awaiting_approval'
+    | 'approved'
+    | 'rejected'
+    | 'registered';
+  testResults?: SkillProposalTestResult[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SkillProposalsData {
+  proposals: DashboardSkillProposal[];
+  total: number;
+}
+
+type SkillProposalStatusFilter =
+  | ''
+  | 'draft'
+  | 'testing'
+  | 'tests_failed'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'rejected'
+  | 'registered';
+
 // ---------------------------------------------------------------------------
 // Fetcher
 // ---------------------------------------------------------------------------
@@ -1798,6 +1838,355 @@ function ViolationsPanel({ data }: { data: ViolationsData | undefined }) {
 }
 
 // ---------------------------------------------------------------------------
+// Section: Skill Proposals Panel
+// ---------------------------------------------------------------------------
+
+const PROPOSAL_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  draft:              { bg: 'bg-gray-100',   text: 'text-gray-600',   label: 'Draft' },
+  testing:            { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Testing' },
+  tests_failed:       { bg: 'bg-red-100',    text: 'text-red-700',    label: 'Tests Failed' },
+  awaiting_approval:  { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Awaiting Approval' },
+  approved:           { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Approved' },
+  rejected:           { bg: 'bg-red-100',    text: 'text-red-600',    label: 'Rejected' },
+  registered:         { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Registered' },
+};
+
+const MAX_PROBLEM_LENGTH = 120;
+
+function SkillProposalsPanel({
+  data,
+  statusFilter,
+  onStatusFilterChange,
+  onMutate,
+}: {
+  data: SkillProposalsData | undefined;
+  statusFilter: SkillProposalStatusFilter;
+  onStatusFilterChange: (s: SkillProposalStatusFilter) => void;
+  onMutate: () => void;
+}) {
+  const [loading, setLoading] = useState<Record<string, string>>({});
+
+  async function proposalAction(id: string, action: 'test' | 'approve' | 'reject') {
+    setLoading((l) => ({ ...l, [id]: action }));
+    await dashboardFetch(`/api/dashboard/skill-proposals/${id}/${action}`, { method: 'POST' });
+    onMutate();
+    setLoading((l) => { const n = { ...l }; delete n[id]; return n; });
+  }
+
+  return (
+    <section className="mb-6">
+      <h2
+        className="text-sm font-semibold uppercase tracking-widest mb-3 flex items-center gap-2"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        <Zap className="w-4 h-4" /> Skill Proposals
+        {data && (
+          <span className="ml-auto text-xs font-normal normal-case" style={{ color: 'var(--text-secondary)' }}>
+            {data.total} 件
+          </span>
+        )}
+      </h2>
+
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
+        <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <label className="flex flex-col gap-1 text-xs w-48" style={{ color: 'var(--text-secondary)' }}>
+            ステータスで絞り込み
+            <select
+              className="rounded px-2 py-1"
+              style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              value={statusFilter}
+              onChange={(e) => onStatusFilterChange(e.target.value as SkillProposalStatusFilter)}
+            >
+              <option value="">すべて</option>
+              <option value="draft">Draft</option>
+              <option value="testing">Testing</option>
+              <option value="tests_failed">Tests Failed</option>
+              <option value="awaiting_approval">Awaiting Approval</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="registered">Registered</option>
+            </select>
+          </label>
+        </div>
+
+        {!data ? (
+          <div className="h-24 animate-pulse" style={{ background: 'var(--secondary-bg)' }} />
+        ) : data.proposals.length === 0 ? (
+          <div className="p-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+            スキルプロポーザルはありません。
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)' }}>
+                <tr>
+                  {['名前', 'ステータス', 'リスク', '課題 (抜粋)', 'テスト結果', '作成日時', '更新日時', '操作'].map((h) => (
+                    <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.proposals.map((p) => {
+                  const st = PROPOSAL_STATUS_STYLES[p.status] ?? PROPOSAL_STATUS_STYLES.draft;
+                  const risk = RISK_STYLES[p.riskLevel] ?? RISK_STYLES.low;
+                  const passCount = p.testResults?.filter((r) => r.passed).length ?? 0;
+                  const totalTests = p.testResults?.length ?? 0;
+                  const problemText =
+                    p.problem.length > MAX_PROBLEM_LENGTH
+                      ? `${p.problem.slice(0, MAX_PROBLEM_LENGTH)}…`
+                      : p.problem;
+                  const isLoading = !!loading[p.id];
+                  return (
+                    <tr key={p.id} style={{ borderTop: '1px solid var(--border-color)' }}>
+                      <td className="px-3 py-2 font-mono font-semibold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+                        {p.name}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className={`inline-block px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>
+                          {st.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className={`inline-block px-1.5 py-0.5 rounded ${risk.bg} ${risk.text}`}>
+                          {risk.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 max-w-[300px]" style={{ color: 'var(--text-secondary)' }}>
+                        {problemText}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                        {p.testResults
+                          ? (
+                            <span className={passCount === totalTests && totalTests > 0 ? 'text-green-700' : 'text-red-600'}>
+                              {passCount} / {totalTests} pass
+                            </span>
+                          )
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                        {fmtDate(p.createdAt)}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                        {fmtDate(p.updatedAt)}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          {(p.status === 'draft' || p.status === 'tests_failed') && (
+                            <button
+                              disabled={isLoading}
+                              onClick={() => void proposalAction(p.id, 'test')}
+                              className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-40 transition-colors"
+                            >
+                              {loading[p.id] === 'test' ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                              Test
+                            </button>
+                          )}
+                          {p.status === 'awaiting_approval' && (
+                            <>
+                              <button
+                                disabled={isLoading}
+                                onClick={() => void proposalAction(p.id, 'approve')}
+                                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-40 transition-colors"
+                              >
+                                {loading[p.id] === 'approve' ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                                Approve
+                              </button>
+                              <button
+                                disabled={isLoading}
+                                onClick={() => void proposalAction(p.id, 'reject')}
+                                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-40 transition-colors"
+                              >
+                                {loading[p.id] === 'reject' ? <RefreshCw className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section: Search Panel
+// ---------------------------------------------------------------------------
+
+interface SearchHit {
+  id: string;
+  type: 'conversation' | 'task';
+  conversationKey?: string;
+  role?: string;
+  taskId?: string;
+  title?: string;
+  content: string;
+  createdAt: string;
+  snippet: string;
+}
+
+interface SearchData {
+  hits: SearchHit[];
+  total: number;
+}
+
+function SearchPanel() {
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'' | 'conversation' | 'task'>('');
+  const [submitted, setSubmitted] = useState<{ q: string; type: string } | null>(null);
+  const [results, setResults] = useState<SearchData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    setSubmitted({ q, type: typeFilter });
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ q, limit: '20' });
+      if (typeFilter) params.set('type', typeFilter);
+      const res = await dashboardFetch(`/api/dashboard/search?${params.toString()}`);
+      if (!res.ok) {
+        setError(`エラー: ${res.status} ${res.statusText}`);
+        setResults(null);
+      } else {
+        const data = await res.json() as SearchData;
+        setResults(data);
+      }
+    } catch {
+      setError('ネットワークエラー');
+      setResults(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const TYPE_BADGE: Record<string, { bg: string; text: string; label: string }> = {
+    conversation: { bg: 'bg-blue-100', text: 'text-blue-700', label: '会話' },
+    task:         { bg: 'bg-purple-100', text: 'text-purple-700', label: 'タスク' },
+  };
+
+  return (
+    <section className="mb-6">
+      <h2
+        className="text-sm font-semibold uppercase tracking-widest mb-3 flex items-center gap-2"
+        style={{ color: 'var(--text-secondary)' }}
+      >
+        <Activity className="w-4 h-4" /> 会話 / タスク検索
+      </h2>
+
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>
+        <form onSubmit={(e) => void handleSearch(e)} className="px-4 py-3 flex flex-wrap items-end gap-2" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <label className="flex-1 min-w-[180px] flex flex-col gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            検索クエリ
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="キーワードを入力…"
+              className="rounded px-3 py-1.5 text-sm outline-none focus:ring-2"
+              style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', '--tw-ring-color': 'var(--accent-orange)' } as React.CSSProperties}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            種別
+            <select
+              className="rounded px-2 py-1.5 text-sm"
+              style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as '' | 'conversation' | 'task')}
+            >
+              <option value="">すべて</option>
+              <option value="conversation">会話</option>
+              <option value="task">タスク</option>
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={loading || !query.trim()}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ background: 'var(--accent-orange)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+          >
+            {loading ? '検索中…' : '検索'}
+          </button>
+        </form>
+
+        {error && (
+          <div className="px-4 py-2 text-sm text-red-600 bg-red-50 border-b border-red-200">{error}</div>
+        )}
+
+        {!submitted && !results && (
+          <div className="px-4 py-6 text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
+            キーワードを入力して会話メッセージやタスクを検索できます。
+          </div>
+        )}
+
+        {results && results.hits.length === 0 && (
+          <div className="px-4 py-6 text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
+            「{submitted?.q}」に一致する結果が見つかりませんでした。
+          </div>
+        )}
+
+        {results && results.hits.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)' }}>
+                <tr>
+                  {['種別', 'スニペット', 'ID / Key', '日時'].map((h) => (
+                    <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.hits.map((hit) => {
+                  const badge = TYPE_BADGE[hit.type] ?? TYPE_BADGE.conversation;
+                  const ref = hit.type === 'conversation'
+                    ? (hit.conversationKey ?? '—')
+                    : (hit.taskId ?? '—');
+                  return (
+                    <tr key={hit.id} style={{ borderTop: '1px solid var(--border-color)' }}>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className={`inline-block px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
+                          {badge.label}
+                        </span>
+                        {hit.role && (
+                          <span className="ml-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{hit.role}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 max-w-[480px]" style={{ color: 'var(--text-primary)' }}>
+                        <div className="line-clamp-3 whitespace-pre-wrap break-words">{hit.snippet}</div>
+                      </td>
+                      <td className="px-3 py-2 font-mono max-w-[200px] truncate" style={{ color: 'var(--text-secondary)' }} title={ref}>
+                        {ref}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                        {fmtDate(hit.createdAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="px-4 py-2 text-xs" style={{ color: 'var(--text-secondary)', borderTop: '1px solid var(--border-color)' }}>
+              {results.total} 件ヒット
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Dashboard Page
 // ---------------------------------------------------------------------------
 
@@ -1820,7 +2209,14 @@ export default function DashboardPage() {
     from: '',
     to: '',
   });
+  const [skillProposalStatusFilter, setSkillProposalStatusFilter] =
+    useState<SkillProposalStatusFilter>('');
   const refreshInterval = autoRefresh ? 30_000 : 0;
+  const skillProposalsUrl = useMemo(() => {
+    const params = new URLSearchParams({ limit: '50' });
+    if (skillProposalStatusFilter) params.set('status', skillProposalStatusFilter);
+    return `/api/dashboard/skill-proposals?${params.toString()}`;
+  }, [skillProposalStatusFilter]);
   const skillExecutionsUrl = useMemo(() => {
     const params = new URLSearchParams({ limit: '50' });
     Object.entries(skillExecutionFilters).forEach(([key, value]) => {
@@ -1858,6 +2254,8 @@ export default function DashboardPage() {
     useSWR<TelemetryData>('/api/dashboard/telemetry?limit=50', fetcher, { refreshInterval });
   const { data: violationsData } =
     useSWR<ViolationsData>('/api/dashboard/violations?limit=50', fetcher, { refreshInterval });
+  const { data: skillProposalsData, mutate: mutateSkillProposals } =
+    useSWR<SkillProposalsData>(skillProposalsUrl, fetcher, { refreshInterval });
 
   function refreshAll() {
     void mutateStatus();
@@ -1882,7 +2280,14 @@ export default function DashboardPage() {
         <SchedulerPanel data={schedulesData} onMutate={() => { void mutateSchedules(); void mutateLogs(); }} />
         <LogFeed data={logsData} />
         <ApprovalsPanel data={approvalsData} onMutate={() => void mutateApprovals()} />
+        <SkillProposalsPanel
+          data={skillProposalsData}
+          statusFilter={skillProposalStatusFilter}
+          onStatusFilterChange={setSkillProposalStatusFilter}
+          onMutate={() => void mutateSkillProposals()}
+        />
         <IdentitiesPanel data={identitiesData} />
+        <SearchPanel />
         <TasksPanel
           data={tasksData}
           filters={taskFilters}

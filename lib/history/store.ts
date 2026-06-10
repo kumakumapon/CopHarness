@@ -21,6 +21,7 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { LLMMessage } from '../adapter';
 import { dataPath } from '../utils/dataDir';
+import { indexConversationMessages } from '../search/index';
 
 /** Maximum number of distinct sessions stored. */
 const MAX_SESSIONS = 1000;
@@ -116,8 +117,11 @@ export function loadHistory(key: string): LLMMessage[] {
  * promise ensures the data has been flushed to disk.
  */
 export async function saveHistory(key: string, history: LLMMessage[]): Promise<void> {
+  const previousCount = getStore()[key]?.messages.length ?? 0;
   getStore()[key] = { messages: history, updatedAt: Date.now() };
   scheduleWrite();
+  // Index only new non-system messages — failure must never affect save behaviour
+  indexConversationMessages(key, history, previousCount);
   return _writeQueue;
 }
 

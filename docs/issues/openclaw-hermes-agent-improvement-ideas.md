@@ -121,11 +121,11 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 ### Phase 2: 学習・改善ループ
 
-- [ ] SkillProposal ストア
-- [ ] スキル生成 → テスト → 承認 → 登録フロー
-- [ ] memory nudging
-- [ ] 会話・タスクの semantic search
-- [ ] TaskLedger と Ralph Loop の統合
+- [x] SkillProposal ストア（`skill_proposals.json` に name / problem / proposedCode / testPlan / riskLevel / status を保持し、ダッシュボード API / UI で提案中・テスト失敗・承認待ちを表示）
+- [x] スキル生成 → テスト → 承認 → 登録フロー（`node:vm` サンドボックスで testPlan を実行し、HIL 承認後に riskLevel 最低 medium の generated スキルとして動的登録。`proposeSkill` でエージェント自身が提案可能）
+- [x] memory nudging（LINE / Discord の通常チャットで「これは覚えますか？」を提示し、はい / いいえで MemoryStore に保存。`MEMORY_NUDGE_ENABLED` で有効化）
+- [x] 会話・タスクの semantic search（SQLite FTS5 + JSON フォールバックの SearchIndex を会話履歴と TaskLedger に接続し、`searchHistory` スキルとダッシュボード検索を追加。現状は lexical FTS で embedding は将来課題）
+- [x] TaskLedger と Ralph Loop の統合（compaction 時に TaskLedger metadata を更新し、progress.md / progress.json を保存。LINE / Discord / API のチャットを Ralph Loop 経由に変更）
 
 ### Phase 3: 常駐・自律実行
 
@@ -136,6 +136,39 @@ context compaction を会話要約だけで終わらせず、構造化された�
 - [ ] モバイルチャットからの進捗確認・停止・承認
 
 ## 実装進捗
+
+### 2026-06-10: Phase 2 完了（学習・改善ループ）
+
+#### 完了
+
+- `SkillProposal` ストアを追加し、提案の `draft` → `testing` → `tests_failed` / `awaiting_approval` → `approved` / `rejected` → `registered` のライフサイクルを `skill_proposals.json` に永続化した。ダッシュボードに提案一覧（状態フィルタ付き）と Test / Approve / Reject 操作を追加した。
+- 生成スキルのサンドボックスを `node:vm` で実装した。`module.exports = async (args) => SkillResult` 契約のコードを最小グローバル（require / process / fetch / timer なし、文字列からのコード生成無効、同期タイムアウト + 非同期期限付き、呼び出しごとにコンテキスト分離）で実行する。
+- 提案の testPlan（args + contains / equals / isError 期待値）をサンドボックスで実行し、全件通過した提案のみ承認待ちへ遷移、監査用に Human-in-the-Loop 承認リクエストも発行するようにした。空の testPlan は必ず失敗する。
+- 承認時に生成スキルを実行時登録するフローを追加した。生成スキルは category `generated`、riskLevel は最低 `medium` を強制（`ENABLED_SKILLS` に明示しない限り不活性）、HIL / policy gate 経由で実行される。起動時ローダーが承認済み提案を再登録する。
+- `proposeSkill` スキルを追加し、エージェント自身が繰り返しタスクからスキル候補を提案 → 即時テストできるようにした（自動登録はせず、人間の承認が必須）。
+- memory nudging を追加した。LINE / Discord の通常チャットでユーザー発話から記憶候補（明示的な「覚えて」、自己紹介、好み、誕生日など日英ヒューリスティック）を検出し、「これは覚えますか？」を返信に付加。次の「はい / いいえ」の短い返信で MemoryStore へ保存または破棄する。`MEMORY_NUDGE_ENABLED` で有効化、保留中 nudge は TTL 付きで `memory_nudges.json` に保持。
+- 会話・タスクの全文検索を追加した。`SearchIndex`（SQLite FTS5 + bm25、`node:sqlite` がない環境では JSON フォールバック）を会話履歴保存と TaskLedger の開始 / 終了 / 更新にフックし、`searchHistory` スキル（low risk）、`GET /api/dashboard/search`、ダッシュボード検索パネルを追加した。
+- Ralph Loop と TaskLedger を統合した。compaction 発生時に該当タスクの metadata へ `ralphLoop`（compaction 回数、最終実行時刻、goal / summary プレビュー）を記録し、progress artifact を Markdown と JSON の両方で保存するようにした。LINE / Discord / API の通常チャット補完を `runWithRalphLoop` 経由に切り替え、compaction が本番経路で動作するようにした。
+
+#### 未完了 / Phase 3 以降で継続
+
+- semantic search は現状 lexical FTS（bm25）であり、embedding ベースの類似検索・rerank は将来課題。
+- 生成スキルのサンドボックスは `node:vm` ベースで完全なセキュリティ境界ではない。Remote Runtime / Isolated Workspace（Phase 3 の Docker / SSH backend）導入時に生成スキル実行を backend 側へ移すことを検討する。
+- memory nudging はヒューリスティック検出のみで、LLM による候補抽出・要約は未実装。誤検出時はユーザーが「いいえ」で破棄する運用。
+- TaskLedger の compaction metadata はチャット 1 リクエスト単位のタスクに紐づく。長期的な「依頼」単位の親子タスクと再開可能セッションは引き続き未実装。
+
+#### テスト / 検証
+
+- `npm test` で Jest 全体（31 スイート / 574 件）の通過を確認した。
+- `npx tsc --noEmit` で TypeScript 型チェック通過を確認した。
+- 主要スイート: `skillProposalStore` / `skillProposalSandbox` / `skillProposalLifecycle` / `dashboardSkillProposals` / `dashboardSkillProposalActions` / `memoryNudge` / `searchIndex` / `searchIndexHooks` / `dashboardSearch` / `ralphLoopLedger`。
+
+#### リスク / 注意点
+
+- 生成スキルはテスト通過 + 人間承認 + riskLevel 最低 medium + HIL / policy gate という多段の安全装置を持つが、`node:vm` は理論上の脱出経路が知られているため、信頼できない第三者からの提案コードをそのまま流し込む運用は想定しない。
+- 提案がプロセスクラッシュで `testing` のまま残った場合は再テストまたは却下が可能（復旧経路を用意済み）。
+- 会話検索インデックスは履歴トリミングで先頭メッセージが落ちるとメッセージ index ベースの文書 ID がずれて古い内容を上書きする。検索用途では実害は小さいが、厳密な監査用途には会話メッセージへの安定 ID 付与が必要。
+- memory nudging の返信判定は短文（12 文字以下）の定型句に限定しているが、保留中に無関係な返信をすると nudge は破棄される仕様のため、後から保存したい場合は再度発話が必要。
 
 ### 2026-06-09: Phase 1 完了（MemoryStore / JSON Tool Policy）
 

@@ -61,7 +61,8 @@ export type SkillCategory =
   | 'web'
   | 'system'
   | 'memory'
-  | 'external';
+  | 'external'
+  | 'generated';
 
 export interface SkillDefinition {
   name: string;

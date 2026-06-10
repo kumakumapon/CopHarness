@@ -37,6 +37,8 @@ import {
   selectTemplate as wizSelectTemplate,
   continueWizard as wizContinue,
 } from '../../../lib/promptWizardSession';
+import { consumePendingNudge, maybeCreateNudge } from '../../../lib/memory/nudge';
+import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.LINE_MAX_HISTORY) || 20);
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
@@ -428,6 +430,26 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // ── Memory nudge: consume pending nudge if user replied はい/いいえ ──
+    try {
+      const nudgeResult = await consumePendingNudge(conversationKey, userText);
+      if (nudgeResult.consumed) {
+        const nudgeReply = nudgeResult.reply ?? '';
+        const history = getHistory(conversationKey);
+        history.push({ role: 'user', content: userText });
+        history.push({ role: 'assistant', content: nudgeReply });
+        trimHistory(history);
+        await persistHistory(conversationKey, history);
+        await scheduleReply(client, {
+          replyToken,
+          messages: [{ type: 'text', text: truncateMessage(nudgeReply) }],
+        });
+        continue;
+      }
+    } catch (nudgeErr) {
+      console.warn('[LINE Bot] Memory nudge error:', nudgeErr);
+    }
+
     // ── Normal LLM chat (existing) ──
     const history = getHistory(conversationKey);
     history.push({ role: 'user', content: userText });
@@ -443,9 +465,15 @@ export async function POST(req: NextRequest) {
     try {
       const resp = await withSkillExecutionContext(
         { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
-        () => adapter.complete({ messages: [...history], timeoutMs }),
+        () => runWithRalphLoop({ messages: [...history], timeoutMs }, adapter, { taskId: task.id }),
       );
-      const replyText = resp.content || '（応答がありませんでした）';
+      let replyText = resp.content || '（応答がありませんでした）';
+      try {
+        const nudgeSuffix = maybeCreateNudge(conversationKey, userText);
+        if (nudgeSuffix) replyText += nudgeSuffix;
+      } catch (nudgeErr) {
+        console.warn('[LINE Bot] Memory nudge suffix error:', nudgeErr);
+      }
       history.push({ role: 'assistant', content: replyText });
       trimHistory(history);
       await persistHistory(conversationKey, history);

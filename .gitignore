@@ -52,7 +52,12 @@ skill_executions.json
 workspace/
 identities.json
 task_ledger.json
+skill_proposals.json
 
 memory.sqlite
 memory.sqlite-*
+search_index.sqlite
+search_index.sqlite-*
+search_index.json
 policy.json
+memory_nudges.json
