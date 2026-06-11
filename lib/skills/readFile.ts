@@ -1,6 +1,5 @@
-import fs from 'node:fs/promises';
 import { type SkillDefinition } from '../skill';
-import { resolveSafe } from './fileSandbox';
+import { getExecutionBackend } from '../execution';
 
 /** Maximum characters returned by readFile to avoid flooding the context. */
 const MAX_READ_BYTES = 100_000;
@@ -8,7 +7,8 @@ const MAX_READ_BYTES = 100_000;
 export const readFile: SkillDefinition = {
   name: 'readFile',
   description:
-    'Reads the content of a file from the sandbox directory (SKILL_FILE_SANDBOX_DIR, default: ./workspace). ' +
+    'Reads the content of a file from the sandbox directory (SKILL_FILE_SANDBOX_DIR, default: ./workspace) ' +
+    'via the configured execution backend. ' +
     'Returns up to 100 000 characters. Use relative paths only.',
   parameters: {
     type: 'object',
@@ -26,14 +26,12 @@ export const readFile: SkillDefinition = {
     const userPath = String(args.path ?? '').trim();
     if (!userPath) return { content: 'Error: path is required', isError: true };
     try {
-      const resolved = await resolveSafe(userPath);
-      const stat = await fs.stat(resolved);
-      if (!stat.isFile()) return { content: `Error: "${userPath}" is not a file`, isError: true };
-      const content = await fs.readFile(resolved, 'utf8');
-      if (content.length > MAX_READ_BYTES) {
-        return { content: content.slice(0, MAX_READ_BYTES) + '\n[truncated]' };
+      const backend = getExecutionBackend();
+      const result = await backend.readFile({ relativePath: userPath, maxBytes: MAX_READ_BYTES });
+      if (result.truncated) {
+        return { content: result.content + '\n[truncated]' };
       }
-      return { content };
+      return { content: result.content };
     } catch (err) {
       return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
     }

@@ -460,6 +460,265 @@ describe('SshBackend', () => {
 });
 
 // ---------------------------------------------------------------------------
+// LocalBackend — readFile / listDir
+// ---------------------------------------------------------------------------
+
+describe('LocalBackend readFile / listDir', () => {
+  let tmpDir: string;
+  let backend: LocalBackend;
+
+  beforeEach(() => {
+    _spawnMockImpl = null; // use real spawn
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copharness-local-rf-'));
+    process.env.SKILL_FILE_SANDBOX_DIR = tmpDir;
+    backend = new LocalBackend();
+  });
+
+  afterEach(() => {
+    delete process.env.SKILL_FILE_SANDBOX_DIR;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('readFile reads an existing file', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'hello.txt'), 'hello world', 'utf8');
+    const result = await backend.readFile({ relativePath: 'hello.txt' });
+    expect(result.content).toBe('hello world');
+    expect(result.truncated).toBe(false);
+    expect(result.backend).toBe('local');
+  });
+
+  it('readFile truncates when content exceeds maxBytes', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'big.txt'), 'abcdefghij', 'utf8'); // 10 chars
+    const result = await backend.readFile({ relativePath: 'big.txt', maxBytes: 5 });
+    expect(result.content).toBe('abcde');
+    expect(result.truncated).toBe(true);
+    expect(result.backend).toBe('local');
+  });
+
+  it('readFile throws for missing file', async () => {
+    await expect(backend.readFile({ relativePath: 'missing.txt' }))
+      .rejects.toThrow();
+  });
+
+  it('readFile throws with "is not a file" for a directory', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'subdir'));
+    await expect(backend.readFile({ relativePath: 'subdir' }))
+      .rejects.toThrow(/"subdir" is not a file/);
+  });
+
+  it('listDir returns entries for sandbox root', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'a.txt'), 'x', 'utf8');
+    fs.mkdirSync(path.join(tmpDir, 'subdir'));
+    const result = await backend.listDir({ relativePath: '.' });
+    expect(result.backend).toBe('local');
+    const names = result.entries.map((e) => e.name);
+    expect(names).toContain('a.txt');
+    expect(names).toContain('subdir');
+    // directories come first
+    const dirEntry = result.entries.find((e) => e.name === 'subdir');
+    const fileEntry = result.entries.find((e) => e.name === 'a.txt');
+    expect(dirEntry?.type).toBe('directory');
+    expect(fileEntry?.type).toBe('file');
+    expect(typeof fileEntry?.size).toBe('number');
+  });
+
+  it('listDir returns empty entries for empty dir', async () => {
+    const result = await backend.listDir({ relativePath: '.' });
+    expect(result.entries).toHaveLength(0);
+    expect(result.backend).toBe('local');
+  });
+
+  it('listDir throws with "is not a directory" for a file', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'file.txt'), 'x', 'utf8');
+    await expect(backend.listDir({ relativePath: 'file.txt' }))
+      .rejects.toThrow(/"file.txt" is not a directory/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DockerBackend — readFile / listDir
+// ---------------------------------------------------------------------------
+
+describe('DockerBackend readFile / listDir', () => {
+  let capturedArgv: { cmd: string; args: string[] }[];
+
+  beforeEach(() => {
+    capturedArgv = [];
+  });
+
+  afterEach(() => {
+    _spawnMockImpl = null;
+    spawnMock.mockClear();
+  });
+
+  function makeBackend(container = 'my-container', workdir = '/workspace') {
+    return new DockerBackend(container, workdir, [], 5000);
+  }
+
+  function setupMock(stdout = '', stderr = '', exitCode = 0) {
+    _spawnMockImpl = (cmd, args) => {
+      capturedArgv.push({ cmd: String(cmd), args: [...args] });
+      return makeFakeChild(stdout, stderr, exitCode);
+    };
+  }
+
+  it('readFile passes head -c to docker exec sh -c', async () => {
+    setupMock('file content');
+    const backend = makeBackend();
+    const result = await backend.readFile({ relativePath: 'notes.txt' });
+    expect(result.backend).toBe('docker');
+    expect(result.truncated).toBe(false);
+    expect(capturedArgv).toHaveLength(1);
+    const { cmd, args } = capturedArgv[0];
+    expect(cmd).toBe('docker');
+    expect(args).toContain('exec');
+    expect(args).toContain('sh');
+    expect(args).toContain('-c');
+    const shCmd = args[args.indexOf('-c') + 1];
+    expect(shCmd).toMatch(/head -c \d+/);
+    expect(shCmd).toContain('/workspace/notes.txt');
+  });
+
+  it('readFile truncates when content exceeds maxBytes', async () => {
+    // Return maxBytes+1 chars (exactly over limit)
+    setupMock('abcdef'); // 6 chars
+    const backend = makeBackend();
+    const result = await backend.readFile({ relativePath: 'notes.txt', maxBytes: 5 });
+    expect(result.content).toBe('abcde');
+    expect(result.truncated).toBe(true);
+  });
+
+  it('readFile throws on non-zero exit code', async () => {
+    setupMock('', 'No such file', 1);
+    const backend = makeBackend();
+    await expect(backend.readFile({ relativePath: 'missing.txt' }))
+      .rejects.toThrow(/Docker readFile failed/);
+  });
+
+  it('listDir passes ls -1p to docker exec sh -c', async () => {
+    setupMock('a.txt\nsub/\n');
+    const backend = makeBackend();
+    const result = await backend.listDir({ relativePath: '.' });
+    expect(result.backend).toBe('docker');
+    expect(capturedArgv).toHaveLength(1);
+    const { cmd, args } = capturedArgv[0];
+    expect(cmd).toBe('docker');
+    expect(args).toContain('sh');
+    expect(args).toContain('-c');
+    const shCmd = args[args.indexOf('-c') + 1];
+    expect(shCmd).toMatch(/ls -1p/);
+    // entries parsed correctly
+    expect(result.entries).toHaveLength(2);
+    const file = result.entries.find((e) => e.name === 'a.txt');
+    const dir = result.entries.find((e) => e.name === 'sub');
+    expect(file?.type).toBe('file');
+    expect(dir?.type).toBe('directory');
+  });
+
+  it('listDir throws on non-zero exit code', async () => {
+    setupMock('', 'No such dir', 1);
+    const backend = makeBackend();
+    await expect(backend.listDir({ relativePath: 'noexist' }))
+      .rejects.toThrow(/Docker listDir failed/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SshBackend — readFile / listDir
+// ---------------------------------------------------------------------------
+
+describe('SshBackend readFile / listDir', () => {
+  let capturedArgv: { cmd: string; args: string[] }[];
+
+  beforeEach(() => {
+    capturedArgv = [];
+  });
+
+  afterEach(() => {
+    _spawnMockImpl = null;
+    spawnMock.mockClear();
+  });
+
+  function makeBackend(overrides: Partial<{ workdir: string }> = {}) {
+    return new SshBackend({
+      host: 'example.com',
+      workdir: overrides.workdir ?? '~',
+      envAllowlist: [],
+      defaultTimeoutMs: 5000,
+    });
+  }
+
+  function setupMock(stdout = '', stderr = '', exitCode = 0) {
+    _spawnMockImpl = (cmd, args) => {
+      capturedArgv.push({ cmd: String(cmd), args: [...args] });
+      return makeFakeChild(stdout, stderr, exitCode);
+    };
+  }
+
+  it('readFile remote command contains head -c', async () => {
+    setupMock('remote content');
+    const backend = makeBackend({ workdir: '/remote' });
+    const result = await backend.readFile({ relativePath: 'data.txt' });
+    expect(result.backend).toBe('ssh');
+    expect(result.truncated).toBe(false);
+    const { cmd, args } = capturedArgv[0];
+    expect(cmd).toBe('ssh');
+    expect(args).toContain('--');
+    const remoteCmd = args[args.length - 1];
+    expect(remoteCmd).toMatch(/head -c \d+/);
+    expect(remoteCmd).toContain('data.txt');
+  });
+
+  it('readFile truncates when content exceeds maxBytes', async () => {
+    setupMock('abcdef'); // 6 chars
+    const backend = makeBackend({ workdir: '/remote' });
+    const result = await backend.readFile({ relativePath: 'data.txt', maxBytes: 5 });
+    expect(result.content).toBe('abcde');
+    expect(result.truncated).toBe(true);
+  });
+
+  it('readFile throws on non-zero exit code', async () => {
+    setupMock('', 'not found', 1);
+    const backend = makeBackend();
+    await expect(backend.readFile({ relativePath: 'missing.txt' }))
+      .rejects.toThrow(/SSH readFile failed/);
+  });
+
+  it('listDir remote command contains ls -1p', async () => {
+    setupMock('a.txt\nsub/\nb.txt\n');
+    const backend = makeBackend({ workdir: '/remote' });
+    const result = await backend.listDir({ relativePath: '.' });
+    expect(result.backend).toBe('ssh');
+    const { cmd, args } = capturedArgv[0];
+    expect(cmd).toBe('ssh');
+    const remoteCmd = args[args.length - 1];
+    expect(remoteCmd).toMatch(/ls -1p/);
+    // entries parsed correctly
+    expect(result.entries).toHaveLength(3);
+    const file = result.entries.find((e) => e.name === 'a.txt');
+    const dir = result.entries.find((e) => e.name === 'sub');
+    expect(file?.type).toBe('file');
+    expect(dir?.type).toBe('directory');
+  });
+
+  it('listDir uses workdir path for default relativePath', async () => {
+    setupMock('x.txt\n');
+    const backend = makeBackend({ workdir: '/remote' });
+    await backend.listDir({});
+    const remoteCmd = capturedArgv[0].args[capturedArgv[0].args.length - 1];
+    expect(remoteCmd).toContain('ls -1p');
+    expect(remoteCmd).toContain('/remote');
+  });
+
+  it('listDir throws on non-zero exit code', async () => {
+    setupMock('', 'no such dir', 1);
+    const backend = makeBackend();
+    await expect(backend.listDir({ relativePath: 'noexist' }))
+      .rejects.toThrow(/SSH listDir failed/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Factory / singleton
 // ---------------------------------------------------------------------------
 
