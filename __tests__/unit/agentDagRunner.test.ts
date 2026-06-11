@@ -141,6 +141,66 @@ describe('agent DAG runner', () => {
     });
   });
 
+  it('persists toolsets in metadata.agentDag.plans', async () => {
+    const runner: AgentPlanRunner = jest.fn(async (task, plan) => ({
+      taskId: task.id,
+      role: String(plan.role),
+      content: `output:${plan.id}`,
+      durationMs: 1,
+    }));
+
+    const result = await runAgentDag([
+      { id: 'fetch', role: 'fetcher', prompt: 'Fetch it', toolsets: ['web', 'search'] },
+      { id: 'analyze', role: 'analyzer', prompt: 'Analyze it', dependsOn: ['fetch'] },
+    ], { runId: 'run_toolsets', runner });
+
+    expect(result.status).toBe('succeeded');
+    const dag = getTask(result.taskId!)?.metadata?.agentDag as
+      | { plans: Array<{ id: string; toolsets?: string[] }> }
+      | undefined;
+    expect(dag?.plans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'fetch', toolsets: ['web', 'search'] }),
+        expect.objectContaining({ id: 'analyze', toolsets: [] }),
+      ]),
+    );
+  });
+
+  it('passes toolsets to runner on retry', async () => {
+    const initialRunner: AgentPlanRunner = jest.fn(async (task, plan) => ({
+      taskId: task.id,
+      role: String(plan.role),
+      content: plan.id === 'fetch' ? '' : `output:${plan.id}`,
+      durationMs: 1,
+      error: plan.id === 'fetch' ? 'fetch failed' : undefined,
+    }));
+
+    const initial = await runAgentDag([
+      { id: 'fetch', role: 'fetcher', prompt: 'Fetch it', toolsets: ['web', 'search'] },
+      { id: 'analyze', role: 'analyzer', prompt: 'Analyze it', dependsOn: ['fetch'] },
+    ], { runId: 'run_toolsets_retry', runner: initialRunner });
+    expect(initial.status).toBe('failed');
+
+    const retryCalls: Array<{ id: string; toolsets: string[] | undefined }> = [];
+    const retryRunner: AgentPlanRunner = jest.fn(async (task, plan) => {
+      retryCalls.push({ id: plan.id, toolsets: task.toolsets });
+      return {
+        taskId: task.id,
+        role: String(plan.role),
+        content: `retry-output:${plan.id}`,
+        durationMs: 1,
+      };
+    });
+
+    const retried = await retryAgentDagNode(initial.taskId!, 'fetch', { runner: retryRunner });
+    expect(retried.status).toBe('succeeded');
+
+    const fetchCall = retryCalls.find((call) => call.id === 'fetch');
+    expect(fetchCall?.toolsets).toEqual(['web', 'search']);
+    const analyzeCall = retryCalls.find((call) => call.id === 'analyze');
+    expect(analyzeCall?.toolsets).toEqual([]);
+  });
+
   it('rejects invalid DAG definitions before running agents', async () => {
     const runner = jest.fn();
 
