@@ -21,6 +21,12 @@ import {
   type ListDirResult,
   type ListDirEntry,
 } from './types';
+import {
+  enforceAllowedPath,
+  enforceNetworkPolicy,
+  getAllowedPathPrefixes,
+  getNetworkPolicy,
+} from './policy';
 
 const MAX_OUTPUT_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -52,6 +58,7 @@ export class LocalBackend implements ExecutionBackend {
   readonly kind = 'local' as const;
 
   async runCommand(req: CommandRequest): Promise<CommandResult> {
+    enforceNetworkPolicy(req.command);
     const timeoutMs = req.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     return new Promise((resolve) => {
       const isWin = process.platform === 'win32';
@@ -85,6 +92,7 @@ export class LocalBackend implements ExecutionBackend {
   }
 
   async writeFile(req: WriteFileRequest): Promise<WriteFileResult> {
+    enforceAllowedPath(req.relativePath);
     const resolved = await resolveSafe(req.relativePath);
     await fs.mkdir(path.dirname(resolved), { recursive: true });
     if (req.append) {
@@ -100,6 +108,7 @@ export class LocalBackend implements ExecutionBackend {
   }
 
   async readFile(req: ReadFileRequest): Promise<ReadFileResult> {
+    enforceAllowedPath(req.relativePath);
     const maxBytes = req.maxBytes ?? 100_000;
     const resolved = await resolveSafe(req.relativePath);
     const stat = await fs.stat(resolved);
@@ -115,6 +124,7 @@ export class LocalBackend implements ExecutionBackend {
 
   async listDir(req: ListDirRequest): Promise<ListDirResult> {
     const relativePath = req.relativePath ?? '.';
+    enforceAllowedPath(relativePath);
     let resolved: string;
     if (relativePath === '.') {
       resolved = await getSandboxDir();
@@ -159,6 +169,8 @@ export class LocalBackend implements ExecutionBackend {
       workingDir: process.cwd(),
       envAllowlist,
       timeoutMs: isNaN(timeoutMs) ? DEFAULT_TIMEOUT_MS : timeoutMs,
+      allowedPaths: getAllowedPathPrefixes() ?? undefined,
+      networkPolicy: getNetworkPolicy(),
     };
   }
 }

@@ -37,6 +37,8 @@ export interface ExecutionBackendDescription {
   envAllowlist: string[];
   timeoutMs: number;
   detail?: string;
+  allowedPaths?: string[];
+  networkPolicy?: 'allow' | 'deny';
 }
 
 export interface ReadFileRequest {

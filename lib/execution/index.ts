@@ -13,6 +13,7 @@ import { createSshBackend } from './sshBackend';
 import { type ExecutionBackend } from './types';
 
 export * from './types';
+export * from './policy';
 export { LocalBackend } from './localBackend';
 export { DockerBackend, createDockerBackend } from './dockerBackend';
 export { SshBackend, createSshBackend, shellQuote } from './sshBackend';

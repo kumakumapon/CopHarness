@@ -25,6 +25,12 @@ import {
   type ListDirEntry,
 } from './types';
 import { shellQuote } from './sshBackend';
+import {
+  enforceAllowedPath,
+  enforceNetworkPolicy,
+  getAllowedPathPrefixes,
+  getNetworkPolicy,
+} from './policy';
 
 const MAX_OUTPUT_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -112,6 +118,7 @@ export class DockerBackend implements ExecutionBackend {
   ) {}
 
   async runCommand(req: CommandRequest): Promise<CommandResult> {
+    enforceNetworkPolicy(req.command);
     const timeoutMs = req.timeoutMs ?? this.defaultTimeoutMs;
 
     // Build env flags for allowlisted vars that are set locally
@@ -141,6 +148,7 @@ export class DockerBackend implements ExecutionBackend {
 
   async writeFile(req: WriteFileRequest): Promise<WriteFileResult> {
     enforceRelativePath(req.relativePath);
+    enforceAllowedPath(req.relativePath);
 
     const targetPath = `${this.workdir}/${req.relativePath}`;
     const parentDir = path.posix.dirname(targetPath);
@@ -194,6 +202,7 @@ export class DockerBackend implements ExecutionBackend {
 
   async readFile(req: ReadFileRequest): Promise<ReadFileResult> {
     enforceRelativePath(req.relativePath);
+    enforceAllowedPath(req.relativePath);
     const maxBytes = req.maxBytes ?? 100_000;
     const target = req.relativePath === '.' ? this.workdir : `${this.workdir}/${req.relativePath}`;
     const headCount = maxBytes + 1;
@@ -217,6 +226,7 @@ export class DockerBackend implements ExecutionBackend {
   async listDir(req: ListDirRequest): Promise<ListDirResult> {
     const relativePath = req.relativePath ?? '.';
     if (relativePath !== '.') enforceRelativePath(relativePath);
+    enforceAllowedPath(relativePath);
     const target = relativePath === '.' ? this.workdir : `${this.workdir}/${relativePath}`;
     const { stdout, stderr, exitCode, timedOut } = await spawnToResult(
       'docker',
@@ -246,6 +256,8 @@ export class DockerBackend implements ExecutionBackend {
       envAllowlist: this.envAllowlist,
       timeoutMs: this.defaultTimeoutMs,
       detail: `container: ${this.container}`,
+      allowedPaths: getAllowedPathPrefixes() ?? undefined,
+      networkPolicy: getNetworkPolicy(),
     };
   }
 }
