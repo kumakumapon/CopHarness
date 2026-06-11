@@ -137,6 +137,29 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 ## 実装進捗
 
+### 2026-06-11: Remote Runtime / 即時中断の残課題実装（readFile 統合 / 実行ポリシー / 生成スキル backend / AbortController）
+
+同日の小分け実装に続き、Remote Runtime / Isolated Workspace と Task Ledger 系の大きめの残課題 4 件を実装した。実装は Sonnet サブエージェントへ委譲し（readFile 統合・実行ポリシー・生成スキル backend）、難度の高いチャット即時中断（AbortController 接続）はメインセッションで実装した。
+
+#### 完了
+
+- `readFile` / `listDirectory` スキルを ExecutionBackend 経由に統合した。`ExecutionBackend` に `readFile` / `listDir` を追加し、local（sandbox fs）、docker（`docker exec sh -c 'head -c N'` / `ls -1p`）、ssh（リモート `head -c N` / `ls -1p`）で実装。remote backend 使用時にファイル読み取りもリモート側を対象にする。`searchInFiles` は引き続き local 直接アクセス（既知の制限）。
+- allowed paths / network policy を backend 層で強制した。`EXECUTION_ALLOWED_PATHS`（相対パスプレフィックスの allowlist）を `writeFile` / `readFile` / `listDir` に、`EXECUTION_NETWORK_POLICY=deny`（curl / wget / ssh などのヒューリスティックデノリスト）を `runCommand` に、3 backend 共通で適用。どちらも未設定時は無制限（後方互換）で、`describe()` から確認できる。
+- 生成スキル実行を backend 側へ移譲できるようにした。`GENERATED_SKILL_EXECUTION=backend` で、提案テストと登録済み生成スキルの実行が `node:vm` ではなくラッパースクリプト + backend `runCommand`（実 Node プロセス）で行われる。隔離は backend（docker / ssh）の責務で、local backend での backend モードは vm より隔離が弱い旨をコード上に明記。デフォルトは従来の vm。
+- チャット `stop <id>` で実行中 LLM 呼び出しを即時中断できるようにした。LINE / Discord / API / SSE stream の会話タスク、サブエージェント（`runAgentTask`、DAG ノード含む）、スケジュール実行（`runPrompt`）が taskId キーの AbortController を登録し、その signal を LLM リクエストへ伝播する。`requestTaskCancellation` が `aborted` を返す経路が本番チャットで機能し、中断時は `cancelled` 状態を維持（`failed` で上書きしない）してチャットに停止完了を返信する。
+
+#### 未完了 / 継続
+
+- `searchInFiles` の remote backend 統合（リモート `grep` 相当）は未対応。
+- network policy はコマンド名デノリストによるヒューリスティックで、完全なネットワーク遮断ではない（コンテナ network 設定などインフラ側の対応が正攻法）。
+- 生成スキルの backend 実行は `generated_skills/` への書き込みを伴うため、`EXECUTION_ALLOWED_PATHS` を設定する場合は `generated_skills` を allowlist に含める必要がある。
+- スキル実行中の abort（LLM 呼び出し以外の長時間スキル）はスキル handler 側へ signal を渡していないため、中断粒度は LLM 呼び出し単位。
+
+#### テスト / 検証
+
+- 新規 / 追加テスト: `executionBackend`（readFile / listDir の 3 backend 実装）、`executionPolicy`（allowlist / network policy の単体 + LocalBackend 統合）、`generatedSkillBackendRunner`（backend 実行・正規化・タイムアウト・モード切替）、`taskAbortIntegration`（agent / schedule タスクの即時 abort と cancelled 状態維持）。
+- `npm test` で Jest 全体（47 スイート / 829 件）の通過、`npx tsc --noEmit` の型チェック通過を確認した。
+
 ### 2026-06-11: Phase 3 残課題の小分け実装（toolsets 永続化 / スケジュール toolsets 更新 / 承認者 allowlist）
 
 2026-06-10 の Phase 3 完了エントリで「未完了 / 継続」に挙げた小さな残課題のうち、独立して切り出せる 3 件を実装した。実装は Sonnet サブエージェントへ分割委譲し、メインセッションは設計・レビュー・型チェック・テスト・コミット集約を担当した。
