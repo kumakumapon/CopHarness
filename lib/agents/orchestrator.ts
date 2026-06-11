@@ -3,6 +3,7 @@ import { resolveSkills } from '../skill';
 import { resolveToolsetSkillNames } from '../skills/toolsets';
 import { getSkillExecutionContext, withSkillExecutionContext } from '../skills/executionContext';
 import { finishTask, startTask } from '../tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../tasks/cancellation';
 import type { LLMAdapter } from '../adapter';
 import type { AgentTask, AgentResult } from './types';
 
@@ -69,6 +70,8 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
 
   let adapter: LLMAdapter | undefined;
   const start = Date.now();
+  const abortController = new AbortController();
+  registerTaskAbortController(taskRecord.id, abortController);
   try {
     adapter = createAdapter({ provider, model, apiKey, timeoutMs });
     const toolsetSkillNames = task.toolsets && task.toolsets.length > 0
@@ -94,6 +97,7 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
         ],
         skills,
         timeoutMs,
+        abortSignal: abortController.signal,
       }),
     );
     await finishTask(taskRecord.id, 'succeeded');
@@ -106,15 +110,19 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
       durationMs: Date.now() - start,
     };
   } catch (err) {
-    await finishTask(taskRecord.id, 'failed', err);
+    // A stop request through the cancellation registry has already finished
+    // the ledger entry as cancelled; do not overwrite it with 'failed'.
+    const cancelled = abortController.signal.aborted;
+    if (!cancelled) await finishTask(taskRecord.id, 'failed', err);
     return {
       taskId: taskRecord.id,
       role: roleName,
       content: '',
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: cancelled ? 'cancelled' : err instanceof Error ? err.message : String(err),
     };
   } finally {
+    unregisterTaskAbortController(taskRecord.id);
     await Promise.resolve(adapter?.destroy?.()).catch(() => {});
   }
 }
