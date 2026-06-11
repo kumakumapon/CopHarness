@@ -237,10 +237,42 @@ describe('DockerBackend', () => {
     delete process.env.MY_TEST_VAR;
   });
 
-  it('rejects append:true', async () => {
+  it('writeFile append:true uses docker exec -i ... sh -c "cat >>" instead of docker cp', async () => {
+    const stdinChunks: string[] = [];
+    _spawnMockImpl = (cmd, args) => {
+      capturedArgv.push({ cmd: String(cmd), args: [...args] });
+      return makeFakeChild('', '', 0, stdinChunks);
+    };
     const backend = makeBackend();
-    await expect(backend.writeFile({ relativePath: 'x.txt', content: 'hi', append: true }))
-      .rejects.toThrow(/append is not supported/);
+    const result = await backend.writeFile({ relativePath: 'sub/file.txt', content: 'appended', append: true });
+    expect(result.backend).toBe('docker');
+    expect(result.bytesWritten).toBe(8);
+    // First call: mkdir -p; second: docker exec -i ... sh -c 'cat >>'
+    expect(capturedArgv).toHaveLength(2);
+    const [mkdirCall, appendCall] = capturedArgv;
+    expect(mkdirCall.cmd).toBe('docker');
+    expect(mkdirCall.args).toContain('mkdir');
+    expect(appendCall.cmd).toBe('docker');
+    expect(appendCall.args).toContain('exec');
+    expect(appendCall.args).toContain('-i');
+    expect(appendCall.args).toContain('sh');
+    expect(appendCall.args).toContain('-c');
+    const shCmd = appendCall.args[appendCall.args.indexOf('-c') + 1];
+    expect(shCmd).toContain('cat >>');
+    // docker cp must NOT be used
+    expect(capturedArgv.every(({ args }) => args[0] !== 'cp')).toBe(true);
+    // content must be streamed via stdin
+    expect(stdinChunks.join('')).toBe('appended');
+  });
+
+  it('writeFile overwrite (append omitted) still uses docker cp', async () => {
+    setupMock();
+    const backend = makeBackend();
+    await backend.writeFile({ relativePath: 'sub/file.txt', content: 'hello' });
+    // First call: mkdir -p; second: docker cp
+    expect(capturedArgv).toHaveLength(2);
+    const cpCall = capturedArgv[1];
+    expect(cpCall.args[0]).toBe('cp');
   });
 
   it('rejects absolute path', async () => {
@@ -344,10 +376,26 @@ describe('SshBackend', () => {
     expect(args[args.indexOf('-i') + 1]).toBe('/home/user/.ssh/id_rsa');
   });
 
-  it('rejects append:true', async () => {
-    const backend = makeBackend();
-    await expect(backend.writeFile({ relativePath: 'x.txt', content: 'hi', append: true }))
-      .rejects.toThrow(/append is not supported/);
+  it('writeFile append:true uses cat >> in remote command', async () => {
+    setupMock();
+    const backend = makeBackend({ workdir: '/remote' });
+    const result = await backend.writeFile({ relativePath: 'notes.txt', content: 'more data', append: true });
+    expect(result.backend).toBe('ssh');
+    expect(result.bytesWritten).toBe(9);
+    const remoteCmd = capturedArgv[0].args[capturedArgv[0].args.length - 1];
+    expect(remoteCmd).toContain('cat >>');
+    // must NOT use single > (overwrite redirect)
+    expect(remoteCmd).not.toMatch(/cat >(?!>)/);
+  });
+
+  it('writeFile overwrite (append omitted) uses cat > in remote command', async () => {
+    setupMock();
+    const backend = makeBackend({ workdir: '/remote' });
+    await backend.writeFile({ relativePath: 'notes.txt', content: 'data' });
+    const remoteCmd = capturedArgv[0].args[capturedArgv[0].args.length - 1];
+    // should contain single > but NOT >>
+    expect(remoteCmd).toMatch(/cat >/);
+    expect(remoteCmd).not.toContain('cat >>');
   });
 
   it('rejects absolute paths in writeFile', async () => {

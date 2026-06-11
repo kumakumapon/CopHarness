@@ -124,6 +124,22 @@ export interface AgentCommandContext {
   channelKey?: string;
 }
 
+/** Returns the configured approver allowlist, or null when unrestricted. */
+export function getApproverAllowlist(): string[] | null {
+  const raw = process.env.AGENT_COMMAND_APPROVERS;
+  if (!raw) return null;
+  const entries = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return entries.length > 0 ? entries : null;
+}
+
+/** Whether the given context is authorized to approve/reject. */
+export function isAuthorizedApprover(ctx: AgentCommandContext): boolean {
+  const allow = getApproverAllowlist();
+  if (!allow) return true; // unrestricted (backward compatible)
+  const ids = [ctx.personId, ctx.channelKey].filter(Boolean) as string[];
+  return ids.some((id) => allow.includes(id.trim()));
+}
+
 const HELP_TEXT = `\
 エージェントコマンド一覧:
   tasks / タスク / タスク一覧 / 進捗   — タスク一覧
@@ -235,6 +251,9 @@ export async function executeAgentCommand(
 
     case 'approve':
     case 'reject': {
+      if (!isAuthorizedApprover(ctx)) {
+        return 'この操作を行う権限がありません。承認者として登録されていません。';
+      }
       const isApprove = command.kind === 'approve';
       const resolution = isApprove ? 'approved' : 'rejected';
       const verb = isApprove ? '承認' : '却下';

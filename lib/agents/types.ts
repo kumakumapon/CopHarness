@@ -93,6 +93,8 @@ export interface AgentDagStoredPlan {
   prompt?: string;
   dependsOn: string[];
   skills: string[];
+  /** Named toolsets whose resolved skills are merged with `skills`. */
+  toolsets?: string[];
   timeoutMs?: number;
   budget?: AgentPlan['budget'];
   workspace?: string;

@@ -11,7 +11,7 @@ export async function PATCH(
   if (unauthorized) return unauthorized;
 
   const { id } = await params;
-  let body: { enabled?: boolean; name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string };
+  let body: { enabled?: boolean; name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string; toolsets?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -31,7 +31,7 @@ export async function PATCH(
   }
 
   // field update
-  const updates: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string } = {};
+  const updates: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string; toolsets?: string[] } = {};
   if (typeof body.name === 'string' && body.name.trim()) updates.name = body.name.trim();
   if (typeof body.cron === 'string' && body.cron.trim()) updates.cron = normalizeCron(body.cron.trim());
   if (typeof body.prompt === 'string' && body.prompt.trim()) updates.prompt = body.prompt.trim();
@@ -40,6 +40,12 @@ export async function PATCH(
   }
   if (typeof body.lineUserId === 'string') {
     updates.lineUserId = body.lineUserId.trim() || undefined;
+  }
+  if (body.toolsets !== undefined) {
+    if (!Array.isArray(body.toolsets) || !body.toolsets.every((t) => typeof t === 'string')) {
+      return NextResponse.json({ error: 'toolsets must be an array of strings' }, { status: 400 });
+    }
+    updates.toolsets = body.toolsets as string[];
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
