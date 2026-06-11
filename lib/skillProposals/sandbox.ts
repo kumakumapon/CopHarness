@@ -218,10 +218,16 @@ export interface ProposalTestRun {
 /**
  * Run every test case in the proposal's testPlan against its proposedCode.
  * An empty testPlan fails: an untested proposal must never reach approval.
+ *
+ * @param proposal - The proposal whose code and test plan to run.
+ * @param options  - Sandbox run options (timeout, etc.).
+ * @param runner   - Optional custom runner (e.g. backend runner). Defaults to
+ *                   `runProposalCode` so existing callers are unaffected.
  */
 export async function runProposalTests(
   proposal: Pick<SkillProposal, 'proposedCode' | 'testPlan'>,
   options: SandboxRunOptions = {},
+  runner: (code: string, args: Record<string, unknown>, opts: SandboxRunOptions) => Promise<SkillResult> = runProposalCode,
 ): Promise<ProposalTestRun> {
   if (!proposal.testPlan || proposal.testPlan.length === 0) {
     return {
@@ -233,7 +239,7 @@ export async function runProposalTests(
   const results: SkillProposalTestResult[] = [];
   for (let index = 0; index < proposal.testPlan.length; index++) {
     const testCase = proposal.testPlan[index];
-    const result = await runProposalCode(proposal.proposedCode, testCase.args ?? {}, options);
+    const result = await runner(proposal.proposedCode, testCase.args ?? {}, options);
     const evaluation = evaluateExpectation(result, testCase.expect);
     results.push({
       index,
