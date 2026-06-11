@@ -37,11 +37,43 @@ export interface ExecutionBackendDescription {
   envAllowlist: string[];
   timeoutMs: number;
   detail?: string;
+  allowedPaths?: string[];
+  networkPolicy?: 'allow' | 'deny';
+}
+
+export interface ReadFileRequest {
+  relativePath: string;
+  /** Maximum characters to return. Content longer than this is truncated. */
+  maxBytes?: number;
+}
+
+export interface ReadFileResult {
+  content: string;
+  truncated: boolean;
+  backend: ExecutionBackendKind;
+}
+
+export interface ListDirEntry {
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+}
+
+export interface ListDirRequest {
+  /** Relative path inside the workdir/sandbox. Defaults to '.'. */
+  relativePath?: string;
+}
+
+export interface ListDirResult {
+  entries: ListDirEntry[];
+  backend: ExecutionBackendKind;
 }
 
 export interface ExecutionBackend {
   kind: ExecutionBackendKind;
   runCommand(req: CommandRequest): Promise<CommandResult>;
   writeFile(req: WriteFileRequest): Promise<WriteFileResult>;
+  readFile(req: ReadFileRequest): Promise<ReadFileResult>;
+  listDir(req: ListDirRequest): Promise<ListDirResult>;
   describe(): ExecutionBackendDescription;
 }

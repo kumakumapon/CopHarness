@@ -95,6 +95,7 @@ import { loadHistory, saveHistory } from '../lib/history/store';
 import { resolveConversationKey } from '../lib/identity/store';
 import { withSkillExecutionContext } from '../lib/skills/executionContext';
 import { finishTask, startTask } from '../lib/tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../lib/tasks/cancellation';
 import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
 import {
   getSession as getWizardSession,
@@ -686,13 +687,19 @@ async function handleMessage(
     conversationKey: identity.conversationKey,
     title: userText.slice(0, 120),
   });
+  const taskAbort = new AbortController();
+  registerTaskAbortController(task.id, taskAbort);
   try {
     if ('sendTyping' in message.channel) await (message.channel as any).sendTyping();
 
     const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     const resp = await withSkillExecutionContext(
       { personId: identity.personId, channelKey: identity.channelKey, taskId: task.id },
-      () => runWithRalphLoop({ messages: [...history], attachments, timeoutMs, skills: listActiveSkills() }, adapter, { taskId: task.id }),
+      () => runWithRalphLoop(
+        { messages: [...history], attachments, timeoutMs, abortSignal: taskAbort.signal, skills: listActiveSkills() },
+        adapter,
+        { taskId: task.id },
+      ),
     );
     let replyText = resp.content || '（応答がありませんでした）';
     try {
@@ -709,12 +716,21 @@ async function handleMessage(
 
     await sendInChunks(message, replyText);
   } catch (err) {
-    await finishTask(task.id, 'failed', err);
+    // A stop request via the cancellation registry has already finished the
+    // ledger entry as cancelled; do not overwrite it with 'failed'.
+    const cancelled = taskAbort.signal.aborted;
+    if (!cancelled) {
+      await finishTask(task.id, 'failed', err);
+      console.error('[Discord Bot] LLM error:', err);
+    }
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[Discord Bot] LLM error:', err);
     const idx = history.lastIndexOf(history.find((m) => m.role === 'user' && m.content === userText)!);
     if (idx !== -1) history.splice(idx, 1);
-    await message.reply(`エラーが発生しました: ${msg.slice(0, 200)}`);
+    await message.reply(
+      cancelled ? '🛑 停止要求により応答を中断しました。' : `エラーが発生しました: ${msg.slice(0, 200)}`,
+    );
+  } finally {
+    unregisterTaskAbortController(task.id);
   }
 }
 

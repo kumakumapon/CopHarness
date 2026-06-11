@@ -20,7 +20,18 @@ import {
   type CommandResult,
   type WriteFileRequest,
   type WriteFileResult,
+  type ReadFileRequest,
+  type ReadFileResult,
+  type ListDirRequest,
+  type ListDirResult,
+  type ListDirEntry,
 } from './types';
+import {
+  enforceAllowedPath,
+  enforceNetworkPolicy,
+  getAllowedPathPrefixes,
+  getNetworkPolicy,
+} from './policy';
 
 const MAX_OUTPUT_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -157,6 +168,7 @@ export class SshBackend implements ExecutionBackend {
   }
 
   async runCommand(req: CommandRequest): Promise<CommandResult> {
+    enforceNetworkPolicy(req.command);
     const timeoutMs = req.timeoutMs ?? this.config.defaultTimeoutMs;
 
     // Build the env prefix for allowlisted vars
@@ -191,6 +203,7 @@ export class SshBackend implements ExecutionBackend {
 
   async writeFile(req: WriteFileRequest): Promise<WriteFileResult> {
     enforceRelativePath(req.relativePath);
+    enforceAllowedPath(req.relativePath);
 
     const workdir = this.config.workdir;
     const remoteBase = remoteWorkdirPath(workdir);
@@ -231,6 +244,72 @@ export class SshBackend implements ExecutionBackend {
     };
   }
 
+  async readFile(req: ReadFileRequest): Promise<ReadFileResult> {
+    enforceRelativePath(req.relativePath);
+    enforceAllowedPath(req.relativePath);
+    const maxBytes = req.maxBytes ?? 100_000;
+    const remoteBase = remoteWorkdirPath(this.config.workdir);
+    const remoteTarget = remoteBase === '.' ? req.relativePath : `${remoteBase}/${req.relativePath}`;
+    const headCount = maxBytes + 1;
+    const remoteCmd = `head -c ${headCount} ${shellQuote(remoteTarget)}`;
+    const sshArgs = [
+      ...this.buildSshBaseArgs(),
+      this.destination(),
+      '--',
+      remoteCmd,
+    ];
+    const { stdout, stderr, exitCode, timedOut } = await spawnToResult(
+      'ssh', sshArgs, this.config.defaultTimeoutMs,
+    );
+    if (timedOut) {
+      throw new Error('SSH readFile timed out.');
+    }
+    if (exitCode !== 0) {
+      throw new Error(`SSH readFile failed (exit ${exitCode ?? 'null'}): ${stderr}`);
+    }
+    if (stdout.length > maxBytes) {
+      return { content: stdout.slice(0, maxBytes), truncated: true, backend: 'ssh' };
+    }
+    return { content: stdout, truncated: false, backend: 'ssh' };
+  }
+
+  async listDir(req: ListDirRequest): Promise<ListDirResult> {
+    const relativePath = req.relativePath ?? '.';
+    enforceAllowedPath(relativePath);
+    const remoteBase = remoteWorkdirPath(this.config.workdir);
+    let remoteTarget: string;
+    if (relativePath === '.') {
+      remoteTarget = remoteBase;
+    } else {
+      enforceRelativePath(relativePath);
+      remoteTarget = remoteBase === '.' ? relativePath : `${remoteBase}/${relativePath}`;
+    }
+    const remoteCmd = `ls -1p ${shellQuote(remoteTarget)}`;
+    const sshArgs = [
+      ...this.buildSshBaseArgs(),
+      this.destination(),
+      '--',
+      remoteCmd,
+    ];
+    const { stdout, stderr, exitCode, timedOut } = await spawnToResult(
+      'ssh', sshArgs, this.config.defaultTimeoutMs,
+    );
+    if (timedOut) {
+      throw new Error('SSH listDir timed out.');
+    }
+    if (exitCode !== 0) {
+      throw new Error(`SSH listDir failed (exit ${exitCode ?? 'null'}): ${stderr}`);
+    }
+    const lines = stdout.split('\n').filter((l) => l.length > 0);
+    const entries: ListDirEntry[] = lines.map((line) => {
+      if (line.endsWith('/')) {
+        return { name: line.slice(0, -1), type: 'directory' as const };
+      }
+      return { name: line, type: 'file' as const };
+    });
+    return { entries, backend: 'ssh' };
+  }
+
   describe(): ExecutionBackendDescription {
     const detail = [
       `host: ${this.config.host}`,
@@ -244,6 +323,8 @@ export class SshBackend implements ExecutionBackend {
       envAllowlist: this.config.envAllowlist,
       timeoutMs: this.config.defaultTimeoutMs,
       detail,
+      allowedPaths: getAllowedPathPrefixes() ?? undefined,
+      networkPolicy: getNetworkPolicy(),
     };
   }
 }

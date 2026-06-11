@@ -15,7 +15,18 @@ import {
   type CommandResult,
   type WriteFileRequest,
   type WriteFileResult,
+  type ReadFileRequest,
+  type ReadFileResult,
+  type ListDirRequest,
+  type ListDirResult,
+  type ListDirEntry,
 } from './types';
+import {
+  enforceAllowedPath,
+  enforceNetworkPolicy,
+  getAllowedPathPrefixes,
+  getNetworkPolicy,
+} from './policy';
 
 const MAX_OUTPUT_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -47,6 +58,7 @@ export class LocalBackend implements ExecutionBackend {
   readonly kind = 'local' as const;
 
   async runCommand(req: CommandRequest): Promise<CommandResult> {
+    enforceNetworkPolicy(req.command);
     const timeoutMs = req.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     return new Promise((resolve) => {
       const isWin = process.platform === 'win32';
@@ -80,6 +92,7 @@ export class LocalBackend implements ExecutionBackend {
   }
 
   async writeFile(req: WriteFileRequest): Promise<WriteFileResult> {
+    enforceAllowedPath(req.relativePath);
     const resolved = await resolveSafe(req.relativePath);
     await fs.mkdir(path.dirname(resolved), { recursive: true });
     if (req.append) {
@@ -94,6 +107,59 @@ export class LocalBackend implements ExecutionBackend {
     };
   }
 
+  async readFile(req: ReadFileRequest): Promise<ReadFileResult> {
+    enforceAllowedPath(req.relativePath);
+    const maxBytes = req.maxBytes ?? 100_000;
+    const resolved = await resolveSafe(req.relativePath);
+    const stat = await fs.stat(resolved);
+    if (!stat.isFile()) {
+      throw new Error(`"${req.relativePath}" is not a file`);
+    }
+    const raw = await fs.readFile(resolved, 'utf8');
+    if (raw.length > maxBytes) {
+      return { content: raw.slice(0, maxBytes), truncated: true, backend: 'local' };
+    }
+    return { content: raw, truncated: false, backend: 'local' };
+  }
+
+  async listDir(req: ListDirRequest): Promise<ListDirResult> {
+    const relativePath = req.relativePath ?? '.';
+    enforceAllowedPath(relativePath);
+    let resolved: string;
+    if (relativePath === '.') {
+      resolved = await getSandboxDir();
+    } else {
+      resolved = await resolveSafe(relativePath);
+    }
+    const stat = await fs.stat(resolved);
+    if (!stat.isDirectory()) {
+      throw new Error(`"${relativePath}" is not a directory`);
+    }
+    const dirents = await fs.readdir(resolved, { withFileTypes: true });
+    const entries: ListDirEntry[] = await Promise.all(
+      dirents.map(async (e) => {
+        const entry: ListDirEntry = {
+          name: e.name,
+          type: e.isDirectory() ? 'directory' : 'file',
+        };
+        if (e.isFile()) {
+          try {
+            const s = await fs.stat(path.join(resolved, e.name));
+            entry.size = s.size;
+          } catch {
+            // ignore; size remains undefined
+          }
+        }
+        return entry;
+      }),
+    );
+    entries.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    return { entries, backend: 'local' };
+  }
+
   describe(): ExecutionBackendDescription {
     const envAllowlist = (process.env.EXECUTION_ENV_ALLOWLIST ?? '')
       .split(',').map((s) => s.trim()).filter(Boolean);
@@ -103,6 +169,8 @@ export class LocalBackend implements ExecutionBackend {
       workingDir: process.cwd(),
       envAllowlist,
       timeoutMs: isNaN(timeoutMs) ? DEFAULT_TIMEOUT_MS : timeoutMs,
+      allowedPaths: getAllowedPathPrefixes() ?? undefined,
+      networkPolicy: getNetworkPolicy(),
     };
   }
 }

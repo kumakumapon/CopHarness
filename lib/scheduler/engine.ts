@@ -6,6 +6,11 @@ import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
 import { withSkillExecutionContext } from '../skills/executionContext';
 import { finishTask, startTask } from '../tasks/ledger';
+import {
+  isAbortError,
+  registerTaskAbortController,
+  unregisterTaskAbortController,
+} from '../tasks/cancellation';
 import type { ScheduledPrompt } from './types';
 import '../skills/index';
 import { listActiveSkills, resolveSkills } from '../skill';
@@ -93,10 +98,6 @@ function automationTaskInput(context: ScheduledPromptRunContext): {
   };
 }
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError';
-}
-
 /** Execute a single prompt against the configured LLM and return the response text. */
 export async function runPrompt(
   prompt: string,
@@ -128,9 +129,9 @@ export async function runPrompt(
       ? resolveSkills(resolveToolsetSkillNames(toolsetNames))
       : listActiveSkills();
 
-  const execute = async () => {
+  const execute = async (signal?: AbortSignal) => {
     const resp = await runWithRalphLoop(
-      { messages, timeoutMs, abortSignal, skills },
+      { messages, timeoutMs, abortSignal: signal, skills },
       adapter,
       { originalGoal: prompt },
     );
@@ -138,20 +139,33 @@ export async function runPrompt(
   };
 
   try {
-    if (!scheduledContext) return await execute();
+    if (!scheduledContext) return await execute(abortSignal);
 
     const task = await startTask(automationTaskInput(scheduledContext));
+    // Register a task-scoped controller so chat "stop <taskId>" can abort the
+    // in-flight LLM call, in addition to the schedule-level stopRequested flag.
+    const taskAbort = new AbortController();
+    registerTaskAbortController(task.id, taskAbort);
+    const signal = abortSignal
+      ? AbortSignal.any([abortSignal, taskAbort.signal])
+      : taskAbort.signal;
 
     try {
       const result = await withSkillExecutionContext(
         { channelKey: task.channelKey, taskId: task.id },
-        execute,
+        () => execute(signal),
       );
       await finishTask(task.id, 'succeeded');
       return result;
     } catch (err) {
-      await finishTask(task.id, isAbortError(err) ? 'cancelled' : 'failed', err);
+      // A stop through the cancellation registry already finished the ledger
+      // entry as cancelled; do not overwrite it.
+      if (!taskAbort.signal.aborted) {
+        await finishTask(task.id, isAbortError(err) ? 'cancelled' : 'failed', err);
+      }
       throw err;
+    } finally {
+      unregisterTaskAbortController(task.id);
     }
   } finally {
     if (adapter.destroy) await adapter.destroy();
