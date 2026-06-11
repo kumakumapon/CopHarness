@@ -20,6 +20,7 @@ import {
   querySkillProposals,
 } from './store';
 import { runProposalCode, runProposalTests } from './sandbox';
+import { runProposalCodeOnBackend } from './backendRunner';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,6 +33,35 @@ function getGeneratedSkillTimeoutMs(): number {
   if (!raw) return DEFAULT_GENERATED_TIMEOUT_MS;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GENERATED_TIMEOUT_MS;
+}
+
+/**
+ * Return the appropriate runner function for generated skill code based on
+ * the `GENERATED_SKILL_EXECUTION` environment variable.
+ *
+ * - `backend` → `runProposalCodeOnBackend` (ExecutionBackend: docker / ssh / local)
+ * - `vm` / unset / any other value → `runProposalCode` (default node:vm sandbox)
+ *
+ * An unrecognised value triggers a warning and falls back to vm.
+ * The mode is resolved **at call time** (not at register time) so that changing
+ * the env var mid-process (e.g. in tests) is reflected immediately.
+ */
+export function getGeneratedSkillRunner(): (
+  code: string,
+  args: Record<string, unknown>,
+  opts: { timeoutMs?: number },
+) => Promise<import('../skill').SkillResult> {
+  const mode = (process.env.GENERATED_SKILL_EXECUTION ?? 'vm').toLowerCase();
+  if (mode === 'backend') {
+    return runProposalCodeOnBackend;
+  }
+  if (mode !== 'vm') {
+    console.warn(
+      `[lifecycle] Unknown GENERATED_SKILL_EXECUTION value "${process.env.GENERATED_SKILL_EXECUTION}". ` +
+        `Falling back to "vm" sandbox.`,
+    );
+  }
+  return runProposalCode;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +104,7 @@ export async function runProposalTestPhase(id: string): Promise<SkillProposal> {
   const testRun = await runProposalTests(
     { proposedCode: proposal.proposedCode, testPlan: proposal.testPlan },
     { timeoutMs: getGeneratedSkillTimeoutMs() },
+    getGeneratedSkillRunner(),
   );
 
   if (testRun.passed) {
@@ -181,7 +212,7 @@ export function registerProposalSkill(proposal: SkillProposal): SkillDefinition 
     category: 'generated',
     riskLevel: effectiveRisk,
     handler: (args: Record<string, unknown>) =>
-      runProposalCode(proposal.proposedCode, args, { timeoutMs }),
+      getGeneratedSkillRunner()(proposal.proposedCode, args, { timeoutMs }),
   };
 
   const gated = wrapWithGate(definition);
