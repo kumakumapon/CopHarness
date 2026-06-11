@@ -18,6 +18,11 @@ import {
   type CommandResult,
   type WriteFileRequest,
   type WriteFileResult,
+  type ReadFileRequest,
+  type ReadFileResult,
+  type ListDirRequest,
+  type ListDirResult,
+  type ListDirEntry,
 } from './types';
 import { shellQuote } from './sshBackend';
 
@@ -185,6 +190,53 @@ export class DockerBackend implements ExecutionBackend {
       bytesWritten: Buffer.byteLength(req.content, 'utf8'),
       backend: 'docker',
     };
+  }
+
+  async readFile(req: ReadFileRequest): Promise<ReadFileResult> {
+    enforceRelativePath(req.relativePath);
+    const maxBytes = req.maxBytes ?? 100_000;
+    const target = req.relativePath === '.' ? this.workdir : `${this.workdir}/${req.relativePath}`;
+    const headCount = maxBytes + 1;
+    const { stdout, stderr, exitCode, timedOut } = await spawnToResult(
+      'docker',
+      ['exec', this.container, 'sh', '-c', `head -c ${headCount} ${shellQuote(target)}`],
+      this.defaultTimeoutMs,
+    );
+    if (timedOut) {
+      throw new Error('Docker readFile timed out.');
+    }
+    if (exitCode !== 0) {
+      throw new Error(`Docker readFile failed (exit ${exitCode ?? 'null'}): ${stderr}`);
+    }
+    if (stdout.length > maxBytes) {
+      return { content: stdout.slice(0, maxBytes), truncated: true, backend: 'docker' };
+    }
+    return { content: stdout, truncated: false, backend: 'docker' };
+  }
+
+  async listDir(req: ListDirRequest): Promise<ListDirResult> {
+    const relativePath = req.relativePath ?? '.';
+    if (relativePath !== '.') enforceRelativePath(relativePath);
+    const target = relativePath === '.' ? this.workdir : `${this.workdir}/${relativePath}`;
+    const { stdout, stderr, exitCode, timedOut } = await spawnToResult(
+      'docker',
+      ['exec', this.container, 'sh', '-c', `ls -1p ${shellQuote(target)}`],
+      this.defaultTimeoutMs,
+    );
+    if (timedOut) {
+      throw new Error('Docker listDir timed out.');
+    }
+    if (exitCode !== 0) {
+      throw new Error(`Docker listDir failed (exit ${exitCode ?? 'null'}): ${stderr}`);
+    }
+    const lines = stdout.split('\n').filter((l) => l.length > 0);
+    const entries: ListDirEntry[] = lines.map((line) => {
+      if (line.endsWith('/')) {
+        return { name: line.slice(0, -1), type: 'directory' as const };
+      }
+      return { name: line, type: 'file' as const };
+    });
+    return { entries, backend: 'docker' };
   }
 
   describe(): ExecutionBackendDescription {
