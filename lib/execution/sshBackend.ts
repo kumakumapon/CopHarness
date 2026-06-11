@@ -190,10 +190,6 @@ export class SshBackend implements ExecutionBackend {
   }
 
   async writeFile(req: WriteFileRequest): Promise<WriteFileResult> {
-    if (req.append) {
-      throw new Error('append is not supported on docker/ssh backends.');
-    }
-
     enforceRelativePath(req.relativePath);
 
     const workdir = this.config.workdir;
@@ -208,7 +204,8 @@ export class SshBackend implements ExecutionBackend {
     const quotedParent = shellQuote(remoteParent);
     const quotedTarget = shellQuote(remoteTarget);
 
-    const mkdirCmd = `mkdir -p ${quotedParent} && cat > ${quotedTarget}`;
+    const redirect = req.append ? '>>' : '>';
+    const mkdirCmd = `mkdir -p ${quotedParent} && cat ${redirect} ${quotedTarget}`;
     const sshArgs = [
       ...this.buildSshBaseArgs(),
       this.destination(),

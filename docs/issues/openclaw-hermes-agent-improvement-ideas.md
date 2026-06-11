@@ -137,6 +137,28 @@ context compaction を会話要約だけで終わらせず、構造化された�
 
 ## 実装進捗
 
+### 2026-06-11: Phase 3 残課題の小分け実装（toolsets 永続化 / スケジュール toolsets 更新 / 承認者 allowlist）
+
+2026-06-10 の Phase 3 完了エントリで「未完了 / 継続」に挙げた小さな残課題のうち、独立して切り出せる 3 件を実装した。実装は Sonnet サブエージェントへ分割委譲し、メインセッションは設計・レビュー・型チェック・テスト・コミット集約を担当した。
+
+#### 完了
+
+- DAG metadata への `toolsets` 永続化と retry 引き継ぎ。`storedPlans` が各ノードの `toolsets` を保存し、`plansFromMetadata` が復元するようにしたため、`retryAgentDagNode` での再構築・再実行時に toolset 指定が失われなくなった（`AgentDagStoredPlan.toolsets` を追加）。
+- スケジュール API の PATCH で `toolsets` を更新できるようにした。`app/api/dashboard/schedules/[id]/route.ts` の PATCH が POST と同じ検証（string 配列）で `toolsets` を受け付け、作成後も変更可能にした。空配列で toolset 制限をクリアできる。
+- チャット経由の承認 / 却下に承認者 allowlist を追加した。`AGENT_COMMAND_APPROVERS`（カンマ区切りの personId / channelKey）が設定されている場合のみ、リストに一致する identity だけが `approve` / `reject` を実行できる。未設定時は従来どおり全員許可（後方互換）。`.env.example` に説明を追記。
+- docker / ssh backend の `writeFile` を append 対応にした。ssh はリダイレクトを `cat >>` に切り替え、docker は append 時に `docker cp` ではなく `docker exec -i sh -c 'cat >>'` で stdin 経由追記する（overwrite は従来の temp ファイル + `docker cp` を維持）。これで 2026-06-10 の「append は local のみ」課題を解消した。
+
+#### 未完了 / 継続
+
+- remote backend（docker / ssh）での `readFile` 系スキルの統合、network policy / allowed paths の強制、生成スキル実行の backend 側移譲は引き続き残課題（次の小分け対象）。
+- 通常会話タスクへの AbortController 登録（チャット `stop` の即時中断）は実行中 LLM 呼び出しへの中断シグナル接続が必要で、別の小分け issue として継続。
+- 承認者 allowlist は完全一致のみ。ロール / グループベースの承認権限や、ポリシー（`policy.json`）との統合は将来課題。
+
+#### テスト / 検証
+
+- 新規 / 追加テスト: `agentDagRunner`（toolsets 永続化・retry 引き継ぎ）、`dashboardScheduleUpdate`（PATCH の toolsets 更新・検証・クリア）、`agentCommands`（承認者 allowlist の後方互換・許可・拒否）、`executionBackend`（docker / ssh の append 経路と overwrite 経路の検証）。
+- `npm test` で Jest 全体（44 スイート / 750 件）の通過、`npx tsc --noEmit` の型チェック通過を確認した。
+
 ### 2026-06-10: Phase 3 完了（ExecutionBackend / Toolset・MCP Hub / チャットコマンド）
 
 #### 完了
