@@ -19,6 +19,7 @@ import {
   type WriteFileRequest,
   type WriteFileResult,
 } from './types';
+import { shellQuote } from './sshBackend';
 
 const MAX_OUTPUT_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -134,37 +135,49 @@ export class DockerBackend implements ExecutionBackend {
   }
 
   async writeFile(req: WriteFileRequest): Promise<WriteFileResult> {
-    if (req.append) {
-      throw new Error('append is not supported on docker/ssh backends.');
-    }
-
     enforceRelativePath(req.relativePath);
 
     const targetPath = `${this.workdir}/${req.relativePath}`;
     const parentDir = path.posix.dirname(targetPath);
-
-    // Write content to a local temp file
-    const tmpFile = path.join(os.tmpdir(), `copharness-docker-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    await fs.writeFile(tmpFile, req.content, 'utf8');
-
     const timeoutMs = this.defaultTimeoutMs;
 
-    try {
-      // Create parent directory inside the container
-      await spawnToResult(
+    // Create parent directory inside the container (needed for both overwrite and append)
+    await spawnToResult(
+      'docker',
+      ['exec', this.container, 'mkdir', '-p', parentDir],
+      timeoutMs,
+    );
+
+    if (req.append) {
+      // Append mode: stream content via stdin into the container using sh -c 'cat >>'
+      const { exitCode, stderr, timedOut } = await spawnToResult(
         'docker',
-        ['exec', this.container, 'mkdir', '-p', parentDir],
+        ['exec', '-i', this.container, 'sh', '-c', `cat >> ${shellQuote(targetPath)}`],
         timeoutMs,
+        req.content,
       );
 
-      // Copy the temp file into the container
-      await spawnToResult(
-        'docker',
-        ['cp', tmpFile, `${this.container}:${targetPath}`],
-        timeoutMs,
-      );
-    } finally {
-      await fs.unlink(tmpFile).catch(() => { /* ignore */ });
+      if (timedOut) {
+        throw new Error('Docker writeFile (append) timed out.');
+      }
+      if (exitCode !== 0) {
+        throw new Error(`Docker writeFile (append) failed (exit ${exitCode ?? 'null'}): ${stderr}`);
+      }
+    } else {
+      // Overwrite mode: write content to a local temp file and docker cp into container
+      const tmpFile = path.join(os.tmpdir(), `copharness-docker-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      await fs.writeFile(tmpFile, req.content, 'utf8');
+
+      try {
+        // Copy the temp file into the container
+        await spawnToResult(
+          'docker',
+          ['cp', tmpFile, `${this.container}:${targetPath}`],
+          timeoutMs,
+        );
+      } finally {
+        await fs.unlink(tmpFile).catch(() => { /* ignore */ });
+      }
     }
 
     return {
