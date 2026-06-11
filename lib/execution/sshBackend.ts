@@ -26,6 +26,12 @@ import {
   type ListDirResult,
   type ListDirEntry,
 } from './types';
+import {
+  enforceAllowedPath,
+  enforceNetworkPolicy,
+  getAllowedPathPrefixes,
+  getNetworkPolicy,
+} from './policy';
 
 const MAX_OUTPUT_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -162,6 +168,7 @@ export class SshBackend implements ExecutionBackend {
   }
 
   async runCommand(req: CommandRequest): Promise<CommandResult> {
+    enforceNetworkPolicy(req.command);
     const timeoutMs = req.timeoutMs ?? this.config.defaultTimeoutMs;
 
     // Build the env prefix for allowlisted vars
@@ -196,6 +203,7 @@ export class SshBackend implements ExecutionBackend {
 
   async writeFile(req: WriteFileRequest): Promise<WriteFileResult> {
     enforceRelativePath(req.relativePath);
+    enforceAllowedPath(req.relativePath);
 
     const workdir = this.config.workdir;
     const remoteBase = remoteWorkdirPath(workdir);
@@ -238,6 +246,7 @@ export class SshBackend implements ExecutionBackend {
 
   async readFile(req: ReadFileRequest): Promise<ReadFileResult> {
     enforceRelativePath(req.relativePath);
+    enforceAllowedPath(req.relativePath);
     const maxBytes = req.maxBytes ?? 100_000;
     const remoteBase = remoteWorkdirPath(this.config.workdir);
     const remoteTarget = remoteBase === '.' ? req.relativePath : `${remoteBase}/${req.relativePath}`;
@@ -266,6 +275,7 @@ export class SshBackend implements ExecutionBackend {
 
   async listDir(req: ListDirRequest): Promise<ListDirResult> {
     const relativePath = req.relativePath ?? '.';
+    enforceAllowedPath(relativePath);
     const remoteBase = remoteWorkdirPath(this.config.workdir);
     let remoteTarget: string;
     if (relativePath === '.') {
@@ -313,6 +323,8 @@ export class SshBackend implements ExecutionBackend {
       envAllowlist: this.config.envAllowlist,
       timeoutMs: this.config.defaultTimeoutMs,
       detail,
+      allowedPaths: getAllowedPathPrefixes() ?? undefined,
+      networkPolicy: getNetworkPolicy(),
     };
   }
 }
