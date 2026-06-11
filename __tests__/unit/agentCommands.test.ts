@@ -8,7 +8,12 @@ import {
   finishTask,
 } from '../../lib/tasks/ledger';
 import { _resetTaskCancellationForTests } from '../../lib/tasks/cancellation';
-import { parseAgentCommand, executeAgentCommand } from '../../lib/channels/agentCommands';
+import {
+  parseAgentCommand,
+  executeAgentCommand,
+  getApproverAllowlist,
+  isAuthorizedApprover,
+} from '../../lib/channels/agentCommands';
 import { createApprovalRequest } from '../../lib/humanInLoop/store';
 
 // The HIL store is an in-memory singleton with no reset — we isolate via
@@ -316,5 +321,155 @@ describe('executeAgentCommand — approval operations', () => {
     expect(reply).toContain('listTest_skill_unique');
     expect(reply).toContain(req.id);
     expect(reply).toContain('承認');
+  });
+});
+
+describe('承認者 allowlist (AGENT_COMMAND_APPROVERS)', () => {
+  afterEach(() => {
+    delete process.env.AGENT_COMMAND_APPROVERS;
+  });
+
+  // ── getApproverAllowlist ──────────────────────────────────────────────────
+
+  it('getApproverAllowlist — 未設定のとき null を返す', () => {
+    delete process.env.AGENT_COMMAND_APPROVERS;
+    expect(getApproverAllowlist()).toBeNull();
+  });
+
+  it('getApproverAllowlist — 空文字のとき null を返す（後方互換）', () => {
+    process.env.AGENT_COMMAND_APPROVERS = '';
+    expect(getApproverAllowlist()).toBeNull();
+  });
+
+  it('getApproverAllowlist — スペースのみのとき null を返す', () => {
+    process.env.AGENT_COMMAND_APPROVERS = '  ,  ,  ';
+    expect(getApproverAllowlist()).toBeNull();
+  });
+
+  it('getApproverAllowlist — カンマ区切りのエントリをトリムして返す', () => {
+    process.env.AGENT_COMMAND_APPROVERS = ' alice , bob , charlie ';
+    expect(getApproverAllowlist()).toEqual(['alice', 'bob', 'charlie']);
+  });
+
+  // ── isAuthorizedApprover ──────────────────────────────────────────────────
+
+  it('isAuthorizedApprover — 未設定のとき常に true（後方互換）', () => {
+    delete process.env.AGENT_COMMAND_APPROVERS;
+    expect(isAuthorizedApprover({})).toBe(true);
+    expect(isAuthorizedApprover({ personId: 'anyone' })).toBe(true);
+  });
+
+  it('isAuthorizedApprover — personId がリストに含まれる場合 true', () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'alice,bob';
+    expect(isAuthorizedApprover({ personId: 'alice' })).toBe(true);
+  });
+
+  it('isAuthorizedApprover — channelKey がリストに含まれる場合 true', () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'line:U123,discord:456';
+    expect(isAuthorizedApprover({ channelKey: 'line:U123' })).toBe(true);
+  });
+
+  it('isAuthorizedApprover — personId も channelKey もリストに含まれない場合 false', () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'alice,bob';
+    expect(isAuthorizedApprover({ personId: 'charlie' })).toBe(false);
+    expect(isAuthorizedApprover({ channelKey: 'line:unknown' })).toBe(false);
+    expect(isAuthorizedApprover({})).toBe(false);
+  });
+
+  it('isAuthorizedApprover — personId または channelKey のいずれかが一致すれば true', () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'alice';
+    expect(isAuthorizedApprover({ personId: 'alice', channelKey: 'discord:999' })).toBe(true);
+  });
+
+  // ── executeAgentCommand — approve/reject with allowlist ───────────────────
+
+  it('AGENT_COMMAND_APPROVERS 未設定 — approve が従来どおり動作する（後方互換）', async () => {
+    delete process.env.AGENT_COMMAND_APPROVERS;
+    const req = createApprovalRequest('allowlist_compat_approve', {}, 'tester');
+
+    const reply = await executeAgentCommand(
+      { kind: 'approve', idPrefix: req.id },
+      {},
+    );
+    expect(reply).toContain('承認しました');
+    expect(reply).toContain('allowlist_compat_approve');
+  });
+
+  it('AGENT_COMMAND_APPROVERS 未設定 — reject が従来どおり動作する（後方互換）', async () => {
+    delete process.env.AGENT_COMMAND_APPROVERS;
+    const req = createApprovalRequest('allowlist_compat_reject', {}, 'tester');
+
+    const reply = await executeAgentCommand(
+      { kind: 'reject', idPrefix: req.id },
+      {},
+    );
+    expect(reply).toContain('却下しました');
+  });
+
+  it('許可リストに含まれる personId からの approve は成功する', async () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'approved_user,other_user';
+    const req = createApprovalRequest('allowlist_approve_ok', {}, 'tester');
+
+    const reply = await executeAgentCommand(
+      { kind: 'approve', idPrefix: req.id },
+      { personId: 'approved_user' },
+    );
+    expect(reply).toContain('承認しました');
+    expect(reply).toContain('allowlist_approve_ok');
+  });
+
+  it('許可リストに含まれる channelKey からの reject は成功する', async () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'line:U_approved';
+    const req = createApprovalRequest('allowlist_reject_ok', {}, 'tester');
+
+    const reply = await executeAgentCommand(
+      { kind: 'reject', idPrefix: req.id },
+      { channelKey: 'line:U_approved' },
+    );
+    expect(reply).toContain('却下しました');
+    expect(reply).toContain('allowlist_reject_ok');
+  });
+
+  it('許可リストに含まれない ctx からの approve は拒否メッセージを返す', async () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'alice,bob';
+    const req = createApprovalRequest('allowlist_approve_denied', {}, 'tester');
+
+    const reply = await executeAgentCommand(
+      { kind: 'approve', idPrefix: req.id },
+      { personId: 'charlie' },
+    );
+    expect(reply).toContain('権限がありません');
+    expect(reply).not.toContain('承認しました');
+  });
+
+  it('許可リストに含まれない ctx からの reject は拒否メッセージを返し、HIL ストアの状態が変わらない', async () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'alice';
+    const req = createApprovalRequest('allowlist_reject_denied', {}, 'tester');
+
+    const reply = await executeAgentCommand(
+      { kind: 'reject', idPrefix: req.id },
+      { personId: 'mallory' },
+    );
+    expect(reply).toContain('権限がありません');
+    expect(reply).not.toContain('却下しました');
+
+    // リクエストがまだ pending であることを確認（権限のある人が approve できること）
+    process.env.AGENT_COMMAND_APPROVERS = 'alice';
+    const replyOk = await executeAgentCommand(
+      { kind: 'approve', idPrefix: req.id },
+      { personId: 'alice' },
+    );
+    expect(replyOk).toContain('承認しました');
+  });
+
+  it('identity が ctx に含まれない場合、設定済みリストでは拒否される', async () => {
+    process.env.AGENT_COMMAND_APPROVERS = 'alice';
+    const req = createApprovalRequest('allowlist_no_identity', {}, 'tester');
+
+    const reply = await executeAgentCommand(
+      { kind: 'approve', idPrefix: req.id },
+      {},
+    );
+    expect(reply).toContain('権限がありません');
   });
 });
