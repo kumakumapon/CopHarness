@@ -6,6 +6,7 @@ import { requireApiKey } from '../../../lib/apiAuth';
 import { resolveConversationKey } from '../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
 import { finishTask, startTask } from '../../../lib/tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/tasks/cancellation';
 import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
 import '../../../lib/skills/index';
 
@@ -68,6 +69,11 @@ export async function POST(req: NextRequest) {
       conversationKey: identity.conversationKey,
       title: messages[messages.length - 1]?.content?.slice(0, 120),
     });
+    const taskAbort = new AbortController();
+    registerTaskAbortController(task.id, taskAbort);
+    const abortSignal = req.signal
+      ? AbortSignal.any([req.signal, taskAbort.signal])
+      : taskAbort.signal;
     try {
       const resp = await withSkillExecutionContext(
         {
@@ -75,13 +81,20 @@ export async function POST(req: NextRequest) {
           channelKey: identity.channelKey,
           taskId: task.id,
         },
-        () => runWithRalphLoop({ messages, attachments, timeoutMs, abortSignal: req.signal, skills }, adapter, { taskId: task.id }),
+        () => runWithRalphLoop({ messages, attachments, timeoutMs, abortSignal, skills }, adapter, { taskId: task.id }),
       );
       await finishTask(task.id, 'succeeded');
       return NextResponse.json({ reply: resp.content, taskId: task.id });
     } catch (err) {
+      // A stop request via the cancellation registry has already finished the
+      // ledger entry as cancelled; report the cancellation instead of failing.
+      if (taskAbort.signal.aborted) {
+        return NextResponse.json({ error: 'Task cancelled', taskId: task.id }, { status: 499 });
+      }
       await finishTask(task.id, 'failed', err);
       throw err;
+    } finally {
+      unregisterTaskAbortController(task.id);
     }
   } catch (err: unknown) {
     console.error('LLM API handler error:', err);

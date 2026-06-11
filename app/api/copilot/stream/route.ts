@@ -6,6 +6,7 @@ import { requireApiKey } from '../../../../lib/apiAuth';
 import { resolveConversationKey } from '../../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../../lib/skills/executionContext';
 import { finishTask, startTask } from '../../../../lib/tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/tasks/cancellation';
 import '../../../../lib/skills/index';
 
 export async function POST(req: NextRequest) {
@@ -68,6 +69,12 @@ export async function POST(req: NextRequest) {
     metadata: { stream: true },
   });
 
+  const taskAbort = new AbortController();
+  registerTaskAbortController(task.id, taskAbort);
+  const abortSignal = req.signal
+    ? AbortSignal.any([req.signal, taskAbort.signal])
+    : taskAbort.signal;
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -80,13 +87,13 @@ export async function POST(req: NextRequest) {
           },
           async () => {
             const gen = adapter.stream
-              ? adapter.stream({ messages, attachments, timeoutMs, abortSignal: req.signal, skills })
+              ? adapter.stream({ messages, attachments, timeoutMs, abortSignal, skills })
               : (async function* fallback() {
                   const resp = await adapter.complete({
                     messages,
                     attachments,
                     timeoutMs,
-                    abortSignal: req.signal,
+                    abortSignal,
                     skills,
                   });
                   yield resp.content;
@@ -102,12 +109,21 @@ export async function POST(req: NextRequest) {
         await finishTask(task.id, 'succeeded');
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await finishTask(task.id, 'failed', err);
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: message, taskId: task.id })}\n\n`),
-        );
+        // A stop request via the cancellation registry has already finished
+        // the ledger entry as cancelled; report the cancellation downstream.
+        if (taskAbort.signal.aborted) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ error: 'Task cancelled', taskId: task.id })}\n\n`),
+          );
+        } else {
+          const message = err instanceof Error ? err.message : String(err);
+          await finishTask(task.id, 'failed', err);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ error: message, taskId: task.id })}\n\n`),
+          );
+        }
       } finally {
+        unregisterTaskAbortController(task.id);
         controller.close();
       }
     },
