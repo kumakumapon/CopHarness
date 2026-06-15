@@ -124,6 +124,8 @@ export async function runWithRalphLoop(
         msg.includes('context length') ||
         msg.includes('maximum context') ||
         msg.includes('too long') ||
+        msg.includes('max length reached') ||
+        msg.includes('maximum length reached') ||
         msg.includes('token limit') ||
         msg.includes('context_length_exceeded');
 

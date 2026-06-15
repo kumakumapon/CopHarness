@@ -32,6 +32,8 @@ export function isContextLengthError(err: unknown): boolean {
     msg.includes('context window') ||
     msg.includes('context length') ||
     msg.includes('request payload size exceeds') ||
+    msg.includes('max length reached') ||
+    msg.includes('maximum length reached') ||
     msg.includes('too many tokens') ||
     msg.includes('max_tokens') ||
     msg.includes('invalid message') ||
