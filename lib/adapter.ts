@@ -26,10 +26,19 @@ export interface LLMRequest {
   skills?: SkillDefinition[];
 }
 
+/** Token usage statistics returned by the LLM provider. */
+export interface TokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
 export interface LLMResponse {
   content: string;
   model?: string;
   provider?: string;
+  /** Token usage breakdown when available from the provider. */
+  usage?: TokenUsage;
 }
 
 /**

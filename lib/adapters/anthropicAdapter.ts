@@ -188,28 +188,33 @@ export class AnthropicAdapter implements LLMAdapter {
         }),
       });
 
-      const toolResults: AnthropicContentBlock[] = [];
-      for (const block of toolUseBlocks) {
-        const skill = skillMap.get(block.name ?? '');
-        let resultContent: string;
-        let isError = false;
-        if (skill) {
-          let args: Record<string, unknown> = {};
-          try { args = JSON.parse(block.input ?? '{}') as Record<string, unknown>; } catch { /* ignore */ }
-          const result = await skill.handler(args);
-          resultContent = result.content;
-          isError = result.isError ?? false;
-        } else {
-          resultContent = `Unknown skill: ${block.name ?? ''}`;
-          isError = true;
-        }
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id ?? '',
-          content: resultContent,
-          ...(isError ? { is_error: true } : {}),
-        } as AnthropicContentBlock);
-      }
+      const toolResultsSettled = await Promise.allSettled(
+        toolUseBlocks.map(async (block) => {
+          const skill = skillMap.get(block.name ?? '');
+          if (skill) {
+            let args: Record<string, unknown> = {};
+            try { args = JSON.parse(block.input ?? '{}') as Record<string, unknown>; } catch { /* ignore */ }
+            const result = await skill.handler(args);
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: block.id ?? '',
+              content: result.content,
+              ...(result.isError ? { is_error: true } : {}),
+            };
+          }
+          return {
+            type: 'tool_result' as const,
+            tool_use_id: block.id ?? '',
+            content: `Unknown skill: ${block.name ?? ''}`,
+            is_error: true,
+          };
+        }),
+      );
+      const toolResults: AnthropicContentBlock[] = toolResultsSettled.map((r) =>
+        r.status === 'fulfilled'
+          ? (r.value as AnthropicContentBlock)
+          : ({ type: 'tool_result', tool_use_id: '', content: `Tool execution failed: ${r.reason}`, is_error: true } as AnthropicContentBlock),
+      );
       messages.push({ role: 'user', content: toolResults });
     }
   }
@@ -256,7 +261,7 @@ export class AnthropicAdapter implements LLMAdapter {
       if (tools.length > 0) body.tools = tools;
 
       const { signal, cleanup } = mergeAbortSignals(timeoutMs, request.abortSignal);
-      let data: { content: AnthropicContentBlock[]; stop_reason?: string };
+      let data: { content: AnthropicContentBlock[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
       try {
         const resp = await fetch(`${this.baseUrl}/v1/messages`, {
           method: 'POST',
@@ -288,33 +293,45 @@ export class AnthropicAdapter implements LLMAdapter {
           .filter((c): c is Extract<AnthropicContentBlock, { type: 'text' }> => c.type === 'text')
           .map((c) => c.text)
           .join('');
-        return { content, model, provider: 'anthropic' };
+        const usage = data.usage
+          ? {
+              promptTokens: data.usage.input_tokens,
+              completionTokens: data.usage.output_tokens,
+              totalTokens: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0),
+            }
+          : undefined;
+        return { content, model, provider: 'anthropic', usage };
       }
 
       // Append the assistant message containing tool_use blocks
       messages.push({ role: 'assistant', content: data.content });
 
-      // Execute each tool use and append results as a single user message
-      const toolResults: AnthropicContentBlock[] = [];
-      for (const block of toolUseBlocks) {
-        const skill = skillMap.get(block.name);
-        let resultContent: string;
-        let isError = false;
-        if (skill) {
-          const result = await skill.handler(block.input);
-          resultContent = result.content;
-          isError = result.isError ?? false;
-        } else {
-          resultContent = `Unknown skill: ${block.name}`;
-          isError = true;
-        }
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: resultContent,
-          ...(isError ? { is_error: true } : {}),
-        });
-      }
+      // Execute tool calls in parallel for better performance
+      const completeToolSettled = await Promise.allSettled(
+        toolUseBlocks.map(async (block) => {
+          const skill = skillMap.get(block.name);
+          if (skill) {
+            const result = await skill.handler(block.input);
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: block.id,
+              content: result.content,
+              ...(result.isError ? { is_error: true } : {}),
+            };
+          }
+          return {
+            type: 'tool_result' as const,
+            tool_use_id: block.id,
+            content: `Unknown skill: ${block.name}`,
+            is_error: true,
+          };
+        }),
+      );
+      const toolResults: AnthropicContentBlock[] = completeToolSettled.map((r) =>
+        r.status === 'fulfilled'
+          ? (r.value as AnthropicContentBlock)
+          : ({ type: 'tool_result', tool_use_id: '', content: `Tool execution failed: ${r.reason}`, is_error: true } as AnthropicContentBlock),
+      );
       messages.push({ role: 'user', content: toolResults });
     }
 

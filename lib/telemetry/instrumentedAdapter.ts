@@ -19,6 +19,9 @@ export class InstrumentedAdapter implements LLMAdapter {
       span.end({
         'llm.response.model': resp.model ?? '',
         'llm.response.length': resp.content.length,
+        ...(resp.usage?.promptTokens != null ? { 'llm.usage.prompt_tokens': resp.usage.promptTokens } : {}),
+        ...(resp.usage?.completionTokens != null ? { 'llm.usage.completion_tokens': resp.usage.completionTokens } : {}),
+        ...(resp.usage?.totalTokens != null ? { 'llm.usage.total_tokens': resp.usage.totalTokens } : {}),
       });
       return resp;
     } catch (err) {
