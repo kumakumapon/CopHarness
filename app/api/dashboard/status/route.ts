@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
 import { requireApiKey } from '../../../../lib/apiAuth';
+import { responseCache, isCacheEnabled } from '../../../../lib/cache/responseCache';
 
 interface ComponentStatus {
   name: string;
@@ -64,6 +65,11 @@ export async function GET(req: NextRequest) {
   const configuredCount = providers.filter((p) => p.configured).length + bots.filter((b) => b.configured).length;
   const totalCount = providers.length + bots.length;
 
+  const cache = {
+    enabled: isCacheEnabled(),
+    ...responseCache.getStats(),
+  };
+
   return NextResponse.json({
     activeProvider: provider,
     activeModel: model,
@@ -71,6 +77,7 @@ export async function GET(req: NextRequest) {
     totalCount,
     providers,
     bots,
+    cache,
     checkedAt: new Date().toISOString(),
   });
 }

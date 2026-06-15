@@ -113,19 +113,22 @@ export class GeminiAdapter implements LLMAdapter {
 
       contents.push({ role: 'model', parts: allParts as GeminiContent['parts'] });
 
-      const responseParts: GeminiPart[] = [];
-      for (const part of functionCallParts) {
-        const { name, args } = part.functionCall;
-        const skill = skillMap.get(name);
-        let response: Record<string, unknown>;
-        if (skill) {
-          const result = await skill.handler(args);
-          response = { content: result.content, ...(result.isError ? { isError: true } : {}) };
-        } else {
-          response = { error: `Unknown skill: ${name}` };
-        }
-        responseParts.push({ functionResponse: { name, response } });
-      }
+      const streamGeminiSettled = await Promise.allSettled(
+        functionCallParts.map(async (part) => {
+          const { name, args } = part.functionCall;
+          const skill = skillMap.get(name);
+          if (skill) {
+            const result = await skill.handler(args);
+            return { functionResponse: { name, response: { content: result.content, ...(result.isError ? { isError: true } : {}) } } } as GeminiPart;
+          }
+          return { functionResponse: { name, response: { error: `Unknown skill: ${name}` } } } as GeminiPart;
+        }),
+      );
+      const responseParts: GeminiPart[] = streamGeminiSettled.map((r) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { functionResponse: { name: 'unknown', response: { error: `Tool execution failed: ${r.reason}` } } } as GeminiPart,
+      );
       contents.push({ role: 'user', parts: responseParts });
     }
   }
@@ -191,7 +194,14 @@ export class GeminiAdapter implements LLMAdapter {
           .filter((p): p is Extract<GeminiPart, { text: string }> => 'text' in p && p.text != null)
           .map((p) => p.text)
           .join('');
-        return { content, model, provider: 'gemini' };
+        const usage = raw.usageMetadata
+          ? {
+              promptTokens: raw.usageMetadata.promptTokenCount,
+              completionTokens: raw.usageMetadata.candidatesTokenCount,
+              totalTokens: raw.usageMetadata.totalTokenCount,
+            }
+          : undefined;
+        return { content, model, provider: 'gemini', usage };
       }
 
       // Append the model's function-call turn
@@ -200,20 +210,23 @@ export class GeminiAdapter implements LLMAdapter {
         parts: parts as GeminiContent['parts'],
       });
 
-      // Execute each function call and append results as a single user turn
-      const responseParts: GeminiPart[] = [];
-      for (const part of functionCallParts) {
-        const { name, args } = part.functionCall;
-        const skill = skillMap.get(name);
-        let response: Record<string, unknown>;
-        if (skill) {
-          const result = await skill.handler(args);
-          response = { content: result.content, ...(result.isError ? { isError: true } : {}) };
-        } else {
-          response = { error: `Unknown skill: ${name}` };
-        }
-        responseParts.push({ functionResponse: { name, response } });
-      }
+      // Execute function calls in parallel for better performance
+      const geminiToolSettled = await Promise.allSettled(
+        functionCallParts.map(async (part) => {
+          const { name, args } = part.functionCall;
+          const skill = skillMap.get(name);
+          if (skill) {
+            const result = await skill.handler(args);
+            return { functionResponse: { name, response: { content: result.content, ...(result.isError ? { isError: true } : {}) } } } as GeminiPart;
+          }
+          return { functionResponse: { name, response: { error: `Unknown skill: ${name}` } } } as GeminiPart;
+        }),
+      );
+      const responseParts: GeminiPart[] = geminiToolSettled.map((r) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { functionResponse: { name: 'unknown', response: { error: `Tool execution failed: ${r.reason}` } } } as GeminiPart,
+      );
       contents.push({ role: 'user', parts: responseParts });
     }
 

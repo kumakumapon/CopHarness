@@ -119,22 +119,23 @@ export class OpenAIAdapter implements LLMAdapter {
           tool_calls: toolCalls,
         });
 
-        for (const tc of toolCalls) {
-          const skill = skillMap.get(tc.function.name);
-          let resultContent: string;
-          if (skill) {
-            let args: Record<string, unknown> = {};
-            try {
-              args = JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>;
-            } catch {
-              // ignore parse error
+        const streamToolResults = await Promise.allSettled(
+          toolCalls.map(async (tc) => {
+            const skill = skillMap.get(tc.function.name);
+            if (skill) {
+              let args: Record<string, unknown> = {};
+              try { args = JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>; } catch { /* ignore */ }
+              const result = await skill.handler(args);
+              return { id: tc.id, content: result.content };
             }
-            const result = await skill.handler(args);
-            resultContent = result.content;
-          } else {
-            resultContent = `Unknown skill: ${tc.function.name}`;
-          }
-          messages.push({ role: 'tool', tool_call_id: tc.id, content: resultContent });
+            return { id: tc.id, content: `Unknown skill: ${tc.function.name}` };
+          }),
+        );
+        for (const r of streamToolResults) {
+          const val = r.status === 'fulfilled'
+            ? r.value
+            : { id: '', content: `Tool execution failed: ${r.reason}` };
+          messages.push({ role: 'tool', tool_call_id: val.id, content: val.content });
         }
       } finally {
         cleanup();
@@ -189,7 +190,14 @@ export class OpenAIAdapter implements LLMAdapter {
       // No tool calls – return the text response
       if (!message.tool_calls || message.tool_calls.length === 0) {
         const content = message.content ?? '';
-        return { content, model, provider: 'openai' };
+        const usage = completion.usage
+          ? {
+              promptTokens: completion.usage.prompt_tokens,
+              completionTokens: completion.usage.completion_tokens,
+              totalTokens: completion.usage.total_tokens,
+            }
+          : undefined;
+        return { content, model, provider: 'openai', usage };
       }
 
       // Append the assistant message with tool_calls
@@ -199,27 +207,32 @@ export class OpenAIAdapter implements LLMAdapter {
         tool_calls: message.tool_calls,
       });
 
-      // Execute each tool call and append results
-      for (const toolCall of message.tool_calls) {
-        const skillName = toolCall.function.name;
-        const skill = skillMap.get(skillName);
-        let resultContent: string;
-        if (skill) {
-          let args: Record<string, unknown> = {};
-          try {
-            args = JSON.parse(toolCall.function.arguments || '{}') as Record<string, unknown>;
-          } catch (parseErr) {
-            console.warn(`[OpenAIAdapter] Failed to parse arguments for tool "${skillName}":`, parseErr);
+      // Execute tool calls in parallel for better performance
+      const toolResults = await Promise.allSettled(
+        message.tool_calls.map(async (toolCall) => {
+          const skillName = toolCall.function.name;
+          const skill = skillMap.get(skillName);
+          if (skill) {
+            let args: Record<string, unknown> = {};
+            try {
+              args = JSON.parse(toolCall.function.arguments || '{}') as Record<string, unknown>;
+            } catch (parseErr) {
+              console.warn(`[OpenAIAdapter] Failed to parse arguments for tool "${skillName}":`, parseErr);
+            }
+            const result = await skill.handler(args);
+            return { toolCallId: toolCall.id, content: result.content };
           }
-          const result = await skill.handler(args);
-          resultContent = result.content;
-        } else {
-          resultContent = `Unknown skill: ${skillName}`;
-        }
+          return { toolCallId: toolCall.id, content: `Unknown skill: ${skillName}` };
+        }),
+      );
+      for (const result of toolResults) {
+        const value = result.status === 'fulfilled'
+          ? result.value
+          : { toolCallId: '', content: `Tool execution failed: ${result.reason}` };
         messages.push({
           role: 'tool',
-          tool_call_id: toolCall.id,
-          content: resultContent,
+          tool_call_id: value.toolCallId,
+          content: value.content,
         });
       }
     }
