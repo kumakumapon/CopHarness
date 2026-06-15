@@ -3,6 +3,7 @@ import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapt
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../lib/skill';
 import { requireApiKey } from '../../../lib/apiAuth';
+import { defaultRateLimiter, rateLimitResponse } from '../../../lib/rateLimit';
 import { resolveConversationKey } from '../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
 import { finishTask, startTask } from '../../../lib/tasks/ledger';
@@ -15,6 +16,10 @@ export async function POST(req: NextRequest) {
   // Optional cross-service API key authentication (e.g. from CopChat)
   const unauthorized = requireApiKey(req);
   if (unauthorized) return unauthorized;
+
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const rl = defaultRateLimiter.consume(clientIp);
+  if (!rl.allowed) return rateLimitResponse(rl);
 
   // プロバイダ自動判定
   const provider = resolveProvider();
@@ -84,7 +89,7 @@ export async function POST(req: NextRequest) {
         () => runWithRalphLoop({ messages, attachments, timeoutMs, abortSignal, skills }, adapter, { taskId: task.id }),
       );
       await finishTask(task.id, 'succeeded');
-      return NextResponse.json({ reply: resp.content, taskId: task.id });
+      return NextResponse.json({ reply: resp.content, taskId: task.id, ...(resp.usage ? { usage: resp.usage } : {}) });
     } catch (err) {
       // A stop request via the cancellation registry has already finished the
       // ledger entry as cancelled; report the cancellation instead of failing.
