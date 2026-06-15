@@ -17,6 +17,8 @@ describe('isContextLengthError', () => {
     // Generic
     ['context window exceeded', true],
     ['context length exceeded', true],
+    ['400 Max length reached!', true],
+    ['maximum length reached for request', true],
     ['too many tokens in request', true],
     ['request payload size exceeds the limit', true],
     // HTTP 400 + context keyword
