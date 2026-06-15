@@ -6,6 +6,8 @@ import { GeminiAdapter } from './adapters/geminiAdapter';
 import { LmStudioAdapter } from './adapters/lmstudioAdapter';
 import { LemonadeAdapter } from './adapters/lemonadeAdapter';
 import { InstrumentedAdapter } from './telemetry/instrumentedAdapter';
+import { CachedAdapter } from './cache/cachedAdapter';
+import { isCacheEnabled } from './cache/responseCache';
 import {
   GEMINI_DEFAULT_ENDPOINT,
   GEMINI_DEFAULT_TIMEOUT_MS,
@@ -20,7 +22,7 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
   switch (options.provider) {
     case 'openai':
       if (!options.apiKey) throw new Error('apiKey is required for the OpenAI adapter');
-      return instrument(new OpenAIAdapter(
+      return wrapAdapter(new OpenAIAdapter(
         options.model,
         options.apiKey,
         options.apiBaseUrl,
@@ -28,7 +30,7 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
       ));
     case 'anthropic':
       if (!options.apiKey) throw new Error('apiKey is required for the Anthropic adapter');
-      return instrument(new AnthropicAdapter(
+      return wrapAdapter(new AnthropicAdapter(
         options.model,
         options.apiKey,
         options.apiBaseUrl,
@@ -39,21 +41,27 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
       const endpoint = options.apiBaseUrl ?? process.env.GEMINI_ENDPOINT ?? GEMINI_DEFAULT_ENDPOINT;
       const timeoutMs = (options.timeoutMs ?? Number(process.env.GEMINI_TIMEOUT_MS)) || GEMINI_DEFAULT_TIMEOUT_MS;
       const retryMax = Number(process.env.GEMINI_RETRY_MAX) || GEMINI_DEFAULT_RETRY_MAX;
-      return instrument(new GeminiAdapter(options.model, options.apiKey, endpoint, timeoutMs, retryMax));
+      return wrapAdapter(new GeminiAdapter(options.model, options.apiKey, endpoint, timeoutMs, retryMax));
     }
     case 'lmstudio':
-      return instrument(new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
+      return wrapAdapter(new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
     case 'lemonade':
-      return instrument(new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
+      return wrapAdapter(new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
     case 'copilot':
     default:
-      return instrument(new CopilotAdapter(options.model, options.timeoutMs));
+      return wrapAdapter(new CopilotAdapter(options.model, options.timeoutMs));
   }
 }
 
-function instrument(adapter: LLMAdapter): LLMAdapter {
-  if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return adapter;
-  return new InstrumentedAdapter(adapter);
+function wrapAdapter(adapter: LLMAdapter): LLMAdapter {
+  let wrapped: LLMAdapter = adapter;
+  if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
+    wrapped = new InstrumentedAdapter(wrapped);
+  }
+  if (isCacheEnabled()) {
+    wrapped = new CachedAdapter(wrapped);
+  }
+  return wrapped;
 }
 
 /**
