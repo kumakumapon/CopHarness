@@ -15,6 +15,8 @@ import type {
   AgentTask,
 } from './types';
 
+const MAX_CONCURRENT_PLANS = Number(process.env.AGENT_DAG_CONCURRENCY) || 8;
+
 export type AgentPlanRunner = (task: AgentTask, plan: AgentPlan) => Promise<AgentResult>;
 
 function assertValidDag(plans: AgentPlan[]): void {
@@ -256,33 +258,45 @@ export async function runAgentDag(
 
       await recordDagProgress(parentTask.id, runId, plans, results, 'running', new Set(ready.map((plan) => plan.id)));
 
-      const settled = await Promise.allSettled(
-        ready.map(async (plan) => {
-          const workspace = planWorkspace(runId, plan);
-          fs.mkdirSync(workspace, { recursive: true });
-          const startedAt = new Date().toISOString();
-          const result = await runner({
-            id: `${runId}_${plan.id}`,
-            role: plan.role,
-            userPrompt: `${plan.prompt}${dependencySummary(results, plan)}`,
-            skills: plan.skills,
-            toolsets: plan.toolsets,
-            timeoutMs: plan.timeoutMs,
-            parentTaskId: parentTask.id,
-            workspace,
-          }, plan);
-          const completedAt = new Date().toISOString();
-          return {
-            planId: plan.id,
-            status: result.error ? 'failed' : 'succeeded',
-            result,
-            error: result.error,
-            workspace,
-            startedAt,
-            completedAt,
-          } satisfies AgentDagNodeResult;
-        }),
-      );
+      const batches: AgentPlan[][] = [];
+      for (let i = 0; i < ready.length; i += MAX_CONCURRENT_PLANS) {
+        batches.push(ready.slice(i, i + MAX_CONCURRENT_PLANS));
+      }
+      const settled: PromiseSettledResult<AgentDagNodeResult>[] = [];
+      for (const batch of batches) {
+        const batchSettled = await Promise.allSettled(
+          batch.map(async (plan) => {
+            const workspace = planWorkspace(runId, plan);
+            try {
+              fs.mkdirSync(workspace, { recursive: true });
+            } catch (mkdirErr) {
+              throw new Error(`Failed to create workspace for plan "${plan.id}": ${mkdirErr instanceof Error ? mkdirErr.message : mkdirErr}`);
+            }
+            const startedAt = new Date().toISOString();
+            const result = await runner({
+              id: `${runId}_${plan.id}`,
+              role: plan.role,
+              userPrompt: `${plan.prompt}${dependencySummary(results, plan)}`,
+              skills: plan.skills,
+              toolsets: plan.toolsets,
+              timeoutMs: plan.timeoutMs,
+              parentTaskId: parentTask.id,
+              workspace,
+            }, plan);
+            const completedAt = new Date().toISOString();
+            return {
+              planId: plan.id,
+              status: result.error ? 'failed' : 'succeeded',
+              result,
+              error: result.error,
+              workspace,
+              startedAt,
+              completedAt,
+            } satisfies AgentDagNodeResult;
+          }),
+        );
+        settled.push(...batchSettled);
+      }
 
       ready.forEach((plan, index) => {
         const entry = settled[index];
@@ -413,32 +427,44 @@ export async function retryAgentDagNode(
 
       await recordDagProgress(parentTask.id, dag.runId, plans, results, 'running', new Set(ready.map((plan) => plan.id)), retry);
       const retrySuffix = `retry_${Date.now()}`;
-      const settled = await Promise.allSettled(
-        ready.map(async (plan) => {
-          const workspace = planWorkspace(dag.runId, plan);
-          fs.mkdirSync(workspace, { recursive: true });
-          const startedAt = new Date().toISOString();
-          const result = await runner({
-            id: `${dag.runId}_${plan.id}_${retrySuffix}`,
-            role: plan.role,
-            userPrompt: `${plan.prompt}${dependencySummary(results, plan)}`,
-            skills: plan.skills,
-            toolsets: plan.toolsets,
-            timeoutMs: plan.timeoutMs,
-            parentTaskId: parentTask.id,
-            workspace,
-          }, plan);
-          return {
-            planId: plan.id,
-            status: result.error ? 'failed' : 'succeeded',
-            result,
-            error: result.error,
-            workspace,
-            startedAt,
-            completedAt: new Date().toISOString(),
-          } satisfies AgentDagNodeResult;
-        }),
-      );
+      const batches: AgentPlan[][] = [];
+      for (let i = 0; i < ready.length; i += MAX_CONCURRENT_PLANS) {
+        batches.push(ready.slice(i, i + MAX_CONCURRENT_PLANS));
+      }
+      const settled: PromiseSettledResult<AgentDagNodeResult>[] = [];
+      for (const batch of batches) {
+        const batchSettled = await Promise.allSettled(
+          batch.map(async (plan) => {
+            const workspace = planWorkspace(dag.runId, plan);
+            try {
+              fs.mkdirSync(workspace, { recursive: true });
+            } catch (mkdirErr) {
+              throw new Error(`Failed to create workspace for plan "${plan.id}": ${mkdirErr instanceof Error ? mkdirErr.message : mkdirErr}`);
+            }
+            const startedAt = new Date().toISOString();
+            const result = await runner({
+              id: `${dag.runId}_${plan.id}_${retrySuffix}`,
+              role: plan.role,
+              userPrompt: `${plan.prompt}${dependencySummary(results, plan)}`,
+              skills: plan.skills,
+              toolsets: plan.toolsets,
+              timeoutMs: plan.timeoutMs,
+              parentTaskId: parentTask.id,
+              workspace,
+            }, plan);
+            return {
+              planId: plan.id,
+              status: result.error ? 'failed' : 'succeeded',
+              result,
+              error: result.error,
+              workspace,
+              startedAt,
+              completedAt: new Date().toISOString(),
+            } satisfies AgentDagNodeResult;
+          }),
+        );
+        settled.push(...batchSettled);
+      }
 
       ready.forEach((plan, index) => {
         const entry = settled[index];

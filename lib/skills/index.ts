@@ -149,8 +149,8 @@ for (const skill of gatedSkills) {
 // Register approved generated skills after built-ins so collision check sees them
 try {
   registerGeneratedSkills();
-} catch {
-  // A corrupt proposal store must never break startup
+} catch (err) {
+  console.error('[skills] Failed to register generated skills:', err instanceof Error ? err.message : err);
 }
 
 export {
