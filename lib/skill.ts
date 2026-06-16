@@ -94,12 +94,89 @@ export const MAX_SKILL_ITERATIONS = 10;
 /** Registry mapping skill names to their definitions. */
 const skillRegistry = new Map<string, SkillDefinition>();
 
+/**
+ * Validate skill arguments against the parameter schema.
+ * Returns an array of human-readable error strings (empty = valid).
+ */
+export function validateSkillArgs(
+  args: Record<string, unknown>,
+  schema: SkillParameterSchema,
+): string[] {
+  const errors: string[] = [];
+
+  for (const name of schema.required ?? []) {
+    if (args[name] === undefined || args[name] === null) {
+      errors.push(`Missing required parameter: "${name}"`);
+    }
+  }
+
+  for (const [name, value] of Object.entries(args)) {
+    const prop = schema.properties[name];
+    if (!prop) continue;
+    if (value === undefined || value === null) continue;
+
+    const expectedType = prop.type;
+    if (expectedType === 'string') {
+      if (typeof value !== 'string') {
+        errors.push(`Parameter "${name}" must be a string, got ${typeof value}`);
+      }
+    } else if (expectedType === 'number' || expectedType === 'integer') {
+      if (typeof value !== 'number') {
+        errors.push(`Parameter "${name}" must be a number, got ${typeof value}`);
+      } else {
+        if (prop.minimum !== undefined && value < prop.minimum) {
+          errors.push(`Parameter "${name}" must be >= ${prop.minimum}, got ${value}`);
+        }
+        if (prop.maximum !== undefined && value > prop.maximum) {
+          errors.push(`Parameter "${name}" must be <= ${prop.maximum}, got ${value}`);
+        }
+        if (expectedType === 'integer' && !Number.isInteger(value)) {
+          errors.push(`Parameter "${name}" must be an integer, got ${value}`);
+        }
+      }
+    } else if (expectedType === 'boolean') {
+      if (typeof value !== 'boolean') {
+        errors.push(`Parameter "${name}" must be a boolean, got ${typeof value}`);
+      }
+    } else if (expectedType === 'array') {
+      if (!Array.isArray(value)) {
+        errors.push(`Parameter "${name}" must be an array, got ${typeof value}`);
+      } else if (prop.items?.type) {
+        for (let i = 0; i < value.length; i++) {
+          if (typeof value[i] !== prop.items.type) {
+            errors.push(`Parameter "${name}[${i}]" must be ${prop.items.type}, got ${typeof value[i]}`);
+          }
+        }
+      }
+    }
+
+    if (prop.enum && prop.enum.length > 0 && typeof value === 'string') {
+      if (!prop.enum.includes(value)) {
+        errors.push(`Parameter "${name}" must be one of [${prop.enum.join(', ')}], got "${value}"`);
+      }
+    }
+  }
+
+  return errors;
+}
+
 /** Register a skill so it can be looked up by name. */
 export function registerSkill(skill: SkillDefinition): void {
+  if (skillRegistry.has(skill.name)) {
+    console.warn(`[skill] Overwriting existing skill: "${skill.name}"`);
+  }
+
   const originalHandler = skill.handler;
   const schema = skill.outputSchema;
 
   skill.handler = async (args) => {
+    const validationErrors = validateSkillArgs(args, skill.parameters);
+    if (validationErrors.length > 0) {
+      return {
+        content: `Invalid arguments for skill "${skill.name}": ${validationErrors.join('; ')}`,
+        isError: true,
+      };
+    }
     const startedAt = new Date();
     const startMs = Date.now();
     const initialContext = getSkillExecutionContext();
