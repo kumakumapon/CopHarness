@@ -14,16 +14,28 @@ interface WindowEntry {
 export class RateLimiter {
   private readonly windowMs: number;
   private readonly maxRequests: number;
+  private readonly maxEntries: number;
   private readonly store = new Map<string, WindowEntry>();
 
-  constructor(windowMs = 60_000, maxRequests = 30) {
+  constructor(windowMs = 60_000, maxRequests = 30, maxEntries = 10_000) {
     this.windowMs = windowMs;
     this.maxRequests = maxRequests;
+    this.maxEntries = maxEntries;
   }
 
   private cleanup(entry: WindowEntry, now: number): void {
     const cutoff = now - this.windowMs;
     entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
+  }
+
+  private pruneStaleEntries(): void {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+    for (const [key, entry] of this.store) {
+      if (entry.timestamps.every((t) => t <= cutoff)) {
+        this.store.delete(key);
+      }
+    }
   }
 
   /** Check the current rate limit state for a key without consuming a slot. */
@@ -43,6 +55,9 @@ export class RateLimiter {
 
   /** Consume one slot for the key and return the updated rate limit state. */
   consume(key: string): RateLimitResult {
+    if (this.store.size > this.maxEntries) {
+      this.pruneStaleEntries();
+    }
     const now = Date.now();
     let entry = this.store.get(key);
     if (!entry) {

@@ -75,8 +75,8 @@ export function resolveModel(provider?: ProviderType): string {
     case 'lemonade':  return process.env.LEMONADE_MODEL  || 'gpt-5-mini';
     case 'lmstudio':  return process.env.LMSTUDIO_MODEL  || 'gpt-5-mini';
     case 'openai':    return process.env.OPENAI_MODEL    || 'gpt-5-mini';
-    case 'anthropic': return process.env.ANTHROPIC_MODEL || 'gpt-5-mini';
-    case 'gemini':    return process.env.GEMINI_MODEL    || 'gemini-1.5-pro';
+    case 'anthropic': return process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+    case 'gemini':    return process.env.GEMINI_MODEL    || 'gemini-2.5-flash';
     default:          return 'gpt-5-mini';
   }
 }

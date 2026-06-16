@@ -31,6 +31,10 @@ export interface TokenUsage {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  /** Tokens used to create a new cache entry (Anthropic / future providers). */
+  cacheCreationInputTokens?: number;
+  /** Tokens read from an existing cache entry. */
+  cacheReadInputTokens?: number;
 }
 
 export interface LLMResponse {
