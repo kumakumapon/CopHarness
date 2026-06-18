@@ -25,8 +25,7 @@ export async function POST(req: NextRequest) {
     process.env.COPILOT_API_KEY ||
     process.env.GITHUB_COPILOT_API_KEY ||
     process.env.OPENAI_API_KEY ||
-    process.env.ANTHROPIC_API_KEY ||
-    process.env.GEMINI_API_KEY;
+    process.env.ANTHROPIC_API_KEY;
   if (!apiKey && !localProviders.includes(provider)) {
     return new Response(JSON.stringify({ error: 'Missing API key' }), { status: 401 });
   }

@@ -37,18 +37,6 @@ jest.mock('../../lib/adapters/anthropicAdapter', () => ({
   })),
 }));
 
-jest.mock('../../lib/adapters/geminiAdapter', () => ({
-  GeminiAdapter: jest.fn().mockImplementation((model, apiKey, endpoint, timeoutMs, retryMax) => ({
-    provider: 'gemini',
-    model,
-    apiKey,
-    endpoint,
-    timeoutMs,
-    retryMax,
-    complete: jest.fn(),
-  })),
-}));
-
 jest.mock('../../lib/adapters/lmstudioAdapter', () => ({
   LmStudioAdapter: jest.fn().mockImplementation((model, apiBaseUrl, timeoutMs) => ({
     provider: 'lmstudio',
@@ -81,12 +69,6 @@ jest.mock('../../lib/cache/cachedAdapter', () => ({
   CachedAdapter: jest.fn().mockImplementation((inner) => inner),
 }));
 
-jest.mock('../../lib/services/geminiClient', () => ({
-  GEMINI_DEFAULT_ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta',
-  GEMINI_DEFAULT_TIMEOUT_MS: 10_000,
-  GEMINI_DEFAULT_RETRY_MAX: 3,
-}));
-
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -95,7 +77,6 @@ import { resolveProvider, resolveModel, createAdapter } from '../../lib/adapterF
 import { CopilotAdapter } from '../../lib/adapters/copilotAdapter';
 import { OpenAIAdapter } from '../../lib/adapters/openaiAdapter';
 import { AnthropicAdapter } from '../../lib/adapters/anthropicAdapter';
-import { GeminiAdapter } from '../../lib/adapters/geminiAdapter';
 import { LmStudioAdapter } from '../../lib/adapters/lmstudioAdapter';
 import { LemonadeAdapter } from '../../lib/adapters/lemonadeAdapter';
 
@@ -114,11 +95,6 @@ const ALL_PROVIDER_VARS = [
   'OPENAI_MODEL',
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_MODEL',
-  'GEMINI_API_KEY',
-  'GEMINI_MODEL',
-  'GEMINI_ENDPOINT',
-  'GEMINI_TIMEOUT_MS',
-  'GEMINI_RETRY_MAX',
   'LMSTUDIO_BASE_URL',
   'LMSTUDIO_MODEL',
   'LEMONADE_BASE_URL',
@@ -150,7 +126,7 @@ describe('resolveProvider()', () => {
 
   it('returns explicit COPILOT_PROVIDER = anthropic even when other keys are present', () => {
     process.env.COPILOT_PROVIDER = 'anthropic';
-    process.env.GEMINI_API_KEY = 'gk-xxx'; // would otherwise win auto-detect
+    process.env.ANTHROPIC_API_KEY = 'ak-xxx'; // would otherwise win auto-detect
     expect(resolveProvider()).toBe('anthropic');
   });
 
@@ -160,14 +136,7 @@ describe('resolveProvider()', () => {
     expect(resolveProvider()).toBe('openai');
   });
 
-  it('auto-detects gemini from GEMINI_API_KEY (highest priority after explicit)', () => {
-    process.env.GEMINI_API_KEY = 'gk-xxx';
-    process.env.ANTHROPIC_API_KEY = 'ak-xxx';
-    process.env.OPENAI_API_KEY = 'sk-xxx';
-    expect(resolveProvider()).toBe('gemini');
-  });
-
-  it('auto-detects anthropic from ANTHROPIC_API_KEY when GEMINI_API_KEY is absent', () => {
+  it('auto-detects anthropic from ANTHROPIC_API_KEY when it is present', () => {
     process.env.ANTHROPIC_API_KEY = 'ak-xxx';
     process.env.OPENAI_API_KEY = 'sk-xxx';
     expect(resolveProvider()).toBe('anthropic');
@@ -236,11 +205,6 @@ describe('resolveModel()', () => {
     expect(resolveModel('anthropic')).toBe('claude-opus-4');
   });
 
-  it('uses GEMINI_MODEL when COPILOT_MODEL is not set', () => {
-    process.env.GEMINI_MODEL = 'gemini-1.5-pro';
-    expect(resolveModel('gemini')).toBe('gemini-1.5-pro');
-  });
-
   it('uses LMSTUDIO_MODEL when COPILOT_MODEL is not set', () => {
     process.env.LMSTUDIO_MODEL = 'local-llama';
     expect(resolveModel('lmstudio')).toBe('local-llama');
@@ -253,10 +217,6 @@ describe('resolveModel()', () => {
 
   it('falls back to default "claude-sonnet-4-20250514" for anthropic', () => {
     expect(resolveModel('anthropic')).toBe('claude-sonnet-4-20250514');
-  });
-
-  it('falls back to default "gemini-2.5-flash" for gemini', () => {
-    expect(resolveModel('gemini')).toBe('gemini-2.5-flash');
   });
 
   it('falls back to default "gpt-5-mini" for openai', () => {
@@ -298,12 +258,6 @@ describe('createAdapter()', () => {
     ).toThrow('apiKey is required for the Anthropic adapter');
   });
 
-  it('throws when apiKey is missing for gemini', () => {
-    expect(() =>
-      createAdapter({ provider: 'gemini', model: 'gemini-2.5-flash' }),
-    ).toThrow('apiKey is required for the Gemini adapter');
-  });
-
   it('creates an OpenAIAdapter for the openai provider', () => {
     createAdapter({ provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' });
     expect(OpenAIAdapter).toHaveBeenCalledTimes(1);
@@ -325,24 +279,6 @@ describe('createAdapter()', () => {
       'https://api.example.com',
       5000,
     );
-  });
-
-  it('creates a GeminiAdapter for the gemini provider using defaults', () => {
-    createAdapter({ provider: 'gemini', model: 'gemini-2.5-flash', apiKey: 'gk-test' });
-    expect(GeminiAdapter).toHaveBeenCalledTimes(1);
-    const [model, apiKey, endpoint, timeoutMs, retryMax] = (GeminiAdapter as jest.Mock).mock.calls[0];
-    expect(model).toBe('gemini-2.5-flash');
-    expect(apiKey).toBe('gk-test');
-    expect(endpoint).toBe('https://generativelanguage.googleapis.com/v1beta');
-    expect(timeoutMs).toBe(10_000);
-    expect(retryMax).toBe(3);
-  });
-
-  it('creates a GeminiAdapter and respects GEMINI_ENDPOINT env var', () => {
-    process.env.GEMINI_ENDPOINT = 'https://custom.gemini.endpoint/v1';
-    createAdapter({ provider: 'gemini', model: 'gemini-2.5-flash', apiKey: 'gk-test' });
-    const [, , endpoint] = (GeminiAdapter as jest.Mock).mock.calls[0];
-    expect(endpoint).toBe('https://custom.gemini.endpoint/v1');
   });
 
   it('creates an LmStudioAdapter for the lmstudio provider (no apiKey required)', () => {
@@ -367,17 +303,5 @@ describe('createAdapter()', () => {
     // Cast to any to simulate an unknown provider reaching the default branch
     createAdapter({ provider: 'copilot', model: 'gpt-5-mini', timeoutMs: 3000 });
     expect(CopilotAdapter).toHaveBeenCalledWith('gpt-5-mini', 3000);
-  });
-
-  it('passes apiBaseUrl override to GeminiAdapter instead of env GEMINI_ENDPOINT', () => {
-    process.env.GEMINI_ENDPOINT = 'https://should.be.ignored/v1';
-    createAdapter({
-      provider: 'gemini',
-      model: 'gemini-2.5-flash',
-      apiKey: 'gk-test',
-      apiBaseUrl: 'https://explicit.override/v1',
-    });
-    const [, , endpoint] = (GeminiAdapter as jest.Mock).mock.calls[0];
-    expect(endpoint).toBe('https://explicit.override/v1');
   });
 });

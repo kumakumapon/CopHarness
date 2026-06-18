@@ -44,13 +44,12 @@ async function main() {
     process.env.COPILOT_API_KEY ||
     process.env.GITHUB_COPILOT_API_KEY ||
     process.env.OPENAI_API_KEY ||
-    process.env.ANTHROPIC_API_KEY ||
-    process.env.GEMINI_API_KEY;
+    process.env.ANTHROPIC_API_KEY;
 
   const localProviders = ['copilot', 'lmstudio', 'lemonade'];
   if (!apiKey && !localProviders.includes(provider)) {
     console.error(
-      'Error: No API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY',
+      'Error: No API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY',
     );
     process.exit(1);
   }
