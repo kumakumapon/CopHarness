@@ -2,7 +2,7 @@
  * Unit tests for the skill feature:
  * - SkillDefinition interface and registry
  * - currentDateTime built-in skill
- * - OpenAI, Anthropic, and Gemini adapter tool-calling loops
+ * - OpenAI and Anthropic adapter tool-calling loops
  */
 
 import {
@@ -307,120 +307,6 @@ describe('AnthropicAdapter skill tool-calling loop', () => {
 });
 
 // -----------------------------------------------------------------------
-// GeminiAdapter skill tool-calling loop
-// -----------------------------------------------------------------------
-
-import { GeminiAdapter } from '../../lib/adapters/geminiAdapter';
-import { GEMINI_DEFAULT_ENDPOINT } from '../../lib/services/geminiClient';
-
-describe('GeminiAdapter skill tool-calling loop', () => {
-  const echoSkill: SkillDefinition = {
-    name: 'echo',
-    description: 'Echoes input',
-    parameters: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] },
-    handler: async (args) => ({ content: String(args.message ?? '') }),
-  };
-
-  let adapter: GeminiAdapter;
-
-  beforeEach(() => {
-    adapter = new GeminiAdapter('gemini-1.5-pro', 'test-key', GEMINI_DEFAULT_ENDPOINT, 5_000, 0);
-    global.fetch = jest.fn();
-  });
-
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
-
-  it('returns text content when no function calls are in the response', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          candidates: [
-            { content: { role: 'model', parts: [{ text: 'Hello from Gemini!' }] }, finishReason: 'STOP' },
-          ],
-        }),
-        { status: 200 },
-      ),
-    );
-
-    const result = await adapter.complete({
-      messages: [{ role: 'user', content: 'Hi' }],
-      skills: [echoSkill],
-    });
-    expect(result.content).toBe('Hello from Gemini!');
-    expect(result.provider).toBe('gemini');
-  });
-
-  it('executes functionCall and appends functionResponse, then returns final text', async () => {
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            candidates: [
-              {
-                content: {
-                  role: 'model',
-                  parts: [{ functionCall: { name: 'echo', args: { message: 'hi' } } }],
-                },
-                finishReason: 'STOP',
-              },
-            ],
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            candidates: [
-              { content: { role: 'model', parts: [{ text: 'Echo: hi' }] }, finishReason: 'STOP' },
-            ],
-          }),
-          { status: 200 },
-        ),
-      );
-
-    const result = await adapter.complete({
-      messages: [{ role: 'user', content: 'Echo hi' }],
-      skills: [echoSkill],
-    });
-    expect(result.content).toBe('Echo: hi');
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-
-    // Second request body should include a functionResponse
-    const secondCall = (global.fetch as jest.Mock).mock.calls[1];
-    const secondBody = JSON.parse(secondCall[1].body as string) as {
-      contents: Array<{ role: string; parts: Array<{ functionResponse?: unknown }> }>;
-    };
-    const userTurn = secondBody.contents.find(
-      (c) => c.role === 'user' && c.parts.some((p) => p.functionResponse),
-    );
-    expect(userTurn).toBeDefined();
-  });
-
-  it('works without skills (backward compatible)', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          candidates: [
-            { content: { role: 'model', parts: [{ text: 'No tools' }] }, finishReason: 'STOP' },
-          ],
-        }),
-        { status: 200 },
-      ),
-    );
-
-    const result = await adapter.complete({
-      messages: [{ role: 'user', content: 'Hello' }],
-    });
-    expect(result.content).toBe('No tools');
-    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body as string) as { tools?: unknown[] };
-    expect(body.tools).toBeUndefined();
-  });
-});
-
-// -----------------------------------------------------------------------
 // LmStudioAdapter
 // -----------------------------------------------------------------------
 
@@ -544,7 +430,6 @@ describe('resolveProvider local LLM detection', () => {
 
   it('returns "lmstudio" when LMSTUDIO_BASE_URL is set and no API keys are present', () => {
     delete process.env.COPILOT_PROVIDER;
-    delete process.env.GEMINI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
     delete process.env.LEMONADE_BASE_URL;
@@ -554,7 +439,6 @@ describe('resolveProvider local LLM detection', () => {
 
   it('returns "lemonade" when LEMONADE_BASE_URL is set and no API keys are present', () => {
     delete process.env.COPILOT_PROVIDER;
-    delete process.env.GEMINI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
     delete process.env.LMSTUDIO_BASE_URL;

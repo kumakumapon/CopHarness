@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const provider = resolveProvider();
   // Copilot, OpenAI, Anthropic などで環境変数名が異なるため柔軟に取得
   const localProviders = ['lmstudio', 'lemonade'];
-  const apiKey = process.env.COPILOT_PROVIDER_API_KEY || process.env.COPILOT_API_KEY || process.env.GITHUB_COPILOT_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.COPILOT_PROVIDER_API_KEY || process.env.COPILOT_API_KEY || process.env.GITHUB_COPILOT_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey && !localProviders.includes(provider)) {
     return NextResponse.json(
       { error: 'Missing API key (COPILOT_PROVIDER_API_KEY, OPENAI_API_KEY, etc)' },
