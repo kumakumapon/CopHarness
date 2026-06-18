@@ -741,12 +741,11 @@ async function main() {
     process.env.COPILOT_API_KEY ||
     process.env.GITHUB_COPILOT_API_KEY ||
     process.env.OPENAI_API_KEY ||
-    process.env.ANTHROPIC_API_KEY ||
-    process.env.GEMINI_API_KEY;
+    process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey && !API_KEY_OPTIONAL_PROVIDERS.includes(provider)) {
     console.error(
-      'Error: No LLM API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY',
+      'Error: No LLM API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY',
     );
     process.exit(1);
   }

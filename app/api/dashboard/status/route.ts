@@ -34,10 +34,6 @@ export async function GET(req: NextRequest) {
       configured: !!process.env.ANTHROPIC_API_KEY,
     },
     {
-      name: 'Gemini',
-      configured: !!process.env.GEMINI_API_KEY,
-    },
-    {
       name: 'LM Studio',
       configured: !!process.env.LMSTUDIO_BASE_URL,
       detail: process.env.LMSTUDIO_BASE_URL,
