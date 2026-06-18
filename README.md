@@ -734,16 +734,18 @@ npm test
 | Google Gemini | `GEMINI_API_KEY` | 詳細は [docs/GEMINI-INTEGRATION.md](docs/GEMINI-INTEGRATION.md) |
 | LM Studio | なし（ローカル） | `LMSTUDIO_BASE_URL` / `LMSTUDIO_MODEL` で設定 |
 | Lemonade Server | なし（ローカル） | `LEMONADE_BASE_URL` / `LEMONADE_MODEL` で設定 |
+| Antigravity (Google Gemini API) | `ANTIGRAVITY_API_KEY` | `ANTIGRAVITY_MODEL` でモデル指定可（デフォルト: `gemini-2.0-flash`） |
 
 プロバイダの自動判定順（`COPILOT_PROVIDER` 未設定時）:
 
 1. `GEMINI_API_KEY` あり → `gemini`
 2. `ANTHROPIC_API_KEY` あり → `anthropic`
 3. `OPENAI_API_KEY` あり → `openai`
-4. `LMSTUDIO_BASE_URL` あり → `lmstudio`
-5. `LEMONADE_BASE_URL` あり → `lemonade`
-6. `COPILOT_PROVIDER_API_KEY` または `COPILOT_API_KEY` あり → `openai`（互換アダプター）
-7. それ以外 → `copilot`（GitHub Copilot SDK）
+4. `ANTIGRAVITY_API_KEY` → `antigravity`
+5. `LMSTUDIO_BASE_URL` あり → `lmstudio`
+6. `LEMONADE_BASE_URL` あり → `lemonade`
+7. `COPILOT_PROVIDER_API_KEY` または `COPILOT_API_KEY` あり → `openai`（互換アダプター）
+8. それ以外 → `copilot`（GitHub Copilot SDK）
 
 `COPILOT_PROVIDER` 環境変数で明示指定した場合はその値が優先されます（`lmstudio` / `lemonade` も指定可）。
 

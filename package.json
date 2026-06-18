@@ -15,15 +15,16 @@
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.2.2",
+    "@google/genai": "^2.8.0",
     "@line/bot-sdk": "^11.0.0",
     "@sentry/node": "^10.56.0",
     "discord.js": "^14.26.3",
     "lucide-react": "^1.14.0",
     "next": "^15.5.15",
     "openai": "^4.98.0",
+    "pptxgenjs": "^3.12.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "pptxgenjs": "^3.12.0",
     "swr": "^2.4.1"
   },
   "devDependencies": {

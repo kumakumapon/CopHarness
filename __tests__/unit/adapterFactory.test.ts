@@ -57,6 +57,16 @@ jest.mock('../../lib/adapters/lemonadeAdapter', () => ({
   })),
 }));
 
+jest.mock('../../lib/adapters/antigravityAdapter', () => ({
+  AntigravityAdapter: jest.fn().mockImplementation((model, apiKey, timeoutMs) => ({
+    provider: 'antigravity',
+    model,
+    apiKey,
+    timeoutMs,
+    complete: jest.fn(),
+  })),
+}));
+
 jest.mock('../../lib/telemetry/instrumentedAdapter', () => ({
   InstrumentedAdapter: jest.fn().mockImplementation((inner) => inner),
 }));
@@ -79,6 +89,7 @@ import { OpenAIAdapter } from '../../lib/adapters/openaiAdapter';
 import { AnthropicAdapter } from '../../lib/adapters/anthropicAdapter';
 import { LmStudioAdapter } from '../../lib/adapters/lmstudioAdapter';
 import { LemonadeAdapter } from '../../lib/adapters/lemonadeAdapter';
+import { AntigravityAdapter } from '../../lib/adapters/antigravityAdapter';
 
 // ---------------------------------------------------------------------------
 // Env helpers
@@ -99,6 +110,8 @@ const ALL_PROVIDER_VARS = [
   'LMSTUDIO_MODEL',
   'LEMONADE_BASE_URL',
   'LEMONADE_MODEL',
+  'ANTIGRAVITY_API_KEY',
+  'ANTIGRAVITY_MODEL',
   'OTEL_EXPORTER_OTLP_ENDPOINT',
 ];
 
@@ -182,6 +195,17 @@ describe('resolveProvider()', () => {
     process.env.OPENAI_API_KEY = 'sk-xxx'; // would normally auto-detect openai
     expect(resolveProvider()).toBe('copilot');
   });
+
+  it('auto-detects antigravity from ANTIGRAVITY_API_KEY', () => {
+    process.env.ANTIGRAVITY_API_KEY = 'aig-xxx';
+    expect(resolveProvider()).toBe('antigravity');
+  });
+
+  it('explicit COPILOT_PROVIDER = antigravity is respected', () => {
+    process.env.COPILOT_PROVIDER = 'antigravity';
+    process.env.OPENAI_API_KEY = 'sk-xxx';
+    expect(resolveProvider()).toBe('antigravity');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -238,6 +262,15 @@ describe('resolveModel()', () => {
   it('COPILOT_MODEL overrides anthropic default', () => {
     process.env.COPILOT_MODEL = 'override-model';
     expect(resolveModel('anthropic')).toBe('override-model');
+  });
+
+  it('uses ANTIGRAVITY_MODEL when COPILOT_MODEL is not set', () => {
+    process.env.ANTIGRAVITY_MODEL = 'gemini-2.5-pro';
+    expect(resolveModel('antigravity')).toBe('gemini-2.5-pro');
+  });
+
+  it('falls back to "gemini-2.0-flash" for antigravity when no model env var set', () => {
+    expect(resolveModel('antigravity')).toBe('gemini-2.0-flash');
   });
 });
 
@@ -303,5 +336,17 @@ describe('createAdapter()', () => {
     // Cast to any to simulate an unknown provider reaching the default branch
     createAdapter({ provider: 'copilot', model: 'gpt-5-mini', timeoutMs: 3000 });
     expect(CopilotAdapter).toHaveBeenCalledWith('gpt-5-mini', 3000);
+  });
+
+  it('throws when apiKey is missing for antigravity', () => {
+    expect(() =>
+      createAdapter({ provider: 'antigravity', model: 'gemini-2.0-flash' }),
+    ).toThrow('apiKey is required for the Antigravity adapter');
+  });
+
+  it('creates an AntigravityAdapter for the antigravity provider', () => {
+    createAdapter({ provider: 'antigravity', model: 'gemini-2.0-flash', apiKey: 'aig-test', timeoutMs: 5000 });
+    expect(AntigravityAdapter).toHaveBeenCalledTimes(1);
+    expect(AntigravityAdapter).toHaveBeenCalledWith('gemini-2.0-flash', 'aig-test', 5000);
   });
 });
