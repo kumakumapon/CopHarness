@@ -4,6 +4,7 @@ import { OpenAIAdapter } from './adapters/openaiAdapter';
 import { AnthropicAdapter } from './adapters/anthropicAdapter';
 import { LmStudioAdapter } from './adapters/lmstudioAdapter';
 import { LemonadeAdapter } from './adapters/lemonadeAdapter';
+import { AntigravityAdapter } from './adapters/antigravityAdapter';
 import { InstrumentedAdapter } from './telemetry/instrumentedAdapter';
 import { CachedAdapter } from './cache/cachedAdapter';
 import { isCacheEnabled } from './cache/responseCache';
@@ -34,6 +35,13 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
       return wrapAdapter(new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
     case 'lemonade':
       return wrapAdapter(new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
+    case 'antigravity':
+      if (!options.apiKey) throw new Error('apiKey is required for the Antigravity adapter');
+      return wrapAdapter(new AntigravityAdapter(
+        options.model,
+        options.apiKey,
+        options.timeoutMs,
+      ));
     case 'copilot':
     default:
       return wrapAdapter(new CopilotAdapter(options.model, options.timeoutMs));
@@ -63,6 +71,7 @@ export function resolveModel(provider?: ProviderType): string {
     case 'lmstudio':  return process.env.LMSTUDIO_MODEL  || 'gpt-5-mini';
     case 'openai':    return process.env.OPENAI_MODEL    || 'gpt-5-mini';
     case 'anthropic': return process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+    case 'antigravity': return process.env.ANTIGRAVITY_MODEL || 'gemini-2.0-flash';
     default:          return 'gpt-5-mini';
   }
 }
@@ -74,13 +83,15 @@ export function resolveProvider(): ProviderType {
     explicit === 'anthropic' ||
     explicit === 'copilot' ||
     explicit === 'lmstudio' ||
-    explicit === 'lemonade'
+    explicit === 'lemonade' ||
+    explicit === 'antigravity'
   ) {
     return explicit;
   }
   // Provider-specific API keys
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
   if (process.env.OPENAI_API_KEY) return 'openai';
+  if (process.env.ANTIGRAVITY_API_KEY) return 'antigravity';
   // Local LLM servers detected by their endpoint env vars
   if (process.env.LMSTUDIO_BASE_URL) return 'lmstudio';
   if (process.env.LEMONADE_BASE_URL) return 'lemonade';

@@ -62,7 +62,7 @@ export interface LLMAdapter {
   destroy?(): Promise<void>;
 }
 
-export type ProviderType = 'copilot' | 'openai' | 'anthropic' | 'lemonade' | 'lmstudio';
+export type ProviderType = 'copilot' | 'openai' | 'anthropic' | 'lemonade' | 'lmstudio' | 'antigravity';
 
 export interface AdapterOptions {
   provider: ProviderType;
