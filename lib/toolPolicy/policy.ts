@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type { SkillDefinition, SkillRiskLevel } from '../skill';
 import { getSkillExecutionContext } from '../skills/executionContext';
 import { dataPath } from '../utils/dataDir';
+import { hasSessionPermission } from './sessionPermissions';
 
 export type ApprovalMode = 'alwaysAllow' | 'allowWithDryRun' | 'requireApproval' | 'deny' | 'allowForSession';
 
@@ -38,7 +39,7 @@ export interface ToolPolicyDecision {
 const DEFAULT_POLICY_FILE = 'policy.json';
 const APPROVAL_MODE_TO_DECISION: Record<ApprovalMode, ToolPolicyDecision['decision']> = {
   alwaysAllow: 'allowed',
-  allowForSession: 'allowed',
+  allowForSession: 'allowed', // overridden dynamically in evaluateToolPolicy
   allowWithDryRun: 'dry_run_allowed',
   requireApproval: 'approval_required',
   deny: 'denied',
@@ -86,6 +87,15 @@ export function evaluateToolPolicy(skill: SkillDefinition, args: Record<string, 
     if (!matchesList(rule.channels, context?.channelKey)) continue;
     if (!matchesArguments(rule.argumentPatterns, args)) continue;
     if (!matchesSchedule(rule.schedule, now)) continue;
+
+    if (rule.approvalMode === 'allowForSession') {
+      const personId = context?.personId;
+      if (personId && hasSessionPermission(personId, skill.name)) {
+        return { mode: 'allowForSession', decision: 'allowed', ruleId: rule.id, reason: 'active session permission found' };
+      }
+      return { mode: 'allowForSession', decision: 'approval_required', ruleId: rule.id, reason: rule.description ?? 'allowForSession: approval required for first use in session' };
+    }
+
     return decisionFromMode(rule.approvalMode, rule.id, rule.description ?? `matched policy rule ${rule.id}`);
   }
 
