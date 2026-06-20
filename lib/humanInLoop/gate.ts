@@ -2,6 +2,7 @@ import type { SkillDefinition } from '../skill';
 import { createApprovalRequest, waitForApproval } from './store';
 import { getSkillExecutionContext, updateSkillExecutionContext } from '../skills/executionContext';
 import { evaluateToolPolicy } from '../toolPolicy/policy';
+import { grantSessionPermission } from '../toolPolicy/sessionPermissions';
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -46,6 +47,10 @@ export function wrapWithGate(skill: SkillDefinition): SkillDefinition {
 
       if (status === 'approved') {
         console.info(`[HIL] Approved "${skill.name}" (id=${req.id})`);
+        if (policy.mode === 'allowForSession' && context?.personId) {
+          grantSessionPermission(context.personId, skill.name, { ruleId: policy.ruleId });
+          console.info(`[HIL] Session permission granted for "${skill.name}" (person=${context.personId})`);
+        }
         return skill.handler(args);
       }
 
