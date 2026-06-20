@@ -5,6 +5,10 @@
  * are never written to local JSON logs or telemetry previews.
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { dataPath } from '../utils/dataDir';
+
 const REDACTED = '[REDACTED]';
 const MAX_REDACTION_DEPTH = 8;
 
@@ -18,13 +22,67 @@ const INLINE_SECRET_PATTERNS: RegExp[] = [
   /\b(?:api[_-]?key|authorization|password|passphrase|private[_-]?key|refresh[_-]?token|secret|token)\s*[:=]\s*([^\s,;}{\]]+)/gi,
 ];
 
+interface RedactionPolicy {
+  version: 1;
+  sensitiveKeyPatterns?: string[];
+  inlineSecretPatterns?: string[];
+}
+
+const DEFAULT_REDACTION_POLICY_FILE = 'redaction_policy.json';
+
+let cachedRedactionPolicy: RedactionPolicy | null = null;
+let cachedRedactionPolicyMtimeMs = -1;
+let cachedRedactionPolicyPath: string | null = null;
+
+function getRedactionPolicyFilePath(): string {
+  const raw = process.env.REDACTION_POLICY_FILE;
+  if (raw && raw.trim()) return path.resolve(raw);
+  return dataPath(DEFAULT_REDACTION_POLICY_FILE);
+}
+
+function loadRedactionPolicy(): RedactionPolicy | null {
+  const file = getRedactionPolicyFilePath();
+  try {
+    const stat = fs.statSync(file);
+    if (cachedRedactionPolicy && cachedRedactionPolicyPath === file && cachedRedactionPolicyMtimeMs === stat.mtimeMs) {
+      return cachedRedactionPolicy;
+    }
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as RedactionPolicy;
+    cachedRedactionPolicy = parsed;
+    cachedRedactionPolicyPath = file;
+    cachedRedactionPolicyMtimeMs = stat.mtimeMs;
+    return cachedRedactionPolicy;
+  } catch {
+    cachedRedactionPolicy = null;
+    cachedRedactionPolicyPath = file;
+    cachedRedactionPolicyMtimeMs = -1;
+    return null;
+  }
+}
+
+export function _resetRedactionPolicyCacheForTests(): void {
+  cachedRedactionPolicy = null;
+  cachedRedactionPolicyPath = null;
+  cachedRedactionPolicyMtimeMs = -1;
+}
+
 export function isSensitivePreviewKey(key: string): boolean {
   const normalized = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
-  return SENSITIVE_KEY_PATTERN.test(normalized);
+  if (SENSITIVE_KEY_PATTERN.test(normalized)) return true;
+  const policy = loadRedactionPolicy();
+  if (!policy?.sensitiveKeyPatterns) return false;
+  for (const pattern of policy.sensitiveKeyPatterns) {
+    try {
+      if (new RegExp(pattern, 'i').test(normalized)) return true;
+    } catch {
+      console.warn(`[redaction] Invalid sensitiveKeyPattern ignored: ${pattern}`);
+    }
+  }
+  return false;
 }
 
 function redactString(value: string): string {
-  return INLINE_SECRET_PATTERNS.reduce((text, pattern) => {
+  let result = INLINE_SECRET_PATTERNS.reduce((text, pattern) => {
     if (pattern.source.includes('Bearer')) return text.replace(pattern, 'Bearer [REDACTED]');
     if (pattern.source.includes('api')) return text.replace(pattern, (match) => {
       const separator = match.includes('=') ? '=' : ':';
@@ -33,6 +91,19 @@ function redactString(value: string): string {
     });
     return text.replace(pattern, REDACTED);
   }, value);
+
+  const policy = loadRedactionPolicy();
+  if (policy?.inlineSecretPatterns) {
+    for (const pattern of policy.inlineSecretPatterns) {
+      try {
+        result = result.replace(new RegExp(pattern, 'g'), REDACTED);
+      } catch {
+        console.warn(`[redaction] Invalid inlineSecretPattern ignored: ${pattern}`);
+      }
+    }
+  }
+
+  return result;
 }
 
 function redactJsonLikeSecrets(text: string): string {
