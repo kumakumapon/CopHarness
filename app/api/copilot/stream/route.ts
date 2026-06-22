@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdapter, resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
 import { requireApiKey } from '../../../../lib/apiAuth';
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       ? Math.min(Math.max(1, body.timeoutMs), defaultTimeout)
       : defaultTimeout;
 
-  const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
+  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
   const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
   const subject = String(body.subject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';
   const identity = await resolveConversationKey('api', subject, { displayName: body.displayName });

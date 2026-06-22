@@ -23,7 +23,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSignature, messagingApi } from '@line/bot-sdk';
-import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
 import { type LLMMessage } from '../../../lib/adapter';
 import { loadHistory, saveHistory } from '../../../lib/history/store';
 import { resolveConversationKey } from '../../../lib/identity/store';
@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
   const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-  const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
+  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
 
   for (const event of body.events) {
     if (event.type !== 'message') continue;
