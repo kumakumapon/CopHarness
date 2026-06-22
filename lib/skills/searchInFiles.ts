@@ -1,36 +1,101 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { type SkillDefinition } from '../skill';
-import { getSandboxDir } from './fileSandbox';
+import { getExecutionBackend } from '../execution';
+import { type ExecutionBackend } from '../execution/types';
 
 const MAX_RESULTS = 200;
 const MAX_FILE_SIZE_BYTES = 1_000_000;
 
-/** Recursively collect all files under a directory. */
-async function collectFiles(dir: string, results: string[] = []): Promise<string[]> {
-  if (results.length >= MAX_RESULTS) return results;
-  let entries;
+function joinRelativePath(base: string, name: string): string {
+  if (base === '.' || base === '') return name;
+  return `${base.replace(/[\\/]+$/, '')}/${name.replace(/^[\\/]+/, '')}`;
+}
+
+async function tryReadFile(
+  backend: ExecutionBackend,
+  relativePath: string,
+): Promise<string | null> {
   try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
+    const result = await backend.readFile({
+      relativePath,
+      maxBytes: MAX_FILE_SIZE_BYTES + 1,
+    });
+    if (result.truncated || result.content.length > MAX_FILE_SIZE_BYTES) return null;
+    return result.content;
   } catch {
-    return results;
+    return null;
   }
-  for (const entry of entries) {
-    if (results.length >= MAX_RESULTS) break;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      await collectFiles(full, results);
-    } else if (entry.isFile()) {
-      results.push(full);
+}
+
+function collectLineMatches(
+  content: string,
+  relPath: string,
+  regex: RegExp,
+  matches: string[],
+): void {
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (matches.length >= MAX_RESULTS) break;
+    if (regex.test(lines[i])) {
+      matches.push(`${relPath}:${i + 1}: ${lines[i]}`);
     }
   }
-  return results;
+}
+
+async function searchFile(
+  backend: ExecutionBackend,
+  relativePath: string,
+  regex: RegExp,
+  matches: string[],
+  size?: number,
+): Promise<void> {
+  if (matches.length >= MAX_RESULTS) return;
+  if (size !== undefined && size > MAX_FILE_SIZE_BYTES) return;
+  const content = await tryReadFile(backend, relativePath);
+  if (content === null) return;
+  collectLineMatches(content, relativePath, regex, matches);
+}
+
+async function searchDirectory(
+  backend: ExecutionBackend,
+  relativePath: string,
+  regex: RegExp,
+  matches: string[],
+): Promise<void> {
+  if (matches.length >= MAX_RESULTS) return;
+  const result = await backend.listDir({ relativePath });
+  for (const entry of result.entries) {
+    if (matches.length >= MAX_RESULTS) break;
+    const childPath = joinRelativePath(relativePath, entry.name);
+    if (entry.type === 'directory') {
+      await searchDirectory(backend, childPath, regex, matches);
+    } else if (entry.type === 'file') {
+      await searchFile(backend, childPath, regex, matches, entry.size);
+    }
+  }
+}
+
+async function searchPath(
+  backend: ExecutionBackend,
+  relativePath: string,
+  regex: RegExp,
+  matches: string[],
+): Promise<void> {
+  try {
+    await searchDirectory(backend, relativePath, regex, matches);
+  } catch (dirErr) {
+    const content = await tryReadFile(backend, relativePath);
+    if (content === null) {
+      throw dirErr;
+    }
+    collectLineMatches(content, relativePath, regex, matches);
+  }
 }
 
 export const searchInFiles: SkillDefinition = {
   name: 'searchInFiles',
   description:
-    'Searches for a text pattern in files within the sandbox directory (SKILL_FILE_SANDBOX_DIR, default: ./workspace). ' +
+    'Searches for a text pattern in files within the sandbox directory (SKILL_FILE_SANDBOX_DIR, default: ./workspace) ' +
+    'via the configured execution backend. ' +
     'Returns matching lines with file path and line number (up to 200 matches).',
   parameters: {
     type: 'object',
@@ -66,41 +131,9 @@ export const searchInFiles: SkillDefinition = {
     }
 
     try {
-      const sandboxDir = await getSandboxDir();
-      let searchRoot: string;
-      if (userPath === '.') {
-        searchRoot = sandboxDir;
-      } else {
-        // Resolve relative to sandbox, reject traversal
-        const stripped = userPath.replace(/^[/\\]+/, '');
-        const resolved = path.resolve(sandboxDir, stripped);
-        if (!resolved.startsWith(sandboxDir + path.sep) && resolved !== sandboxDir) {
-          return { content: `Error: path "${userPath}" is outside the sandbox directory.`, isError: true };
-        }
-        searchRoot = resolved;
-      }
-
-      const stat = await fs.stat(searchRoot).catch(() => null);
-      if (!stat) return { content: `Error: path "${userPath}" does not exist`, isError: true };
-
-      const files = stat.isFile() ? [searchRoot] : await collectFiles(searchRoot);
+      const backend = getExecutionBackend();
       const matches: string[] = [];
-
-      for (const file of files) {
-        if (matches.length >= MAX_RESULTS) break;
-        const fileStat = await fs.stat(file).catch(() => null);
-        if (!fileStat || fileStat.size > MAX_FILE_SIZE_BYTES) continue;
-        let content: string;
-        try { content = await fs.readFile(file, 'utf8'); } catch { continue; }
-        const relPath = path.relative(sandboxDir, file);
-        const lines = content.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          if (matches.length >= MAX_RESULTS) break;
-          if (regex.test(lines[i])) {
-            matches.push(`${relPath}:${i + 1}: ${lines[i]}`);
-          }
-        }
-      }
+      await searchPath(backend, userPath, regex, matches);
 
       if (matches.length === 0) return { content: 'No matches found.' };
       const header = matches.length >= MAX_RESULTS ? `(first ${MAX_RESULTS} matches)\n` : '';
