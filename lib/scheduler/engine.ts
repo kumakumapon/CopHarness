@@ -1,6 +1,6 @@
 import { listSchedules, setRunNow, setStopRequested, updateLastRun } from './store';
 import { matchesCron, normalizeCron, isValidCronInput } from './cron';
-import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
@@ -115,7 +115,7 @@ export async function runPrompt(
   const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-  const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
+  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
 
   const messages: LLMMessage[] = [];
   const sys = process.env.COPILOT_SYSTEM_PROMPT;

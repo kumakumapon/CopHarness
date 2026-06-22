@@ -83,7 +83,7 @@ jest.mock('../../lib/cache/cachedAdapter', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { resolveProvider, resolveModel, createAdapter } from '../../lib/adapterFactory';
+import { resolveProvider, resolveModel, createAdapter, createAdapterWithFallback, resolveApiKey } from '../../lib/adapterFactory';
 import { CopilotAdapter } from '../../lib/adapters/copilotAdapter';
 import { OpenAIAdapter } from '../../lib/adapters/openaiAdapter';
 import { AnthropicAdapter } from '../../lib/adapters/anthropicAdapter';
@@ -106,6 +106,7 @@ const ALL_PROVIDER_VARS = [
   'OPENAI_MODEL',
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_MODEL',
+  'GEMINI_API_KEY',
   'LMSTUDIO_BASE_URL',
   'LMSTUDIO_MODEL',
   'LEMONADE_BASE_URL',
@@ -113,6 +114,7 @@ const ALL_PROVIDER_VARS = [
   'ANTIGRAVITY_API_KEY',
   'ANTIGRAVITY_MODEL',
   'OTEL_EXPORTER_OTLP_ENDPOINT',
+  'FALLBACK_PROVIDERS',
 ];
 
 beforeEach(() => {
@@ -348,5 +350,97 @@ describe('createAdapter()', () => {
     createAdapter({ provider: 'antigravity', model: 'gemini-2.0-flash', apiKey: 'aig-test', timeoutMs: 5000 });
     expect(AntigravityAdapter).toHaveBeenCalledTimes(1);
     expect(AntigravityAdapter).toHaveBeenCalledWith('gemini-2.0-flash', 'aig-test', 5000);
+  });
+
+  it('uses GEMINI_API_KEY as fallback for antigravity when apiKey is not provided', () => {
+    process.env.GEMINI_API_KEY = 'gemini-key-123';
+    createAdapter({ provider: 'antigravity', model: 'gemini-2.0-flash' });
+    expect(AntigravityAdapter).toHaveBeenCalledWith('gemini-2.0-flash', 'gemini-key-123', undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveProvider() — GEMINI_API_KEY backward compatibility
+// ---------------------------------------------------------------------------
+
+describe('resolveProvider() — GEMINI_API_KEY backward compat', () => {
+  it('auto-detects antigravity from GEMINI_API_KEY', () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    expect(resolveProvider()).toBe('antigravity');
+  });
+
+  it('GEMINI_API_KEY has higher priority than ANTHROPIC_API_KEY', () => {
+    process.env.GEMINI_API_KEY = 'gemini-key';
+    process.env.ANTHROPIC_API_KEY = 'ak-xxx';
+    expect(resolveProvider()).toBe('antigravity');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveApiKey()
+// ---------------------------------------------------------------------------
+
+describe('resolveApiKey()', () => {
+  it('returns OPENAI_API_KEY for openai', () => {
+    process.env.OPENAI_API_KEY = 'sk-test';
+    expect(resolveApiKey('openai')).toBe('sk-test');
+  });
+
+  it('returns ANTHROPIC_API_KEY for anthropic', () => {
+    process.env.ANTHROPIC_API_KEY = 'ak-test';
+    expect(resolveApiKey('anthropic')).toBe('ak-test');
+  });
+
+  it('returns ANTIGRAVITY_API_KEY for antigravity', () => {
+    process.env.ANTIGRAVITY_API_KEY = 'aig-test';
+    expect(resolveApiKey('antigravity')).toBe('aig-test');
+  });
+
+  it('falls back to GEMINI_API_KEY for antigravity', () => {
+    process.env.GEMINI_API_KEY = 'gemini-test';
+    expect(resolveApiKey('antigravity')).toBe('gemini-test');
+  });
+
+  it('returns undefined for copilot', () => {
+    expect(resolveApiKey('copilot')).toBeUndefined();
+  });
+
+  it('returns undefined for lmstudio', () => {
+    expect(resolveApiKey('lmstudio')).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createAdapterWithFallback()
+// ---------------------------------------------------------------------------
+
+describe('createAdapterWithFallback()', () => {
+  it('behaves like createAdapter when FALLBACK_PROVIDERS is not set', () => {
+    createAdapterWithFallback({ provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' });
+    expect(OpenAIAdapter).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates fallback chain when FALLBACK_PROVIDERS is set', () => {
+    process.env.FALLBACK_PROVIDERS = 'anthropic';
+    process.env.ANTHROPIC_API_KEY = 'ak-test';
+    createAdapterWithFallback({ provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' });
+    expect(OpenAIAdapter).toHaveBeenCalledTimes(1);
+    expect(AnthropicAdapter).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips invalid provider names in FALLBACK_PROVIDERS', () => {
+    process.env.FALLBACK_PROVIDERS = 'invalid,anthropic';
+    process.env.ANTHROPIC_API_KEY = 'ak-test';
+    createAdapterWithFallback({ provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' });
+    expect(OpenAIAdapter).toHaveBeenCalledTimes(1);
+    expect(AnthropicAdapter).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not duplicate the primary provider in fallback chain', () => {
+    process.env.FALLBACK_PROVIDERS = 'openai,anthropic';
+    process.env.ANTHROPIC_API_KEY = 'ak-test';
+    createAdapterWithFallback({ provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' });
+    expect(OpenAIAdapter).toHaveBeenCalledTimes(1);
+    expect(AnthropicAdapter).toHaveBeenCalledTimes(1);
   });
 });

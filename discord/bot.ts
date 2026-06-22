@@ -77,7 +77,7 @@ import {
   Partials,
   TextChannel,
 } from 'discord.js';
-import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../lib/adapterFactory';
 import { type LLMAdapter, type LLMAttachment, type LLMMessage } from '../lib/adapter';
 import '../lib/skills/index';
 import { listActiveSkills } from '../lib/skill';
@@ -753,7 +753,7 @@ async function main() {
   const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-  const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
+  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
 
   const client = new Client({
     intents: [
