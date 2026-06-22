@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test": "jest",
     "cli": "tsx scripts/cli.ts",
+    "agent-cli": "tsx scripts/agentCli.ts",
     "discord": "tsx discord/bot.ts",
     "schedule": "tsx scripts/schedule.ts",
     "eval": "tsx scripts/eval.ts"
