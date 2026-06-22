@@ -2899,12 +2899,66 @@ function ConversationsPanel({ data, onMutate }: { data: ConversationsData | unde
   );
 }
 
+
+type DashboardTab = 'overview' | 'operations' | 'observability' | 'governance' | 'tools';
+
+const DASHBOARD_TABS: { id: DashboardTab; label: string; description: string }[] = [
+  { id: 'overview', label: '概要', description: '状態・直近ログ' },
+  { id: 'operations', label: '運用', description: 'スケジュール・タスク' },
+  { id: 'observability', label: '観測', description: 'Telemetry・Token' },
+  { id: 'governance', label: '承認', description: 'HITL・違反' },
+  { id: 'tools', label: 'ツール', description: 'Skills・Toolsets' },
+];
+
+function tabButtonStyle(active: boolean): React.CSSProperties {
+  return {
+    background: active ? 'var(--text-primary)' : 'rgba(255,255,255,0.52)',
+    color: active ? 'var(--primary-bg)' : 'var(--text-primary)',
+    border: `1px solid ${active ? 'var(--text-primary)' : 'var(--border-color)'}`,
+    boxShadow: active ? '0 10px 24px rgba(90,74,66,0.18)' : '0 1px 8px var(--shadow-light)',
+  };
+}
+
+function DashboardTabs({ activeTab, onChange }: { activeTab: DashboardTab; onChange: (tab: DashboardTab) => void }) {
+  return (
+    <nav
+      className="sticky top-0 z-20 -mx-4 mb-6 border-y px-4 py-3 backdrop-blur-xl md:top-3 md:mx-0 md:rounded-2xl md:border"
+      style={{
+        background: 'rgba(250,246,241,0.82)',
+        borderColor: 'var(--border-color)',
+        boxShadow: '0 8px 24px var(--shadow-light)',
+      }}
+      aria-label="Dashboard sections"
+    >
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {DASHBOARD_TABS.map((tab) => {
+          const active = tab.id === activeTab;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onChange(tab.id)}
+              className="rounded-xl px-3 py-2 text-left transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+              style={tabButtonStyle(active)}
+              aria-pressed={active}
+            >
+              <div className="text-sm font-bold">{tab.label}</div>
+              <div className="mt-0.5 hidden text-[11px] opacity-75 lg:block">{tab.description}</div>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main Dashboard Page
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
   const [skillExecutionFilters, setSkillExecutionFilters] = useState<SkillExecutionFilters>({
     status: '',
     riskLevel: '',
@@ -2925,6 +2979,11 @@ export default function DashboardPage() {
   const [skillProposalStatusFilter, setSkillProposalStatusFilter] =
     useState<SkillProposalStatusFilter>('');
   const refreshInterval = autoRefresh ? 30_000 : 0;
+  const showOverview = activeTab === 'overview';
+  const showOperations = activeTab === 'operations';
+  const showObservability = activeTab === 'observability';
+  const showGovernance = activeTab === 'governance';
+  const showTools = activeTab === 'tools';
   const skillProposalsUrl = useMemo(() => {
     const params = new URLSearchParams({ limit: '50' });
     if (skillProposalStatusFilter) params.set('status', skillProposalStatusFilter);
@@ -2950,33 +3009,33 @@ export default function DashboardPage() {
   const { data: statusData, mutate: mutateStatus } =
     useSWR<StatusData>('/api/dashboard/status', fetcher, { refreshInterval });
   const { data: schedulesData, mutate: mutateSchedules } =
-    useSWR<SchedulesData>('/api/dashboard/schedules', fetcher, { refreshInterval });
+    useSWR<SchedulesData>(showOperations ? '/api/dashboard/schedules' : null, fetcher, { refreshInterval });
   const { data: watchersData, mutate: mutateWatchers } =
-    useSWR<WatchersData>('/api/dashboard/watchers', fetcher, { refreshInterval });
+    useSWR<WatchersData>(showOperations ? '/api/dashboard/watchers' : null, fetcher, { refreshInterval });
   const { data: logsData, mutate: mutateLogs } =
-    useSWR<LogsData>('/api/dashboard/logs?limit=20', fetcher, { refreshInterval });
+    useSWR<LogsData>(showOverview ? '/api/dashboard/logs?limit=20' : null, fetcher, { refreshInterval });
   const { data: skillsData } =
-    useSWR<SkillsData>('/api/dashboard/skills', fetcher);
+    useSWR<SkillsData>(showTools ? '/api/dashboard/skills' : null, fetcher);
   const { data: skillExecutionsData, mutate: mutateSkillExecutions } =
-    useSWR<SkillExecutionsData>(skillExecutionsUrl, fetcher, { refreshInterval });
+    useSWR<SkillExecutionsData>(showTools ? skillExecutionsUrl : null, fetcher, { refreshInterval });
   const { data: approvalsData, mutate: mutateApprovals } =
-    useSWR<ApprovalsData>('/api/dashboard/approvals', fetcher, { refreshInterval: 3_000 });
+    useSWR<ApprovalsData>(showGovernance ? '/api/dashboard/approvals' : null, fetcher, { refreshInterval: 3_000 });
   const { data: identitiesData, mutate: mutateIdentities } =
-    useSWR<IdentitiesData>('/api/dashboard/identities?limit=50&recentTaskLimit=3', fetcher, { refreshInterval });
+    useSWR<IdentitiesData>(showOperations ? '/api/dashboard/identities?limit=50&recentTaskLimit=3' : null, fetcher, { refreshInterval });
   const { data: tasksData, mutate: mutateTasks } =
-    useSWR<TasksData>(tasksUrl, fetcher, { refreshInterval });
+    useSWR<TasksData>(showOperations ? tasksUrl : null, fetcher, { refreshInterval });
   const { data: telemetryData } =
-    useSWR<TelemetryData>('/api/dashboard/telemetry?limit=50', fetcher, { refreshInterval });
+    useSWR<TelemetryData>(showObservability ? '/api/dashboard/telemetry?limit=50' : null, fetcher, { refreshInterval });
   const { data: violationsData } =
-    useSWR<ViolationsData>('/api/dashboard/violations?limit=50', fetcher, { refreshInterval });
+    useSWR<ViolationsData>(showGovernance ? '/api/dashboard/violations?limit=50' : null, fetcher, { refreshInterval });
   const { data: skillProposalsData, mutate: mutateSkillProposals } =
-    useSWR<SkillProposalsData>(skillProposalsUrl, fetcher, { refreshInterval });
+    useSWR<SkillProposalsData>(showGovernance ? skillProposalsUrl : null, fetcher, { refreshInterval });
   const { data: toolsetsData } =
-    useSWR<ToolsetsData>('/api/dashboard/toolsets', fetcher);
+    useSWR<ToolsetsData>(showTools ? '/api/dashboard/toolsets' : null, fetcher);
   const { data: tokenUsageData } =
-    useSWR<TokenUsageData>('/api/dashboard/token-usage', fetcher, { refreshInterval });
+    useSWR<TokenUsageData>(showObservability ? '/api/dashboard/token-usage' : null, fetcher, { refreshInterval });
   const { data: conversationsData, mutate: mutateConversations } =
-    useSWR<ConversationsData>('/api/dashboard/conversations?limit=100', fetcher, { refreshInterval });
+    useSWR<ConversationsData>(showOperations ? '/api/dashboard/conversations?limit=100' : null, fetcher, { refreshInterval });
 
   function refreshAll() {
     void mutateStatus();
@@ -2998,37 +3057,65 @@ export default function DashboardPage() {
           onToggleAutoRefresh={() => setAutoRefresh((v) => !v)}
           onRefresh={refreshAll}
         />
-        <StatusCards data={statusData} />
-        <SchedulerPanel data={schedulesData} onMutate={() => { void mutateSchedules(); void mutateLogs(); }} />
-        <WatchersPanel data={watchersData} onMutate={() => { void mutateWatchers(); void mutateLogs(); void mutateTasks(); }} />
-        <LogFeed data={logsData} />
-        <ApprovalsPanel data={approvalsData} onMutate={() => void mutateApprovals()} />
-        <SkillProposalsPanel
-          data={skillProposalsData}
-          statusFilter={skillProposalStatusFilter}
-          onStatusFilterChange={setSkillProposalStatusFilter}
-          onMutate={() => void mutateSkillProposals()}
-        />
-        <IdentitiesPanel data={identitiesData} />
-        <SearchPanel />
-        <TasksPanel
-          data={tasksData}
-          filters={taskFilters}
-          onFiltersChange={setTaskFilters}
-          onSkillExecutionFiltersChange={setSkillExecutionFilters}
-          onTasksMutate={() => void mutateTasks()}
-        />
-        <TelemetryPanel data={telemetryData} />
-        <TokenUsagePanel data={tokenUsageData} />
-        <ToolsetsPanel data={toolsetsData} />
-        <ViolationsPanel data={violationsData} />
-        <SkillsPanel
-          data={skillsData}
-          executionsData={skillExecutionsData}
-          executionFilters={skillExecutionFilters}
-          onExecutionFiltersChange={setSkillExecutionFilters}
-        />
-        <ConversationsPanel data={conversationsData} onMutate={() => void mutateConversations()} />
+        <DashboardTabs activeTab={activeTab} onChange={setActiveTab} />
+
+        {showOverview && (
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div>
+              <StatusCards data={statusData} />
+              <SearchPanel />
+            </div>
+            <LogFeed data={logsData} />
+          </div>
+        )}
+
+        {showOperations && (
+          <>
+            <SchedulerPanel data={schedulesData} onMutate={() => { void mutateSchedules(); void mutateLogs(); }} />
+            <WatchersPanel data={watchersData} onMutate={() => { void mutateWatchers(); void mutateLogs(); void mutateTasks(); }} />
+            <TasksPanel
+              data={tasksData}
+              filters={taskFilters}
+              onFiltersChange={setTaskFilters}
+              onSkillExecutionFiltersChange={setSkillExecutionFilters}
+              onTasksMutate={() => void mutateTasks()}
+            />
+            <IdentitiesPanel data={identitiesData} />
+            <ConversationsPanel data={conversationsData} onMutate={() => void mutateConversations()} />
+          </>
+        )}
+
+        {showObservability && (
+          <>
+            <TelemetryPanel data={telemetryData} />
+            <TokenUsagePanel data={tokenUsageData} />
+          </>
+        )}
+
+        {showGovernance && (
+          <>
+            <ApprovalsPanel data={approvalsData} onMutate={() => void mutateApprovals()} />
+            <SkillProposalsPanel
+              data={skillProposalsData}
+              statusFilter={skillProposalStatusFilter}
+              onStatusFilterChange={setSkillProposalStatusFilter}
+              onMutate={() => void mutateSkillProposals()}
+            />
+            <ViolationsPanel data={violationsData} />
+          </>
+        )}
+
+        {showTools && (
+          <>
+            <ToolsetsPanel data={toolsetsData} />
+            <SkillsPanel
+              data={skillsData}
+              executionsData={skillExecutionsData}
+              executionFilters={skillExecutionFilters}
+              onExecutionFiltersChange={setSkillExecutionFilters}
+            />
+          </>
+        )}
       </div>
     </div>
   );
