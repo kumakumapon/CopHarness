@@ -1,4 +1,5 @@
 import { startSpan } from './tracer';
+import { recordTokenUsage } from './tokenTracker';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../adapter';
 
 export class InstrumentedAdapter implements LLMAdapter {
@@ -23,6 +24,9 @@ export class InstrumentedAdapter implements LLMAdapter {
         ...(resp.usage?.completionTokens != null ? { 'llm.usage.completion_tokens': resp.usage.completionTokens } : {}),
         ...(resp.usage?.totalTokens != null ? { 'llm.usage.total_tokens': resp.usage.totalTokens } : {}),
       });
+      if (resp.usage) {
+        recordTokenUsage(this.inner.provider, resp.model ?? this.inner.model, resp.usage);
+      }
       return resp;
     } catch (err) {
       span.end({}, err instanceof Error ? err : new Error(String(err)));

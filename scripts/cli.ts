@@ -30,7 +30,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../lib/adapterFactory';
 import { type LLMMessage } from '../lib/adapter';
 import '../lib/skills/index';
 import { listActiveSkills } from '../lib/skill';
@@ -58,7 +58,7 @@ async function main() {
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
 
-  const adapter = createAdapter({ provider, model, apiKey, timeoutMs });
+  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
 
   console.log(`CopHarness CLI — provider: ${provider}, model: ${model}`);
   console.log('Type your message and press Enter. Type "exit" or "quit" to quit.\n');

@@ -5,6 +5,7 @@ import { AnthropicAdapter } from './adapters/anthropicAdapter';
 import { LmStudioAdapter } from './adapters/lmstudioAdapter';
 import { LemonadeAdapter } from './adapters/lemonadeAdapter';
 import { AntigravityAdapter } from './adapters/antigravityAdapter';
+import { FallbackAdapter } from './adapters/fallbackAdapter';
 import { InstrumentedAdapter } from './telemetry/instrumentedAdapter';
 import { CachedAdapter } from './cache/cachedAdapter';
 import { isCacheEnabled } from './cache/responseCache';
@@ -35,13 +36,15 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
       return wrapAdapter(new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
     case 'lemonade':
       return wrapAdapter(new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
-    case 'antigravity':
-      if (!options.apiKey) throw new Error('apiKey is required for the Antigravity adapter');
+    case 'antigravity': {
+      const antigravityKey = options.apiKey || process.env.GEMINI_API_KEY;
+      if (!antigravityKey) throw new Error('apiKey is required for the Antigravity adapter');
       return wrapAdapter(new AntigravityAdapter(
         options.model,
-        options.apiKey,
+        antigravityKey,
         options.timeoutMs,
       ));
+    }
     case 'copilot':
     default:
       return wrapAdapter(new CopilotAdapter(options.model, options.timeoutMs));
@@ -49,10 +52,7 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
 }
 
 function wrapAdapter(adapter: LLMAdapter): LLMAdapter {
-  let wrapped: LLMAdapter = adapter;
-  if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
-    wrapped = new InstrumentedAdapter(wrapped);
-  }
+  let wrapped: LLMAdapter = new InstrumentedAdapter(adapter);
   if (isCacheEnabled()) {
     wrapped = new CachedAdapter(wrapped);
   }
@@ -76,6 +76,68 @@ export function resolveModel(provider?: ProviderType): string {
   }
 }
 
+/**
+ * Resolve the API key for a provider from environment variables.
+ * Returns undefined when no key is available (e.g. local-only providers).
+ */
+export function resolveApiKey(provider: ProviderType): string | undefined {
+  switch (provider) {
+    case 'openai':
+      return process.env.OPENAI_API_KEY ?? process.env.COPILOT_PROVIDER_API_KEY ?? process.env.COPILOT_API_KEY;
+    case 'anthropic':
+      return process.env.ANTHROPIC_API_KEY;
+    case 'antigravity':
+      return process.env.ANTIGRAVITY_API_KEY ?? process.env.GEMINI_API_KEY;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Creates an adapter with automatic fallback to alternative providers.
+ *
+ * Set FALLBACK_PROVIDERS as a comma-separated list of provider names
+ * (e.g. "openai,anthropic,antigravity"). When the primary provider
+ * fails with a retryable error, the next provider in the list is tried.
+ *
+ * If FALLBACK_PROVIDERS is not set, behaves identically to createAdapter.
+ */
+export function createAdapterWithFallback(options: AdapterOptions): LLMAdapter {
+  const fallbackEnv = process.env.FALLBACK_PROVIDERS;
+  if (!fallbackEnv || !fallbackEnv.trim()) {
+    return createAdapter(options);
+  }
+
+  const fallbackProviders = fallbackEnv
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is ProviderType =>
+      ['openai', 'anthropic', 'copilot', 'lmstudio', 'lemonade', 'antigravity'].includes(s),
+    )
+    .filter((p) => p !== options.provider);
+
+  if (fallbackProviders.length === 0) {
+    return createAdapter(options);
+  }
+
+  const adapters: LLMAdapter[] = [createAdapter(options)];
+  for (const provider of fallbackProviders) {
+    try {
+      const key = resolveApiKey(provider);
+      const model = resolveModel(provider);
+      adapters.push(createAdapter({ provider, model, apiKey: key, timeoutMs: options.timeoutMs }));
+    } catch {
+      // Skip providers that can't be constructed (e.g. missing API key)
+    }
+  }
+
+  if (adapters.length <= 1) {
+    return adapters[0];
+  }
+
+  return wrapAdapter(new FallbackAdapter(adapters));
+}
+
 export function resolveProvider(): ProviderType {
   const explicit = (process.env.COPILOT_PROVIDER ?? '').toLowerCase() as ProviderType;
   if (
@@ -89,6 +151,7 @@ export function resolveProvider(): ProviderType {
     return explicit;
   }
   // Provider-specific API keys
+  if (process.env.GEMINI_API_KEY) return 'antigravity';
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
   if (process.env.OPENAI_API_KEY) return 'openai';
   if (process.env.ANTIGRAVITY_API_KEY) return 'antigravity';

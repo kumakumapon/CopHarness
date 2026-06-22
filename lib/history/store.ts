@@ -134,3 +134,17 @@ export async function clearHistory(key: string): Promise<void> {
   scheduleWrite();
   return _writeQueue;
 }
+
+/**
+ * List all stored conversation sessions sorted by most-recently-updated first.
+ */
+export function listHistoryKeys(): { key: string; messageCount: number; updatedAt: number }[] {
+  const store = getStore();
+  return Object.entries(store)
+    .map(([key, entry]) => ({
+      key,
+      messageCount: entry.messages.length,
+      updatedAt: entry.updatedAt,
+    }))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}

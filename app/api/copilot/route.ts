@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdapter, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../lib/skill';
 import { requireApiKey } from '../../../lib/apiAuth';
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       body.timeoutMs != null
         ? Math.min(Math.max(1, body.timeoutMs), defaultTimeout)
         : defaultTimeout;
-    const adapter = createAdapter({
+    const adapter = createAdapterWithFallback({
       provider,
       model,
       apiKey,

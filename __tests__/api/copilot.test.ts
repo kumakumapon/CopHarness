@@ -10,6 +10,7 @@ import { NextRequest } from 'next/server';
 
 jest.mock('../../lib/adapterFactory', () => ({
   createAdapter: jest.fn(),
+  createAdapterWithFallback: jest.fn(),
   resolveProvider: jest.fn(),
   resolveModel: jest.fn(),
 }));
@@ -34,7 +35,7 @@ describe('POST /api/copilot', () => {
     process.env = { ...originalEnv };
     mockComplete.mockReset();
     mockComplete.mockResolvedValue({ content: 'こんにちは！今日はどうされましたか？' });
-    (adapterFactory.createAdapter as jest.Mock).mockReturnValue({
+    (adapterFactory.createAdapterWithFallback as jest.Mock).mockReturnValue({
       complete: mockComplete,
       provider: 'copilot',
       model: 'gpt-5-mini',
