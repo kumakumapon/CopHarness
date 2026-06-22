@@ -7,6 +7,7 @@ import { _resetTaskLedgerForTests, listTasks } from '../../lib/tasks/ledger';
 
 jest.mock('../../lib/adapterFactory', () => ({
   createAdapter: jest.fn(),
+  createAdapterWithFallback: jest.fn(),
   resolveProvider: jest.fn(),
   resolveModel: jest.fn(),
 }));
@@ -24,12 +25,14 @@ function installMockAdapter() {
   mockDestroy.mockReset();
   (adapterFactory.resolveProvider as jest.Mock).mockReturnValue('openai');
   (adapterFactory.resolveModel as jest.Mock).mockReturnValue('gpt-test');
-  (adapterFactory.createAdapter as jest.Mock).mockReturnValue({
+  const mockAdapter = {
     provider: 'openai',
     model: 'gpt-test',
     complete: mockComplete,
     destroy: mockDestroy,
-  } as unknown as LLMAdapter);
+  } as unknown as LLMAdapter;
+  (adapterFactory.createAdapter as jest.Mock).mockReturnValue(mockAdapter);
+  (adapterFactory.createAdapterWithFallback as jest.Mock).mockReturnValue(mockAdapter);
 }
 
 describe('TaskLedger integrations', () => {
