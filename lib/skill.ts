@@ -9,6 +9,7 @@ import { recordViolation } from './guardrails/violationLog';
 import { recordSkillExecution } from './skills/executionLog';
 import { getSkillExecutionContext } from './skills/executionContext';
 import { startSpan } from './telemetry/tracer';
+import { eventBus } from './events/bus';
 
 /** A single property definition within a skill's parameter schema. */
 export interface SkillParameterProperty {
@@ -190,6 +191,12 @@ export function registerSkill(skill: SkillDefinition): void {
       'policy.decision': initialContext?.policyDecision ?? 'allowed',
     });
 
+    eventBus.emit('skill:start', {
+      skillName: skill.name,
+      args,
+      taskId: initialContext?.taskId,
+    });
+
     try {
       const result = await originalHandler(args);
       if (schema && !result.isError) {
@@ -200,11 +207,19 @@ export function registerSkill(skill: SkillDefinition): void {
       }
       const finishedAt = new Date();
       const context = getSkillExecutionContext();
+      const durationMs = Date.now() - startMs;
+      eventBus.emit('skill:end', {
+        skillName: skill.name,
+        durationMs,
+        resultLength: result.content.length,
+        isError: result.isError ?? false,
+        taskId: context?.taskId,
+      });
       const executionRecord = await recordSkillExecution({
         skillName: skill.name,
         startedAt,
         finishedAt,
-        durationMs: Date.now() - startMs,
+        durationMs,
         status: result.isError ? 'error' : 'success',
         args,
         resultContent: result.content,
@@ -227,13 +242,21 @@ export function registerSkill(skill: SkillDefinition): void {
       });
       return result;
     } catch (error) {
+      const exDurationMs = Date.now() - startMs;
+      const errMsg = error instanceof Error ? error.message : String(error);
+      eventBus.emit('skill:error', {
+        skillName: skill.name,
+        error: errMsg,
+        durationMs: exDurationMs,
+        taskId: getSkillExecutionContext()?.taskId,
+      });
       const finishedAt = new Date();
       const context = getSkillExecutionContext();
       const executionRecord = await recordSkillExecution({
         skillName: skill.name,
         startedAt,
         finishedAt,
-        durationMs: Date.now() - startMs,
+        durationMs: exDurationMs,
         status: 'exception',
         args,
         error,

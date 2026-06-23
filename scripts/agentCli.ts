@@ -38,6 +38,12 @@ if (fs.existsSync(envPath)) {
 
 import { createAdapterWithFallback, resolveProvider, resolveModel, resolveApiKey } from '../lib/adapterFactory';
 import { type LLMAdapter, type LLMMessage, type ProviderType } from '../lib/adapter';
+import {
+  saveConversation,
+  loadConversation,
+  listConversations,
+  deleteConversation,
+} from '../lib/history/conversationPersistence';
 import '../lib/skills/index';
 import { listActiveSkills } from '../lib/skill';
 import { runAgentLoop, type AgentLoopCallbacks, type AgentLoopResult } from '../lib/agents/agentLoop';
@@ -64,14 +70,20 @@ function argsToSummary(args: Record<string, unknown>): string {
 function printHelp(): void {
   console.log(`
 Available commands:
-  /agent <goal>     Run the agent loop toward a specific goal
-  /skills           List available skills with names and risk levels
-  /model <name>     Switch to a different model mid-session
-  /provider <name>  Switch to a different provider mid-session
-  /compact          Manually compact conversation context
-  /clear            Clear conversation history
-  /help             Show this help message
-  exit / quit       Exit the CLI
+  /agent <goal>       Run the agent loop toward a specific goal
+  /skills             List available skills with names and risk levels
+  /model <name>       Switch to a different model mid-session
+  /provider <name>    Switch to a different provider mid-session
+  /compact            Manually compact conversation context
+  /clear              Clear conversation history
+  /save [title]       Save the current conversation (auto-title if omitted)
+  /load <id>          Load a saved conversation, replacing current messages
+  /conversations      List saved conversations
+  /list               Alias for /conversations
+  /delete <id>        Delete a saved conversation
+  /autosave           Toggle auto-save after each exchange
+  /help               Show this help message
+  exit / quit         Exit the CLI (auto-saves if there are messages)
 `);
 }
 
@@ -168,7 +180,7 @@ async function main() {
   let adapter = buildAdapter(provider, model, apiKey);
 
   console.log(`CopHarness Agent CLI — provider: ${provider}, model: ${model}`);
-  console.log('Commands: /agent <goal>, /skills, /model, /provider, /compact, /clear, /help');
+  console.log('Commands: /agent, /skills, /model, /provider, /compact, /clear, /save, /load, /conversations, /delete, /autosave, /help');
   console.log('Type your message or use a command. Type "exit" to quit.\n');
 
   const messages: LLMMessage[] = [];
@@ -176,6 +188,10 @@ async function main() {
   if (rawSystemPrompt) {
     messages.push({ role: 'system', content: rawSystemPrompt });
   }
+
+  // Conversation persistence state
+  let autosaveEnabled = false;
+  let currentConvId: string | undefined;
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -213,6 +229,15 @@ async function main() {
       }
 
       if (trimmed.toLowerCase() === 'exit' || trimmed.toLowerCase() === 'quit') {
+        const userMessages = messages.filter((m) => m.role === 'user');
+        if (userMessages.length > 0) {
+          try {
+            const savedId = saveConversation(messages, provider, model, currentConvId);
+            console.log(`Conversation saved (id: ${savedId})`);
+          } catch {
+            // Non-fatal — don't block exit on save errors.
+          }
+        }
         console.log('Goodbye!');
         rl.close();
         if (adapter.destroy) await adapter.destroy();
@@ -323,6 +348,101 @@ async function main() {
             break;
           }
 
+          case '/save': {
+            const userMsgs = messages.filter((m) => m.role === 'user');
+            if (userMsgs.length === 0) {
+              console.log('Nothing to save — no messages in the current conversation.\n');
+              break;
+            }
+            try {
+              const title = rest || undefined;
+              currentConvId = saveConversation(messages, provider, model, currentConvId, title);
+              console.log(`Conversation saved (id: ${currentConvId})\n`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error(`Failed to save conversation: ${msg}\n`);
+            }
+            break;
+          }
+
+          case '/load': {
+            if (!rest) {
+              console.log('Usage: /load <id>\n');
+              break;
+            }
+            try {
+              const conv = loadConversation(rest);
+              if (!conv) {
+                console.log(`No conversation found with id: ${rest}\n`);
+              } else {
+                messages.length = 0;
+                messages.push(...conv.messages);
+                currentConvId = conv.id;
+                console.log(`Loaded conversation "${conv.title}" (${conv.messageCount} messages)\n`);
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error(`Failed to load conversation: ${msg}\n`);
+            }
+            break;
+          }
+
+          case '/conversations':
+          case '/list': {
+            try {
+              const convList = listConversations();
+              if (convList.length === 0) {
+                console.log('No saved conversations.\n');
+              } else {
+                console.log(`\nSaved conversations (${convList.length}):`);
+                for (const entry of convList) {
+                  const date = new Date(entry.updatedAt).toLocaleString();
+                  console.log(`  ${entry.id}`);
+                  console.log(`    Title:    ${entry.title}`);
+                  console.log(`    Provider: ${entry.provider} / ${entry.model}`);
+                  console.log(`    Messages: ${entry.messageCount}  |  Updated: ${date}`);
+                  if (entry.preview) {
+                    const preview = entry.preview.length > 80 ? entry.preview.slice(0, 80) + '…' : entry.preview;
+                    console.log(`    Preview:  ${preview}`);
+                  }
+                }
+                console.log();
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error(`Failed to list conversations: ${msg}\n`);
+            }
+            break;
+          }
+
+          case '/delete': {
+            if (!rest) {
+              console.log('Usage: /delete <id>\n');
+              break;
+            }
+            try {
+              const removed = deleteConversation(rest);
+              if (removed) {
+                console.log(`Conversation ${rest} deleted.\n`);
+                if (currentConvId === rest) {
+                  currentConvId = undefined;
+                }
+              } else {
+                console.log(`No conversation found with id: ${rest}\n`);
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error(`Failed to delete conversation: ${msg}\n`);
+            }
+            break;
+          }
+
+          case '/autosave': {
+            autosaveEnabled = !autosaveEnabled;
+            console.log(`Auto-save ${autosaveEnabled ? 'enabled' : 'disabled'}.\n`);
+            break;
+          }
+
           default: {
             console.log(`Unknown command: ${command}. Type /help for a list of commands.\n`);
             break;
@@ -361,6 +481,14 @@ async function main() {
           console.log(resp.content);
           console.log();
           messages.push({ role: 'assistant', content: resp.content });
+        }
+        // Auto-save after each successful exchange if enabled.
+        if (autosaveEnabled) {
+          try {
+            currentConvId = saveConversation(messages, provider, model, currentConvId);
+          } catch {
+            // Non-fatal.
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

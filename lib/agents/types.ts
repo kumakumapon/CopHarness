@@ -22,6 +22,14 @@ export interface AgentTask {
   parentTaskId?: string;
   /** Workspace directory reserved for this agent execution. */
   workspace?: string;
+  /**
+   * When true, use the iterative agent loop (runAgentLoop) instead of a
+   * single adapter.complete() call. This gives the agent multi-step reasoning,
+   * tool call iteration, context compaction, and stuck detection.
+   */
+  useAgentLoop?: boolean;
+  /** Max iterations when useAgentLoop is true (default: 25). */
+  maxIterations?: number;
 }
 
 /**
@@ -45,6 +53,13 @@ export interface AgentPlan {
     maxCostUsd?: number;
   };
   workspace?: string;
+  /**
+   * When true, the DAG runner uses the iterative agent loop instead of
+   * a single completion call, giving the node multi-step reasoning.
+   */
+  useAgentLoop?: boolean;
+  /** Max iterations when useAgentLoop is true (default: 25). */
+  maxIterations?: number;
 }
 
 export type AgentPlanStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
