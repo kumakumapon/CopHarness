@@ -6,6 +6,7 @@ import { LmStudioAdapter } from './adapters/lmstudioAdapter';
 import { LemonadeAdapter } from './adapters/lemonadeAdapter';
 import { AntigravityAdapter } from './adapters/antigravityAdapter';
 import { FallbackAdapter } from './adapters/fallbackAdapter';
+import { RetryAdapter } from './adapters/retryAdapter';
 import { InstrumentedAdapter } from './telemetry/instrumentedAdapter';
 import { CachedAdapter } from './cache/cachedAdapter';
 import { isCacheEnabled } from './cache/responseCache';
@@ -52,7 +53,10 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
 }
 
 function wrapAdapter(adapter: LLMAdapter): LLMAdapter {
+  // Each attempt is individually instrumented before retry wraps it, so
+  // telemetry reflects per-attempt behaviour rather than only the final success.
   let wrapped: LLMAdapter = new InstrumentedAdapter(adapter);
+  wrapped = new RetryAdapter(wrapped);
   if (isCacheEnabled()) {
     wrapped = new CachedAdapter(wrapped);
   }

@@ -282,6 +282,8 @@ export async function runAgentDag(
               timeoutMs: plan.timeoutMs,
               parentTaskId: parentTask.id,
               workspace,
+              useAgentLoop: plan.useAgentLoop,
+              maxIterations: plan.maxIterations,
             }, plan);
             const completedAt = new Date().toISOString();
             return {
@@ -451,6 +453,8 @@ export async function retryAgentDagNode(
               timeoutMs: plan.timeoutMs,
               parentTaskId: parentTask.id,
               workspace,
+              useAgentLoop: plan.useAgentLoop,
+              maxIterations: plan.maxIterations,
             }, plan);
             return {
               planId: plan.id,
