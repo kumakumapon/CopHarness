@@ -4,6 +4,8 @@ import { resolveToolsetSkillNames } from '../skills/toolsets';
 import { getSkillExecutionContext, withSkillExecutionContext } from '../skills/executionContext';
 import { finishTask, startTask } from '../tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../tasks/cancellation';
+import { runAgentLoop } from './agentLoop';
+import { eventBus } from '../events/bus';
 import type { LLMAdapter } from '../adapter';
 import type { AgentTask, AgentResult } from './types';
 
@@ -82,6 +84,62 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
     ];
     const dedupedSkillNames = Array.from(new Set(allSkillNames));
     const skills = dedupedSkillNames.length > 0 ? resolveSkills(dedupedSkillNames) : undefined;
+
+    eventBus.emit('agent:start', {
+      taskId: taskRecord.id,
+      role: roleName,
+      goal: task.userPrompt.slice(0, 200),
+    });
+
+    if (task.useAgentLoop) {
+      const loopResult = await withSkillExecutionContext(
+        {
+          ...inheritedContext,
+          personId: taskRecord.personId,
+          channelKey: taskRecord.channelKey,
+          taskId: taskRecord.id,
+        },
+        () => runAgentLoop({
+          goal: task.userPrompt,
+          adapter: adapter!,
+          skills: skills ?? [],
+          systemPrompt,
+          maxIterations: task.maxIterations ?? (Number(process.env.AGENT_MAX_ITERATIONS) || 25),
+          timeoutMs,
+          abortSignal: abortController.signal,
+          callbacks: {
+            onProgress(message) {
+              eventBus.emit('agent:progress', {
+                taskId: taskRecord.id,
+                iteration: 0,
+                message,
+              });
+            },
+          },
+        }),
+      );
+
+      eventBus.emit('agent:complete', {
+        taskId: taskRecord.id,
+        role: roleName,
+        durationMs: loopResult.durationMs,
+        iterations: loopResult.iterations,
+        toolCallCount: loopResult.toolCallCount,
+        completed: loopResult.completed,
+      });
+
+      await finishTask(taskRecord.id, 'succeeded');
+      return {
+        taskId: taskRecord.id,
+        role: roleName,
+        content: loopResult.summary ?? loopResult.content,
+        model,
+        provider,
+        durationMs: Date.now() - start,
+        error: loopResult.completed ? undefined : 'Agent loop did not complete',
+      };
+    }
+
     const resp = await withSkillExecutionContext(
       {
         ...inheritedContext,
@@ -99,6 +157,16 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
         abortSignal: abortController.signal,
       }),
     );
+
+    eventBus.emit('agent:complete', {
+      taskId: taskRecord.id,
+      role: roleName,
+      durationMs: Date.now() - start,
+      iterations: 1,
+      toolCallCount: 0,
+      completed: true,
+    });
+
     await finishTask(taskRecord.id, 'succeeded');
     return {
       taskId: taskRecord.id,
@@ -109,16 +177,21 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
       durationMs: Date.now() - start,
     };
   } catch (err) {
-    // A stop request through the cancellation registry has already finished
-    // the ledger entry as cancelled; do not overwrite it with 'failed'.
     const cancelled = abortController.signal.aborted;
+    const errMsg = cancelled ? 'cancelled' : err instanceof Error ? err.message : String(err);
+    eventBus.emit('agent:error', {
+      taskId: taskRecord.id,
+      role: roleName,
+      error: errMsg,
+      durationMs: Date.now() - start,
+    });
     if (!cancelled) await finishTask(taskRecord.id, 'failed', err);
     return {
       taskId: taskRecord.id,
       role: roleName,
       content: '',
       durationMs: Date.now() - start,
-      error: cancelled ? 'cancelled' : err instanceof Error ? err.message : String(err),
+      error: errMsg,
     };
   } finally {
     unregisterTaskAbortController(taskRecord.id);
