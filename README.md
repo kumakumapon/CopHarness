@@ -14,6 +14,7 @@
 - **マルチエージェント** — 複数の役割エージェントを実行（A2A プロトコル対応）
 - **OpenTelemetry** — LLM 呼び出しをスパン計装し OTLP/HTTP で外部へエクスポート
 - **Human-in-the-Loop** — リスク高スキルの実行前に人間の承認を要求
+- **学習ガイド** — 利用シーン別の導入手順と実践課題は [`docs/USE_CASE_LEARNING.md`](docs/USE_CASE_LEARNING.md) を参照
 
 ---
 
