@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -577,7 +578,7 @@ export default function PlaygroundPage() {
           flexWrap: 'wrap',
         }}
       >
-        <a
+        <Link
           href="/"
           style={{
             display: 'inline-flex',
@@ -593,7 +594,7 @@ export default function PlaygroundPage() {
           }}
         >
           &#8592; ホームへ
-        </a>
+        </Link>
         <div>
           <h1
             style={{
