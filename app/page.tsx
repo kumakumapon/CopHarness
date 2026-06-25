@@ -96,6 +96,40 @@ export default function Home() {
           >
             📊 ダッシュボードを開く
           </a>
+          <a
+            href="/tutorials"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '14px 18px',
+              borderRadius: '999px',
+              background: 'var(--accent-peachy)',
+              textDecoration: 'none',
+              color: 'var(--text-primary)',
+              border: '1px solid rgba(90, 74, 66, 0.08)',
+              fontWeight: 700,
+            }}
+          >
+            📖 チュートリアル
+          </a>
+          <a
+            href="/playground"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '14px 18px',
+              borderRadius: '999px',
+              background: 'rgba(255, 255, 255, 0.7)',
+              textDecoration: 'none',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-color)',
+              fontWeight: 700,
+            }}
+          >
+            🧪 プレイグラウンド
+          </a>
           <code
             style={{
               padding: '10px 12px',
