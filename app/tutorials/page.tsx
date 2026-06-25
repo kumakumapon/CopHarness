@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -633,7 +634,7 @@ export default function TutorialsPage() {
       }}
     >
       {/* Back link */}
-      <a
+      <Link
         href="/"
         style={{
           display: 'inline-flex',
@@ -647,7 +648,7 @@ export default function TutorialsPage() {
         }}
       >
         ← ホームへ戻る
-      </a>
+      </Link>
 
       {/* Page header */}
       <section
