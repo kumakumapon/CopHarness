@@ -328,7 +328,8 @@ function CodeBlock({ code }: { code: string }) {
         lineHeight: 1.65,
         margin: '10px 0 2px',
         fontFamily: '"SF Mono", "Fira Mono", "Consolas", monospace',
-        whiteSpace: 'pre',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
       }}
     >
       <code>{code}</code>
@@ -734,7 +735,7 @@ export default function TutorialsPage() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(460px, 100%), 1fr))',
           gap: '20px',
         }}
       >
