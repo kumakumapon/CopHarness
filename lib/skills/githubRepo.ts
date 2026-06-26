@@ -1,4 +1,5 @@
 import { type SkillDefinition } from '../skill';
+import { buildGithubHeaders } from '../utils/github';
 
 /**
  * GitHub repository analysis skill.
@@ -47,21 +48,11 @@ interface GithubIssue {
   html_url: string;
 }
 
-function buildHeaders(): Record<string, string> {
-  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_COPILOT_API_KEY;
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-}
-
 async function ghFetch<T>(url: string): Promise<T | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
-    const res = await fetch(url, { headers: buildHeaders(), signal: controller.signal });
+    const res = await fetch(url, { headers: buildGithubHeaders(), signal: controller.signal });
     if (!res.ok) return null;
     return await res.json() as T;
   } finally {

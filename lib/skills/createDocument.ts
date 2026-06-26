@@ -2,16 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { type SkillDefinition } from '../skill';
 import { resolveSafe } from './fileSandbox';
+import { escapeHtml } from '../utils/html';
 
 interface DocumentSection {
   heading: string;
   content: string;
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function buildMarkdownDoc(title: string, sections: DocumentSection[]): string {

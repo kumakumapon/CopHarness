@@ -2,20 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { type SkillDefinition } from '../skill';
 import { resolveSafe } from './fileSandbox';
-
-interface Slide {
-  title: string;
-  bullets: string[];
-  notes?: string;
-}
+import { escapeHtml } from '../utils/html';
+import { parseSlides, type SlideItem as Slide } from '../utils/slides';
 
 type Theme = 'light' | 'dark' | 'corporate';
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 
 const THEME_VARS: Record<Theme, string> = {
   light: [
@@ -192,23 +182,6 @@ ${navJS}
 </script>
 </body>
 </html>`;
-}
-
-function parseSlides(raw: unknown): Slide[] | null {
-  const str = String(raw ?? '').trim();
-  if (!str) return null;
-  try {
-    const parsed: unknown = JSON.parse(str);
-    if (!Array.isArray(parsed)) return null;
-    for (const item of parsed) {
-      if (typeof item !== 'object' || item === null) return null;
-      if (typeof (item as Record<string, unknown>).title !== 'string') return null;
-      if (!Array.isArray((item as Record<string, unknown>).bullets)) return null;
-    }
-    return parsed as Slide[];
-  } catch {
-    return null;
-  }
 }
 
 export const createSlideshow: SkillDefinition = {
