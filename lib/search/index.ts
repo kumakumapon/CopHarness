@@ -15,6 +15,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dataPath } from '../utils/dataDir';
+import { type StatementLike, type DatabaseLike, type SqliteModuleLike, loadSqlite, escapeFtsQuery } from '../utils/sqlite';
 import type { LLMMessage } from '../adapter';
 import type { TaskRecord } from '../tasks/ledger';
 
@@ -46,45 +47,10 @@ export interface SearchQuery {
   limit?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Internal SQLite plumbing (mirrors memory/store.ts)
-// ---------------------------------------------------------------------------
-
-interface StatementLike {
-  run: (...params: unknown[]) => unknown;
-  get: (...params: unknown[]) => unknown;
-  all: (...params: unknown[]) => unknown[];
-}
-
-interface DatabaseLike {
-  exec: (sql: string) => void;
-  prepare: (sql: string) => StatementLike;
-  close: () => void;
-}
-
-interface SqliteModuleLike {
-  DatabaseSync: new (filename: string) => DatabaseLike;
-}
-
 const DEFAULT_SEARCH_DB = 'search_index.sqlite';
 const DEFAULT_SEARCH_JSON = 'search_index.json';
 const JSON_CAP = 5000;
 const SNIPPET_LENGTH = 160;
-
-function loadSqlite(): SqliteModuleLike | null {
-  if (
-    process.env.SEARCH_INDEX_FORCE_JSON === 'true' ||
-    process.env.SEARCH_INDEX_FORCE_JSON === '1'
-  ) {
-    return null;
-  }
-  try {
-    const req = eval('require') as NodeRequire;
-    return req('node:sqlite') as SqliteModuleLike;
-  } catch {
-    return null;
-  }
-}
 
 export function isSearchIndexEnabled(): boolean {
   const v = process.env.SEARCH_INDEX_ENABLED;
@@ -136,19 +102,6 @@ function makeSnippet(content: string, query: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// FTS query escaping (mirrors memory/store.ts)
-// ---------------------------------------------------------------------------
-
-function escapeFtsQuery(query: string): string {
-  return query
-    .split(/\s+/)
-    .map((token) => token.trim().replace(/"/g, ''))
-    .filter(Boolean)
-    .map((token) => `"${token}"`)
-    .join(' OR ');
-}
-
-// ---------------------------------------------------------------------------
 // Row mapping
 // ---------------------------------------------------------------------------
 
@@ -174,7 +127,8 @@ export class SearchIndex {
   private readonly fallbackFile: string | null;
 
   constructor(filename = getSearchDbPath()) {
-    const sqlite = loadSqlite();
+    const forceJson = process.env.SEARCH_INDEX_FORCE_JSON === 'true' || process.env.SEARCH_INDEX_FORCE_JSON === '1';
+    const sqlite = forceJson ? null : loadSqlite();
     if (sqlite) {
       this.db = new sqlite.DatabaseSync(filename);
       this.fallbackFile = null;

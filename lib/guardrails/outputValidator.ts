@@ -86,10 +86,12 @@ export function validateSkillOutput(content: string, schema: SkillOutputSchema):
         if (!Array.isArray(parsed)) {
           errors.push(`Expected JSON array, got ${typeof parsed}`);
         } else if (schema.items && parsed.length > 0) {
-          const item = parsed[0];
-          const itemType = Array.isArray(item) ? 'array' : typeof item;
-          if (schema.items.type && itemType !== schema.items.type) {
-            errors.push(`Array items: expected ${schema.items.type}, got ${itemType}`);
+          for (let i = 0; i < parsed.length; i++) {
+            const item = parsed[i];
+            const itemType = Array.isArray(item) ? 'array' : typeof item;
+            if (schema.items.type && itemType !== schema.items.type) {
+              errors.push(`Array items[${i}]: expected ${schema.items.type}, got ${itemType}`);
+            }
           }
         }
         break;

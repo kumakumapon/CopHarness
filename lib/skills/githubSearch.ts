@@ -1,4 +1,5 @@
 import { type SkillDefinition } from '../skill';
+import { buildGithubHeaders } from '../utils/github';
 
 /**
  * GitHub Search skill using the GitHub REST API.
@@ -30,16 +31,6 @@ interface GithubSearchReposResponse {
 interface GithubSearchIssuesResponse {
   total_count: number;
   items: GithubIssue[];
-}
-
-function buildHeaders(): Record<string, string> {
-  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_COPILOT_API_KEY;
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
 }
 
 export const githubSearch: SkillDefinition = {
@@ -83,7 +74,7 @@ export const githubSearch: SkillDefinition = {
       : `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&per_page=${maxResults}&sort=stars&order=desc`;
 
     try {
-      const response = await fetch(endpoint, { headers: buildHeaders() });
+      const response = await fetch(endpoint, { headers: buildGithubHeaders() });
       if (!response.ok) {
         return { content: `Error: GitHub API returned ${response.status} ${response.statusText}`, isError: true };
       }
