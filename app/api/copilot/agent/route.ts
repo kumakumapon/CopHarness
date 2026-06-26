@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
-import { type LLMMessage, type LLMAttachment } from '../../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
 import { requireApiKey } from '../../../../lib/apiAuth';
 import { defaultRateLimiter, rateLimitResponse } from '../../../../lib/rateLimit';
@@ -8,7 +7,7 @@ import { resolveConversationKey } from '../../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../../lib/skills/executionContext';
 import { finishTask, startTask } from '../../../../lib/tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/tasks/cancellation';
-import { auditRequest, auditResponse } from '../../../../lib/logs/auditLogger';
+import { runAgentLoop } from '../../../../lib/agents/agentLoop';
 import '../../../../lib/skills/index';
 
 export async function POST(req: NextRequest) {
@@ -32,13 +31,11 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    messages?: LLMMessage[];
-    attachments?: LLMAttachment[];
-    timeoutMs?: number;
+    goal?: string;
     skills?: string[];
     subject?: string;
     displayName?: string;
-    taskId?: string;
+    maxIterations?: number;
   };
   try {
     body = (await req.json()) as typeof body;
@@ -46,35 +43,26 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
   }
 
-  const { messages, attachments } = body;
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return new Response(JSON.stringify({ error: 'messages array is required' }), {
-      status: 400,
-    });
+  const { goal } = body;
+  if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+    return new Response(JSON.stringify({ error: 'goal string is required' }), { status: 400 });
   }
 
   const model = resolveModel(provider);
   const defaultTimeout = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-  const timeoutMs =
-    body.timeoutMs != null
-      ? Math.min(Math.max(1, body.timeoutMs), defaultTimeout)
-      : defaultTimeout;
-
-  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
+  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs: defaultTimeout });
   const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
   const subject = String(body.subject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';
   const identity = await resolveConversationKey('api', subject, { displayName: body.displayName });
   const task = await startTask({
-    id: body.taskId,
-    kind: 'api',
+    kind: 'agent',
     personId: identity.personId,
     channelKey: identity.channelKey,
     conversationKey: identity.conversationKey,
-    title: messages[messages.length - 1]?.content?.slice(0, 120),
+    title: goal.slice(0, 120),
     metadata: { stream: true },
   });
 
-  auditRequest(task.id, identity.personId, messages[messages.length - 1]?.content);
   const taskAbort = new AbortController();
   registerTaskAbortController(task.id, taskAbort);
   const abortSignal = req.signal
@@ -82,9 +70,13 @@ export async function POST(req: NextRequest) {
     : taskAbort.signal;
 
   const encoder = new TextEncoder();
+
+  function sseEvent(data: unknown): Uint8Array {
+    return encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
-      let fullContent = '';
       try {
         await withSkillExecutionContext(
           {
@@ -93,46 +85,57 @@ export async function POST(req: NextRequest) {
             taskId: task.id,
           },
           async () => {
-            const gen = adapter.stream
-              ? adapter.stream({ messages, attachments, timeoutMs, abortSignal, skills })
-              : (async function* fallback() {
-                  const resp = await adapter.complete({
-                    messages,
-                    attachments,
-                    timeoutMs,
-                    abortSignal,
-                    skills,
-                  });
-                  yield resp.content;
-                })();
+            const result = await runAgentLoop({
+              goal: goal.trim(),
+              adapter,
+              skills,
+              maxIterations: body.maxIterations,
+              abortSignal,
+              callbacks: {
+                onProgress: (message) => {
+                  controller.enqueue(sseEvent({ type: 'progress', message }));
+                },
+                onToolCall: (skill, args) => {
+                  controller.enqueue(sseEvent({ type: 'tool_call', skill, args }));
+                },
+                onToolResult: (skill, result, isError) => {
+                  controller.enqueue(sseEvent({ type: 'tool_result', skill, result, isError }));
+                },
+                onResponse: (content) => {
+                  controller.enqueue(sseEvent({ type: 'response', content }));
+                },
+                onCompaction: (before, after) => {
+                  controller.enqueue(sseEvent({ type: 'compaction', before, after }));
+                },
+                onRequestInput: undefined,
+              },
+            });
 
-            for await (const chunk of gen) {
-              fullContent += chunk;
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ token: chunk })}\n\n`),
-              );
-            }
             controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ done: true, reply: fullContent })}\n\n`),
+              sseEvent({
+                type: 'done',
+                result: {
+                  completed: result.completed,
+                  iterations: result.iterations,
+                  durationMs: result.durationMs,
+                  toolCallCount: result.toolCallCount,
+                  summary: result.summary,
+                },
+              }),
             );
           },
         );
         await finishTask(task.id, 'succeeded');
-        auditResponse(task.id, fullContent);
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       } catch (err) {
-        // A stop request via the cancellation registry has already finished
-        // the ledger entry as cancelled; report the cancellation downstream.
         if (taskAbort.signal.aborted) {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: 'Task cancelled', taskId: task.id })}\n\n`),
+            sseEvent({ type: 'error', message: 'Task cancelled', taskId: task.id }),
           );
         } else {
           const message = err instanceof Error ? err.message : String(err);
           await finishTask(task.id, 'failed', err);
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: message, taskId: task.id })}\n\n`),
-          );
+          controller.enqueue(sseEvent({ type: 'error', message, taskId: task.id }));
         }
       } finally {
         unregisterTaskAbortController(task.id);

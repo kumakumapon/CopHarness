@@ -9,6 +9,7 @@ import { withSkillExecutionContext } from '../../../lib/skills/executionContext'
 import { finishTask, startTask } from '../../../lib/tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/tasks/cancellation';
 import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
+import { auditRequest, auditResponse, auditError } from '../../../lib/logs/auditLogger';
 import '../../../lib/skills/index';
 
 
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       conversationKey: identity.conversationKey,
       title: messages[messages.length - 1]?.content?.slice(0, 120),
     });
+    auditRequest(task.id, identity.personId, messages[messages.length - 1]?.content);
     const taskAbort = new AbortController();
     registerTaskAbortController(task.id, taskAbort);
     const abortSignal = req.signal
@@ -89,6 +91,7 @@ export async function POST(req: NextRequest) {
         () => runWithRalphLoop({ messages, attachments, timeoutMs, abortSignal, skills }, adapter, { taskId: task.id }),
       );
       await finishTask(task.id, 'succeeded');
+      auditResponse(task.id, resp.content);
       return NextResponse.json({ reply: resp.content, taskId: task.id, ...(resp.usage ? { usage: resp.usage } : {}) });
     } catch (err) {
       // A stop request via the cancellation registry has already finished the
@@ -96,6 +99,7 @@ export async function POST(req: NextRequest) {
       if (taskAbort.signal.aborted) {
         return NextResponse.json({ error: 'Task cancelled', taskId: task.id }, { status: 499 });
       }
+      auditError(task.id, err);
       await finishTask(task.id, 'failed', err);
       throw err;
     } finally {
