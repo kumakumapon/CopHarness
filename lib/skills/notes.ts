@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { type SkillDefinition } from '../skill';
+import { dataPath } from '../utils/dataDir';
 
 /**
  * Structured note management skill.
@@ -19,8 +20,8 @@ interface Note {
 }
 
 function getNotesFile(): string {
-  const raw = process.env.SKILL_NOTES_FILE ?? './notes.json';
-  return path.resolve(raw);
+  if (process.env.SKILL_NOTES_FILE) return path.resolve(process.env.SKILL_NOTES_FILE);
+  return dataPath('notes.json');
 }
 
 async function loadNotes(): Promise<Note[]> {

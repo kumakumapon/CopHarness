@@ -1,4 +1,5 @@
 import { type SkillDefinition } from '../skill';
+import { stripHtml } from '../utils/html';
 
 /**
  * API-key-free deep research skill.
@@ -128,25 +129,6 @@ async function fetchWikiSummary(
   return response.json() as Promise<WikiSummary>;
 }
 
-/** Strip basic HTML tags from a string and decode common HTML entities.
- * Uses a single-pass regex that removes both complete tags (<foo>) and
- * partial/unclosed tags (<script without a closing >) to prevent injection. */
-function stripHtml(text: string): string {
-  return text
-    // Single pass: remove complete tags AND partial tags (closing '>' is optional)
-    .replace(/<[^>]*>?/g, ' ')
-    // Decode common HTML entities
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    // Collapse whitespace
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 // ---------------------------------------------------------------------------
 // Skill definition
 // ---------------------------------------------------------------------------
@@ -154,9 +136,10 @@ function stripHtml(text: string): string {
 export const freeResearch: SkillDefinition = {
   name: 'freeResearch',
   description:
-    'Performs deep research on a topic without requiring any API key. ' +
+    'Performs deep, multi-angle research on a topic without requiring any API key. ' +
+    'Replaces deepResearch — supports optional sub-queries for multi-perspective coverage. ' +
     'Queries the DuckDuckGo Instant Answer API for a quick summary and related topics, ' +
-    'then searches Wikipedia for in-depth articles. ' +
+    'then searches Wikipedia for in-depth articles. Deduplicates Wikipedia articles by title. ' +
     'Returns a structured research report. ' +
     'Use this for a language-specific research report (supports multiple Wikipedia language editions).',
   parameters: {
@@ -166,6 +149,12 @@ export const freeResearch: SkillDefinition = {
         type: 'string',
         description: 'The research topic or question.',
       },
+      subQueries: {
+        type: 'string',
+        description:
+          'Comma-separated list of additional sub-queries to explore different angles of the topic ' +
+          '(e.g., "recent developments, criticism, future outlook"). Up to 3 sub-queries are used.',
+      },
       language: {
         type: 'string',
         description:
@@ -174,7 +163,7 @@ export const freeResearch: SkillDefinition = {
       },
       maxWikiResults: {
         type: 'number',
-        description: 'Maximum Wikipedia articles to include (1–5). Defaults to 3.',
+        description: 'Maximum Wikipedia articles per query to include (1–5). Defaults to 3.',
         minimum: 1,
         maximum: 5,
       },
@@ -198,6 +187,16 @@ export const freeResearch: SkillDefinition = {
         ? Math.min(5, Math.max(1, Math.floor(args.maxWikiResults)))
         : 3;
 
+    // Parse sub-queries (up to 3)
+    const rawSubQueries = typeof args.subQueries === 'string' ? args.subQueries : '';
+    const subQueries = rawSubQueries
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+
+    const allQueries = [query, ...subQueries];
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     const { signal } = controller;
@@ -205,9 +204,12 @@ export const freeResearch: SkillDefinition = {
     const parts: string[] = [];
     parts.push(`# Free Research: ${query}\n`);
 
+    // Deduplicate Wikipedia articles by title across all queries
+    const seenTitles = new Set<string>();
+
     try {
       // -----------------------------------------------------------------------
-      // 1. DuckDuckGo Instant Answer
+      // 1. DuckDuckGo Instant Answer (main query only)
       // -----------------------------------------------------------------------
       let ddgData: DdgResponse | null = null;
       try {
@@ -272,18 +274,21 @@ export const freeResearch: SkillDefinition = {
       }
 
       // -----------------------------------------------------------------------
-      // 2. Wikipedia
+      // 2. Wikipedia (all queries, deduplicated by title)
       // -----------------------------------------------------------------------
-      let wikiResults: WikiSearchResult[] = [];
-      try {
-        wikiResults = (await searchWikipedia(query, lang, maxWikiResults, signal)).slice(0, maxWikiResults);
-      } catch {
-        // Non-fatal
-      }
+      const wikiSections: string[] = [];
 
-      if (wikiResults.length > 0) {
-        parts.push('\n## Wikipedia\n');
+      for (const q of allQueries) {
+        let wikiResults: WikiSearchResult[] = [];
+        try {
+          wikiResults = (await searchWikipedia(q, lang, maxWikiResults, signal)).slice(0, maxWikiResults);
+        } catch {
+          // Non-fatal
+        }
+
         for (const result of wikiResults) {
+          if (seenTitles.has(result.title)) continue;
+          seenTitles.add(result.title);
           try {
             const summary = await fetchWikiSummary(result.title, lang, signal);
             if (summary) {
@@ -293,12 +298,17 @@ export const freeResearch: SkillDefinition = {
                 : summary.extract;
               const pageUrl = summary.content_urls?.desktop?.page
                 ?? `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(result.title)}`;
-              parts.push(`### ${summary.title}\n${extract}\n**URL:** ${pageUrl}\n`);
+              wikiSections.push(`### ${summary.title}\n${extract}\n**URL:** ${pageUrl}\n`);
             }
           } catch {
             // Skip pages that fail to load
           }
         }
+      }
+
+      if (wikiSections.length > 0) {
+        parts.push('\n## Wikipedia\n');
+        parts.push(...wikiSections);
       }
 
     } finally {

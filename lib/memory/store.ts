@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dataPath } from '../utils/dataDir';
+import { type StatementLike, type DatabaseLike, type SqliteModuleLike, loadSqlite, escapeFtsQuery } from '../utils/sqlite';
 
 export type MemoryKind = 'fact' | 'preference' | 'project' | 'task' | 'episodic';
 
@@ -46,34 +47,8 @@ export interface MemorySearchResult extends MemoryRecord {
   rank?: number;
 }
 
-interface StatementLike {
-  run: (...params: unknown[]) => unknown;
-  get: (...params: unknown[]) => unknown;
-  all: (...params: unknown[]) => unknown[];
-}
-
-interface DatabaseLike {
-  exec: (sql: string) => void;
-  prepare: (sql: string) => StatementLike;
-  close: () => void;
-}
-
-interface SqliteModuleLike {
-  DatabaseSync: new (filename: string) => DatabaseLike;
-}
-
 const DEFAULT_MEMORY_DB = 'memory.sqlite';
 const MEMORY_KINDS = new Set<MemoryKind>(['fact', 'preference', 'project', 'task', 'episodic']);
-
-function loadSqlite(): SqliteModuleLike | null {
-  if (process.env.MEMORY_STORE_FORCE_JSON === 'true' || process.env.MEMORY_STORE_FORCE_JSON === '1') return null;
-  try {
-    const req = eval('require') as NodeRequire;
-    return req('node:sqlite') as SqliteModuleLike;
-  } catch {
-    return null;
-  }
-}
 
 export function getMemoryDbPath(): string {
   const raw = process.env.MEMORY_DB_FILE;
@@ -142,21 +117,13 @@ function getFallbackMemoryFile(filename: string): string {
   return filename.endsWith('.sqlite') ? dataPath('memory.json') : filename;
 }
 
-function escapeFtsQuery(query: string): string {
-  return query
-    .split(/\s+/)
-    .map((token) => token.trim().replace(/"/g, ''))
-    .filter(Boolean)
-    .map((token) => `"${token}"`)
-    .join(' OR ');
-}
-
 export class MemoryStore {
   private readonly db: DatabaseLike | null;
   private readonly fallbackFile: string | null;
 
   constructor(filename = getMemoryDbPath()) {
-    const sqlite = loadSqlite();
+    const forceJson = process.env.MEMORY_STORE_FORCE_JSON === 'true' || process.env.MEMORY_STORE_FORCE_JSON === '1';
+    const sqlite = forceJson ? null : loadSqlite();
     if (sqlite) {
       this.db = new sqlite.DatabaseSync(filename);
       this.fallbackFile = null;
