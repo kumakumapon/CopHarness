@@ -5,6 +5,12 @@
 
 export type ExecutionBackendKind = 'local' | 'docker' | 'ssh';
 
+/** Maximum number of characters kept from stdout/stderr before truncation. */
+export const MAX_OUTPUT_CHARS = 10_000;
+
+/** Default command execution timeout in milliseconds. */
+export const DEFAULT_TIMEOUT_MS = 10_000;
+
 export interface CommandRequest {
   command: string;
   args: string[];

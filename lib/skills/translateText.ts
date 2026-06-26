@@ -1,5 +1,5 @@
 import { type SkillDefinition } from '../skill';
-import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
+import { createAdapter, resolveProvider, resolveModel, resolveApiKey } from '../adapterFactory';
 
 /**
  * Text translation skill using the configured LLM.
@@ -48,15 +48,7 @@ export const translateText: SkillDefinition = {
 
     try {
       const provider = resolveProvider();
-      const localProviders = ['lmstudio', 'lemonade'];
-      const apiKey = localProviders.includes(provider)
-        ? undefined
-        : process.env.COPILOT_PROVIDER_API_KEY ||
-          process.env.COPILOT_API_KEY ||
-          process.env.GITHUB_COPILOT_API_KEY ||
-          process.env.OPENAI_API_KEY ||
-          process.env.ANTHROPIC_API_KEY ||
-          process.env.GEMINI_API_KEY;
+      const apiKey = resolveApiKey(provider);
       const model = resolveModel(provider);
       const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 60_000;
 

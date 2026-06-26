@@ -1,6 +1,6 @@
 import { listSchedules, setRunNow, setStopRequested, updateLastRun } from './store';
 import { matchesCron, normalizeCron, isValidCronInput } from './cron';
-import { createAdapterWithFallback, resolveProvider, resolveModel } from '../adapterFactory';
+import { createAdapterWithFallback, resolveProvider, resolveModel, resolveApiKey } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
@@ -105,13 +105,7 @@ export async function runPrompt(
   scheduledContext?: ScheduledPromptRunContext,
 ): Promise<string> {
   const provider = resolveProvider();
-  const apiKey =
-    process.env.COPILOT_PROVIDER_API_KEY ||
-    process.env.COPILOT_API_KEY ||
-    process.env.GITHUB_COPILOT_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    process.env.ANTHROPIC_API_KEY;
-
+  const apiKey = resolveApiKey(provider);
   const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
