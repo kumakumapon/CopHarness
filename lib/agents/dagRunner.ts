@@ -182,7 +182,7 @@ function descendantPlanIds(plans: AgentPlan[], rootId: string): Set<string> {
 function runStatusFromResults(plans: AgentPlan[], results: Map<string, AgentDagNodeResult>): 'succeeded' | 'failed' {
   return plans.some((plan) => {
     const result = results.get(plan.id);
-    return !result || result.status === 'failed' || result.status === 'skipped';
+    return !result || result.status === 'failed';
   }) ? 'failed' : 'succeeded';
 }
 

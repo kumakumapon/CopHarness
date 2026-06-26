@@ -11,18 +11,17 @@ import type { LLMAdapter, LLMRequest, LLMResponse } from '../adapter';
  * Configure via FALLBACK_PROVIDERS env var (comma-separated provider names).
  */
 
-const NON_RETRYABLE_PATTERNS = [
-  /\b(401|403)\b/,
+const NON_FALLBACK_PATTERNS = [
   /\b(authenticat|unauthoriz|forbidden)\b/i,
   /\bapikey\b/i,
   /\binvalid.*key\b/i,
 ];
 
-function isRetryableError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
+function shouldTryNextProvider(err: unknown): boolean {
   const status = (err as { status?: number }).status;
   if (status === 401 || status === 403) return false;
-  return !NON_RETRYABLE_PATTERNS.some((p) => p.test(msg));
+  const msg = err instanceof Error ? err.message : String(err);
+  return !NON_FALLBACK_PATTERNS.some((p) => p.test(msg));
 }
 
 export class FallbackAdapter implements LLMAdapter {
@@ -50,7 +49,7 @@ export class FallbackAdapter implements LLMAdapter {
       } catch (err) {
         lastError = err;
         const isLast = i === this.adapters.length - 1;
-        if (isLast || !isRetryableError(err)) throw err;
+        if (isLast || !shouldTryNextProvider(err)) throw err;
         console.warn(
           `[FallbackAdapter] ${adapter.provider}/${adapter.model} failed, trying next provider: ${err instanceof Error ? err.message : err}`,
         );
@@ -74,7 +73,7 @@ export class FallbackAdapter implements LLMAdapter {
       } catch (err) {
         lastError = err;
         const isLast = i === this.adapters.length - 1;
-        if (isLast || !isRetryableError(err)) throw err;
+        if (isLast || !shouldTryNextProvider(err)) throw err;
         console.warn(
           `[FallbackAdapter] ${adapter.provider}/${adapter.model} stream failed, trying next provider: ${err instanceof Error ? err.message : err}`,
         );

@@ -10,6 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { dataPath } from '../utils/dataDir';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,7 +32,7 @@ export interface AuditEntry {
 // ---------------------------------------------------------------------------
 
 function resolveLogPath(): string {
-  return process.env.AUDIT_LOG_PATH ?? path.join(process.cwd(), 'logs', 'audit.jsonl');
+  return process.env.AUDIT_LOG_PATH ?? dataPath('audit.jsonl');
 }
 
 function ensureDir(filePath: string): void {

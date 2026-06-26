@@ -198,11 +198,3 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
     await Promise.resolve(adapter?.destroy?.()).catch(() => {});
   }
 }
-
-export async function runAgentPipeline(tasks: AgentTask[]): Promise<AgentResult[]> {
-  const results: AgentResult[] = [];
-  for (const task of tasks) {
-    results.push(await runAgentTask(task));
-  }
-  return results;
-}

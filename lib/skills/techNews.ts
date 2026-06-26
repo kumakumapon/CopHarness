@@ -1,4 +1,5 @@
 import { type SkillDefinition } from '../skill';
+import { stripHtml } from '../utils/html';
 
 /**
  * Tech news skill using public RSS feeds (no API key required).
@@ -70,28 +71,6 @@ function extractTag(xml: string, tag: string): string {
 function extractAttr(xml: string, tag: string, attr: string): string {
   const m = xml.match(new RegExp(`<${tag}[^>]*${attr}="([^"]*)"`, 'i'));
   return m ? m[1] : '';
-}
-
-function stripHtml(html: string): string {
-  // Remove HTML tags in multiple passes to handle nested/malformed tags
-  // e.g. "<scr<b>ipt>" → "<script>" after first pass → "" after second pass
-  let text = html;
-  let prev = '';
-  while (prev !== text) {
-    prev = text;
-    text = text.replace(/<[^>]*>/g, '');
-  }
-  // Decode HTML entities (order matters: &amp; last to prevent double-decoding)
-  text = text
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/&amp;/g, '&');
-  return text.replace(/\s+/g, ' ').trim();
 }
 
 /** Curated list of RSS feeds for tech news. */
@@ -192,18 +171,30 @@ export const techNews: SkillDefinition = {
     'Topics: "ai" (AI/ML), "tech" (general tech), "dev" (developer/Hacker News), ' +
     '"world" (international news), "finance" (business/markets), ' +
     '"science" (NASA/ScienceDaily), "japan" (NHK World/Japan Today). ' +
+    'Provide a single "topic" for a focused feed, or a "topics" array for a multi-topic digest (replaces newsBrief). ' +
     'Returns titles, links, and brief descriptions sorted newest-first.',
   parameters: {
     type: 'object',
     properties: {
       topic: {
         type: 'string',
-        description: 'News topic. One of: "ai", "tech", "dev", "world", "finance", "science", "japan". Defaults to "ai".',
+        description: 'News topic for a single-topic feed. One of: "ai", "tech", "dev", "world", "finance", "science", "japan". Defaults to "ai". Ignored when "topics" is provided.',
         enum: NEWS_TOPICS,
+      },
+      topics: {
+        type: 'array',
+        description:
+          'List of news topics for a multi-topic digest. Each element must be one of: ' +
+          '"ai", "tech", "dev", "world", "finance", "science", "japan". ' +
+          'When provided, returns a combined digest formatted per-topic. Defaults to ["ai", "tech"] when given an empty array.',
+        items: {
+          type: 'string',
+          description: 'A news topic name.',
+        },
       },
       maxResults: {
         type: 'number',
-        description: 'Maximum number of news items to return (1–10). Defaults to 5.',
+        description: 'Maximum number of news items to return per topic (1–10). Defaults to 5 for single-topic, 3 for multi-topic.',
         minimum: 1,
         maximum: 10,
       },
@@ -213,6 +204,52 @@ export const techNews: SkillDefinition = {
   category: 'web',
   riskLevel: 'low',
   handler: async (args) => {
+    // Multi-topic digest mode when "topics" array is provided
+    if (Array.isArray(args.topics)) {
+      const rawTopics = (args.topics as unknown[]).map(String);
+      const validTopics = rawTopics.filter((t) =>
+        NEWS_TOPICS.includes(t as keyof typeof FEEDS),
+      );
+      const topics = validTopics.length > 0 ? validTopics : ['ai', 'tech'];
+
+      const maxPerTopic = typeof args.maxResults === 'number'
+        ? Math.min(10, Math.max(1, Math.floor(args.maxResults)))
+        : 3;
+
+      const sections: string[] = [];
+
+      const results = await Promise.all(
+        topics.map(async (topic) => {
+          const feeds = FEEDS[topic];
+          const items = await fetchFeedItems(feeds);
+          return { topic, items: items.slice(0, maxPerTopic) };
+        }),
+      );
+
+      for (const { topic, items } of results) {
+        if (items.length === 0) {
+          sections.push(`### ${topic.toUpperCase()}\n_(No items available)_`);
+          continue;
+        }
+        const lines = items.map((item) => {
+          const displayDate = item.pubDate ? ` (${item.pubDate.slice(0, 16)})` : '';
+          const parts = [`- **${item.title}**${displayDate} — ${item.source}`];
+          if (item.description) parts.push(`  ${item.description}`);
+          if (item.link) parts.push(`  ${item.link}`);
+          return parts.join('\n');
+        });
+        sections.push(`### ${topic.toUpperCase()}\n${lines.join('\n\n')}`);
+      }
+
+      const totalItems = results.reduce((sum, r) => sum + r.items.length, 0);
+      const header = `📋 News Brief — ${topics.map((t) => t.toUpperCase()).join(', ')} (${totalItems} items total)`;
+
+      return {
+        content: `${header}\n\n${sections.join('\n\n')}`,
+      };
+    }
+
+    // Single-topic mode
     const topic = NEWS_TOPICS.includes(String(args.topic ?? '') as keyof typeof FEEDS)
       ? String(args.topic)
       : 'ai';

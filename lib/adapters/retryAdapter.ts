@@ -23,7 +23,7 @@ const RETRYABLE_MESSAGE_PATTERNS = [
 
 const NON_RETRYABLE_STATUS_CODES = new Set([400, 401, 403, 404]);
 
-function isRetryableError(err: unknown): boolean {
+export function isRetryableError(err: unknown): boolean {
   const status = (err as { status?: number }).status;
   if (status != null) {
     if (NON_RETRYABLE_STATUS_CODES.has(status)) return false;
