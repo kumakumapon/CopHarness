@@ -285,18 +285,21 @@ function MessageRow({ msg }: { msg: Message }) {
 export default function PlaygroundPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set(ALL_SKILLS));
   const [useStreaming, setUseStreaming] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Scroll to bottom whenever messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (shouldAutoScrollRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // Auto-grow textarea
@@ -940,7 +943,13 @@ export default function PlaygroundPage() {
 
           {/* Messages area */}
           <div
+            ref={messagesContainerRef}
             className="messages-container"
+            onScroll={() => {
+              const el = messagesContainerRef.current;
+              if (!el) return;
+              shouldAutoScrollRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+            }}
             style={{
               flex: 1,
               overflowY: 'auto',

@@ -58,6 +58,8 @@ export interface LLMAdapter {
   complete(request: LLMRequest): Promise<LLMResponse>;
   /** Stream a response token by token. Yields text chunks as they arrive. */
   stream?(request: LLMRequest): AsyncGenerator<string>;
+  /** Token usage from the most recent stream() call, if available. */
+  lastStreamUsage?: TokenUsage;
   /** Optional cleanup (close connections, etc.). */
   destroy?(): Promise<void>;
 }
