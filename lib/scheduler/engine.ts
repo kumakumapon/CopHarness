@@ -105,7 +105,7 @@ export async function runPrompt(
   scheduledContext?: ScheduledPromptRunContext,
 ): Promise<string> {
   const provider = resolveProvider();
-  const apiKey = resolveApiKey(provider);
+  const apiKey = typeof resolveApiKey === 'function' ? resolveApiKey(provider) : undefined;
   const model = resolveModel(provider);
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;

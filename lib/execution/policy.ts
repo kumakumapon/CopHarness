@@ -13,6 +13,24 @@
  */
 
 // ---------------------------------------------------------------------------
+// Relative path enforcement
+// ---------------------------------------------------------------------------
+
+/**
+ * Enforce that a path is relative: no leading '/', no '..' segments.
+ * Throws a descriptive error when the constraint is violated.
+ */
+export function enforceRelativePath(relativePath: string): void {
+  if (relativePath.startsWith('/')) {
+    throw new Error(`Path "${relativePath}" must be relative (no leading slash).`);
+  }
+  const segments = relativePath.split(/[\\/]/);
+  if (segments.some((s) => s === '..')) {
+    throw new Error(`Path "${relativePath}" must not contain '..' segments.`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Path allowlist
 // ---------------------------------------------------------------------------
 
