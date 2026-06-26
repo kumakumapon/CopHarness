@@ -98,13 +98,28 @@ export class InstrumentedAdapter implements LLMAdapter {
         totalLength += chunk.length;
         yield chunk;
       }
-      span.end({ 'llm.stream.chunks': chunkCount });
+
+      const streamUsage = this.inner.lastStreamUsage;
+      span.end({
+        'llm.stream.chunks': chunkCount,
+        ...(streamUsage?.promptTokens != null ? { 'llm.usage.prompt_tokens': streamUsage.promptTokens } : {}),
+        ...(streamUsage?.completionTokens != null ? { 'llm.usage.completion_tokens': streamUsage.completionTokens } : {}),
+        ...(streamUsage?.totalTokens != null ? { 'llm.usage.total_tokens': streamUsage.totalTokens } : {}),
+      });
+      if (streamUsage) {
+        recordTokenUsage(this.inner.provider, this.inner.model, streamUsage);
+      }
 
       eventBus.emit('adapter:response', {
         provider: this.inner.provider,
         model: this.inner.model,
         durationMs: Date.now() - startMs,
         contentLength: totalLength,
+        usage: streamUsage ? {
+          promptTokens: streamUsage.promptTokens,
+          completionTokens: streamUsage.completionTokens,
+          totalTokens: streamUsage.totalTokens,
+        } : undefined,
       });
     } catch (err) {
       const durationMs = Date.now() - startMs;

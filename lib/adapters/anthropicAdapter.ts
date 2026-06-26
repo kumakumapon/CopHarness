@@ -1,4 +1,4 @@
-import { type LLMAdapter, type LLMRequest, type LLMResponse } from '../adapter';
+import { type LLMAdapter, type LLMRequest, type LLMResponse, type TokenUsage } from '../adapter';
 import { type SkillDefinition, MAX_SKILL_ITERATIONS } from '../skill';
 import { mergeAbortSignals } from '../utils/abort';
 import { withContextFallback } from '../utils/contextRetry';
@@ -19,6 +19,7 @@ type AnthropicContentBlock =
 export class AnthropicAdapter implements LLMAdapter {
   readonly provider = 'anthropic';
   readonly model: string;
+  lastStreamUsage?: TokenUsage;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -38,6 +39,7 @@ export class AnthropicAdapter implements LLMAdapter {
   }
 
   async *stream(request: LLMRequest): AsyncGenerator<string> {
+    this.lastStreamUsage = undefined;
     const model = request.model ?? this.model;
     const timeoutMs = request.timeoutMs ?? this.timeoutMs;
     const skills = request.skills ?? [];
@@ -114,6 +116,10 @@ export class AnthropicAdapter implements LLMAdapter {
       };
       const contentBlocks: StreamBlock[] = [];
       let stopReason: string | undefined;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let cacheCreation = 0;
+      let cacheRead = 0;
 
       try {
         while (true) {
@@ -159,15 +165,36 @@ export class AnthropicAdapter implements LLMAdapter {
                     (contentBlocks[idx].input ?? '') + String(delta['partial_json'] ?? '');
                 }
               }
+            } else if (event['type'] === 'message_start') {
+              const msg = event['message'] as Record<string, unknown> | undefined;
+              const u = msg?.['usage'] as Record<string, number> | undefined;
+              if (u) {
+                inputTokens += u['input_tokens'] ?? 0;
+                outputTokens += u['output_tokens'] ?? 0;
+                cacheCreation += u['cache_creation_input_tokens'] ?? 0;
+                cacheRead += u['cache_read_input_tokens'] ?? 0;
+              }
             } else if (event['type'] === 'message_delta') {
               const d = event['delta'] as Record<string, unknown>;
               stopReason = String(d['stop_reason'] ?? '');
+              const u = event['usage'] as Record<string, number> | undefined;
+              if (u) {
+                outputTokens += u['output_tokens'] ?? 0;
+              }
             }
           }
         }
       } finally {
         reader.releaseLock();
       }
+
+      this.lastStreamUsage = {
+        promptTokens: inputTokens,
+        completionTokens: outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        ...(cacheCreation > 0 ? { cacheCreationInputTokens: cacheCreation } : {}),
+        ...(cacheRead > 0 ? { cacheReadInputTokens: cacheRead } : {}),
+      };
 
       if (stopReason !== 'tool_use') return;
 

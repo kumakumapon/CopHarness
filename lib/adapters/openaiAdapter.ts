@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { type LLMAdapter, type LLMRequest, type LLMResponse } from '../adapter';
+import { type LLMAdapter, type LLMRequest, type LLMResponse, type TokenUsage } from '../adapter';
 import { type SkillDefinition, MAX_SKILL_ITERATIONS } from '../skill';
 import { mergeAbortSignals } from '../utils/abort';
 import { withContextFallback } from '../utils/contextRetry';
@@ -19,6 +19,7 @@ function skillToOpenAITool(skill: SkillDefinition): OpenAI.Chat.ChatCompletionTo
 export class OpenAIAdapter implements LLMAdapter {
   readonly provider = 'openai';
   readonly model: string;
+  lastStreamUsage?: TokenUsage;
   private readonly client: OpenAI;
   private readonly timeoutMs: number;
 
@@ -40,6 +41,7 @@ export class OpenAIAdapter implements LLMAdapter {
   }
 
   async *stream(request: LLMRequest): AsyncGenerator<string> {
+    this.lastStreamUsage = undefined;
     const model = request.model ?? this.model;
     const timeoutMs = request.timeoutMs ?? this.timeoutMs;
     const skills = request.skills ?? [];
@@ -72,6 +74,7 @@ export class OpenAIAdapter implements LLMAdapter {
             model,
             messages,
             stream: true,
+            stream_options: { include_usage: true },
             ...(tools.length > 0 ? { tools } : {}),
           },
           { signal },
@@ -81,6 +84,14 @@ export class OpenAIAdapter implements LLMAdapter {
         const toolCallData: Record<number, { id: string; name: string; args: string }> = {};
 
         for await (const chunk of stream) {
+          if (chunk.usage) {
+            this.lastStreamUsage = {
+              promptTokens: chunk.usage.prompt_tokens ?? 0,
+              completionTokens: chunk.usage.completion_tokens ?? 0,
+              totalTokens: chunk.usage.total_tokens ?? 0,
+            };
+          }
+
           const delta = chunk.choices[0]?.delta;
           if (!delta) continue;
 
