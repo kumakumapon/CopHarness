@@ -1,7 +1,7 @@
 'use client';
 
 import useSWR, { mutate } from 'swr';
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react';
 import {
   CheckCircle,
   XCircle,
@@ -1557,68 +1557,112 @@ function agentDagFromTask(task: DashboardTask): DashboardAgentDag | undefined {
   return isAgentDag(value) ? value : undefined;
 }
 
+function computeLayers(plans: DashboardAgentDagPlan[]): DashboardAgentDagPlan[][] {
+  const layers: DashboardAgentDagPlan[][] = [];
+  const placed = new Set<string>();
+  let remaining = [...plans];
+  while (remaining.length > 0) {
+    const layer = remaining.filter(p =>
+      !p.dependsOn?.length || p.dependsOn.every(d => placed.has(d))
+    );
+    if (layer.length === 0) { layers.push(remaining); break; } // cycle fallback
+    layers.push(layer);
+    layer.forEach(p => placed.add(p.id));
+    remaining = remaining.filter(p => !placed.has(p.id));
+  }
+  return layers;
+}
+
 function AgentDagMiniGraph({
   dag,
   taskId,
   retryingPlanId,
   onRetry,
+  expanded,
 }: {
   dag: DashboardAgentDag;
   taskId: string;
   retryingPlanId?: string;
   onRetry: (taskId: string, planId: string) => void;
+  expanded?: boolean;
 }) {
   const progressById = new Map(dag.progress.map((entry) => [entry.planId, entry]));
   const completed = dag.progress.filter((entry) => entry.status === 'succeeded').length;
   const failed = dag.progress.filter((entry) => entry.status === 'failed').length;
   const skipped = dag.progress.filter((entry) => entry.status === 'skipped').length;
+  const total = dag.plans.length;
+  const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const layers = computeLayers(dag.plans);
 
   return (
     <div className="mt-2 rounded-lg p-2 space-y-2" style={{ background: 'var(--primary-bg)', border: '1px solid var(--border-color)' }}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-[11px]" style={{ color: 'var(--text-primary)' }}>{dag.runId}</span>
         <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-          {completed}/{dag.plans.length} 完了
+          {completed}/{total} 完了
           {failed > 0 ? ` / 失敗 ${failed}` : ''}
           {skipped > 0 ? ` / skip ${skipped}` : ''}
         </span>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {dag.plans.map((plan) => {
-          const progress = progressById.get(plan.id);
-          const st = DAG_STATUS_STYLES[progress?.status ?? 'pending'] ?? DAG_STATUS_STYLES.pending;
-          const deps = plan.dependsOn?.length ? plan.dependsOn.join(', ') : 'root';
-          const canRetry = progress?.status === 'failed' || progress?.status === 'skipped';
-          const isRetrying = retryingPlanId === plan.id;
-          return (
-            <div
-              key={plan.id}
-              className="min-w-[160px] max-w-[220px] rounded-md p-2"
-              style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}
-              title={progress?.error || plan.workspace || plan.id}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>{plan.id}</span>
-                <span className={`shrink-0 px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span>
-              </div>
-              <div className="truncate mt-1" style={{ color: 'var(--text-secondary)' }}>{plan.role}</div>
-              <div className="truncate font-mono mt-1" style={{ color: 'var(--text-secondary)' }}>deps: {deps}</div>
-              {progress?.error ? <div className="truncate mt-1 text-red-600">error: {progress.error}</div> : null}
-              {canRetry ? (
-                <button
-                  type="button"
-                  disabled={isRetrying || dag.status === 'running'}
-                  onClick={() => onRetry(taskId, plan.id)}
-                  className="mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium disabled:opacity-50"
-                  style={{ background: 'var(--accent-warm)', color: 'var(--text-primary)' }}
-                >
-                  <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
-                  再実行
-                </button>
-              ) : null}
+      {/* Progress bar */}
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border-color)' }}>
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${progressPct}%`, background: failed > 0 ? '#ef4444' : 'var(--accent-warm)' }}
+        />
+      </div>
+      {/* Layered DAG nodes */}
+      <div className="space-y-1">
+        {layers.map((layer, layerIdx) => (
+          <div key={layerIdx}>
+            <div className={`flex flex-wrap gap-2 ${expanded ? '' : 'flex-nowrap overflow-x-auto'}`}>
+              {layer.map((plan) => {
+                const progress = progressById.get(plan.id);
+                const st = DAG_STATUS_STYLES[progress?.status ?? 'pending'] ?? DAG_STATUS_STYLES.pending;
+                const deps = plan.dependsOn?.length ? plan.dependsOn.join(', ') : null;
+                const canRetry = progress?.status === 'failed' || progress?.status === 'skipped';
+                const isRetrying = retryingPlanId === plan.id;
+                return (
+                  <div
+                    key={plan.id}
+                    className={`rounded-md p-2 ${expanded ? 'min-w-[180px] max-w-[260px]' : 'min-w-[160px] max-w-[220px]'}`}
+                    style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)', flexShrink: 0 }}
+                    title={progress?.error || plan.workspace || plan.id}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono truncate" style={{ color: 'var(--text-primary)' }}>{plan.id}</span>
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span>
+                    </div>
+                    <div className="truncate mt-1" style={{ color: 'var(--text-secondary)' }}>{plan.role}</div>
+                    {deps ? (
+                      <div className="truncate font-mono mt-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                        ← 依存: {deps}
+                      </div>
+                    ) : (
+                      <div className="font-mono mt-1 text-[10px]" style={{ color: 'var(--text-secondary)' }}>root</div>
+                    )}
+                    {progress?.error ? <div className="truncate mt-1 text-red-600 text-[10px]">error: {progress.error}</div> : null}
+                    {canRetry ? (
+                      <button
+                        type="button"
+                        disabled={isRetrying || dag.status === 'running'}
+                        onClick={() => onRetry(taskId, plan.id)}
+                        className="mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium disabled:opacity-50"
+                        style={{ background: 'var(--accent-warm)', color: 'var(--text-primary)' }}
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                        再実行
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+            {layerIdx < layers.length - 1 && (
+              <div className="flex justify-center py-0.5 text-sm" style={{ color: 'var(--text-secondary)' }}>↓</div>
+            )}
+          </div>
+        ))}
       </div>
       <div className="text-[11px] font-mono truncate" style={{ color: 'var(--text-secondary)' }}>
         updated: {fmtDate(dag.updatedAt)}
@@ -1641,6 +1685,8 @@ function TasksPanel({
   onTasksMutate: () => void;
 }) {
   const [retrying, setRetrying] = useState<Record<string, string>>({});
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const toggleExpanded = (taskId: string) => setExpandedTaskId((prev) => (prev === taskId ? null : taskId));
   const updateFilter = (key: keyof TaskFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
   };
@@ -1789,42 +1835,107 @@ function TasksPanel({
                 {data.tasks.map((task) => {
                   const st = TASK_STATUS_STYLES[task.status] ?? TASK_STATUS_STYLES.running;
                   const agentDag = agentDagFromTask(task);
+                  const isExpanded = expandedTaskId === task.id;
+                  const colCount = 8;
                   return (
-                    <tr key={task.id} style={{ borderTop: '1px solid var(--border-color)' }}>
-                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{fmtDate(task.updatedAt)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap"><span className={`inline-block px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span></td>
-                      <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{task.kind}</td>
-                      <td className="px-3 py-2 max-w-[260px]">
-                        <div className="truncate" style={{ color: 'var(--text-primary)' }} title={task.title || task.id}>{task.title || '—'}</div>
-                        <div className="font-mono truncate" style={{ color: 'var(--text-secondary)' }} title={task.id}>{task.id}</div>
-                      </td>
-                      <td className="px-3 py-2 font-mono max-w-[220px]" style={{ color: 'var(--text-secondary)' }}>
-                        <div className="truncate">{task.personId || '—'}</div>
-                        <div className="truncate">{task.channelKey || '—'}</div>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                        <div>開始: {fmtDate(task.startedAt)}</div>
-                        <div>終了: {task.finishedAt ? fmtDate(task.finishedAt) : '—'}</div>
-                      </td>
-                      <td className="px-3 py-2 max-w-[300px]" style={{ color: 'var(--text-secondary)' }}>
-                        {task.errorPreview ? <div className="truncate text-red-600">error: {task.errorPreview}</div> : null}
-                        {agentDag ? (
-                          <AgentDagMiniGraph
-                            dag={agentDag}
-                            taskId={task.id}
-                            retryingPlanId={retrying[task.id]}
-                            onRetry={retryAgentDagPlan}
-                          />
-                        ) : (
-                          <div className="font-mono truncate" title={taskMetadataPreview(task.metadata)}>{taskMetadataPreview(task.metadata)}</div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <button type="button" className="text-xs underline" style={{ color: 'var(--text-primary)' }} onClick={() => showSkillExecutionsForTask(task)}>
-                          スキル履歴へ
-                        </button>
-                      </td>
-                    </tr>
+                    <Fragment key={task.id}>
+                      <tr
+                        style={{ borderTop: '1px solid var(--border-color)', cursor: 'pointer' }}
+                        onClick={() => toggleExpanded(task.id)}
+                      >
+                        <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                          <span className="mr-1" style={{ color: 'var(--text-secondary)' }}>{isExpanded ? '▾' : '▸'}</span>
+                          {fmtDate(task.updatedAt)}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap"><span className={`inline-block px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span></td>
+                        <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{task.kind}</td>
+                        <td className="px-3 py-2 max-w-[260px]">
+                          <div className="truncate" style={{ color: 'var(--text-primary)' }} title={task.title || task.id}>{task.title || '—'}</div>
+                          <div className="font-mono truncate" style={{ color: 'var(--text-secondary)' }} title={task.id}>{task.id}</div>
+                        </td>
+                        <td className="px-3 py-2 font-mono max-w-[220px]" style={{ color: 'var(--text-secondary)' }}>
+                          <div className="truncate">{task.personId || '—'}</div>
+                          <div className="truncate">{task.channelKey || '—'}</div>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                          <div>開始: {fmtDate(task.startedAt)}</div>
+                          <div>終了: {task.finishedAt ? fmtDate(task.finishedAt) : '—'}</div>
+                        </td>
+                        <td className="px-3 py-2 max-w-[300px]" style={{ color: 'var(--text-secondary)' }}>
+                          {task.errorPreview ? <div className="truncate text-red-600">error: {task.errorPreview}</div> : null}
+                          {agentDag ? (
+                            <AgentDagMiniGraph
+                              dag={agentDag}
+                              taskId={task.id}
+                              retryingPlanId={retrying[task.id]}
+                              onRetry={retryAgentDagPlan}
+                            />
+                          ) : (
+                            <div className="font-mono truncate" title={taskMetadataPreview(task.metadata)}>{taskMetadataPreview(task.metadata)}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button type="button" className="text-xs underline" style={{ color: 'var(--text-primary)' }} onClick={() => showSkillExecutionsForTask(task)}>
+                            スキル履歴へ
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr style={{ borderTop: '1px solid var(--border-color)' }}>
+                          <td colSpan={colCount} className="px-4 py-4" style={{ background: 'var(--primary-bg)' }}>
+                            <div className="space-y-3 text-xs">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                  <div className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>タスク ID</div>
+                                  <div className="font-mono break-all" style={{ color: 'var(--text-primary)' }}>{task.id}</div>
+                                </div>
+                                <div>
+                                  <div className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>タイトル</div>
+                                  <div className="break-words" style={{ color: 'var(--text-primary)' }}>{task.title || '—'}</div>
+                                </div>
+                                <div>
+                                  <div className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>会話キー</div>
+                                  <div className="font-mono break-all" style={{ color: 'var(--text-primary)' }}>{task.conversationKey || '—'}</div>
+                                </div>
+                                <div>
+                                  <div className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>タイムスタンプ</div>
+                                  <div className="space-y-0.5 font-mono" style={{ color: 'var(--text-primary)' }}>
+                                    <div>作成: {fmtDate(task.createdAt)}</div>
+                                    <div>開始: {fmtDate(task.startedAt)}</div>
+                                    <div>更新: {fmtDate(task.updatedAt)}</div>
+                                    <div>終了: {task.finishedAt ? fmtDate(task.finishedAt) : '—'}</div>
+                                  </div>
+                                </div>
+                              </div>
+                              {task.errorPreview && (
+                                <div>
+                                  <div className="font-semibold mb-1 text-red-600">エラー</div>
+                                  <pre className="whitespace-pre-wrap break-all rounded p-2 text-[11px] text-red-600" style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)' }}>{task.errorPreview}</pre>
+                                </div>
+                              )}
+                              {task.metadata && (
+                                <div>
+                                  <div className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>メタデータ (JSON)</div>
+                                  <pre className="whitespace-pre-wrap break-all rounded p-2 text-[11px]" style={{ background: 'var(--secondary-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>{JSON.stringify(task.metadata, null, 2)}</pre>
+                                </div>
+                              )}
+                              {agentDag && (
+                                <div>
+                                  <div className="font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Agent DAG</div>
+                                  <AgentDagMiniGraph
+                                    dag={agentDag}
+                                    taskId={task.id}
+                                    retryingPlanId={retrying[task.id]}
+                                    onRetry={retryAgentDagPlan}
+                                    expanded={true}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
