@@ -2,12 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { type SkillDefinition } from '../skill';
 import { resolveSafe } from './fileSandbox';
-
-interface PptxSlide {
-  title: string;
-  bullets: string[];
-  layout?: 'title' | 'bullets' | 'blank';
-}
+import { parseSlides, type SlideItem as PptxSlide } from '../utils/slides';
 
 interface ThemeConfig {
   background: { color: string };
@@ -46,23 +41,6 @@ async function loadPptxGen(): Promise<(new () => PptxGenPresentation) | null> {
       return ctor as unknown as new () => PptxGenPresentation;
     }
     return null;
-  } catch {
-    return null;
-  }
-}
-
-function parseSlides(raw: unknown): PptxSlide[] | null {
-  const str = String(raw ?? '').trim();
-  if (!str) return null;
-  try {
-    const parsed: unknown = JSON.parse(str);
-    if (!Array.isArray(parsed)) return null;
-    for (const item of parsed) {
-      if (typeof item !== 'object' || item === null) return null;
-      if (typeof (item as Record<string, unknown>).title !== 'string') return null;
-      if (!Array.isArray((item as Record<string, unknown>).bullets)) return null;
-    }
-    return parsed as PptxSlide[];
   } catch {
     return null;
   }

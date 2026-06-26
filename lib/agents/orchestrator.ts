@@ -1,4 +1,4 @@
-import { createAdapter, resolveProvider, resolveModel } from '../adapterFactory';
+import { createAdapter, resolveProvider, resolveModel, resolveApiKey } from '../adapterFactory';
 import { resolveSkills } from '../skill';
 import { resolveToolsetSkillNames } from '../skills/toolsets';
 import { getSkillExecutionContext, withSkillExecutionContext } from '../skills/executionContext';
@@ -32,23 +32,13 @@ function resolveSystemPrompt(role: AgentTask['role']): { name: string; systemPro
   return { name: role.name, systemPrompt: role.systemPrompt };
 }
 
-function resolveApiKey(): string | undefined {
-  return (
-    process.env.COPILOT_PROVIDER_API_KEY ??
-    process.env.COPILOT_API_KEY ??
-    process.env.GITHUB_COPILOT_API_KEY ??
-    process.env.OPENAI_API_KEY ??
-    process.env.ANTHROPIC_API_KEY
-  );
-}
-
 export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
   const { name: roleName, systemPrompt } = resolveSystemPrompt(task.role);
   const provider = resolveProvider();
   const model =
     task.model ??
     resolveModel(provider);
-  const apiKey = resolveApiKey();
+  const apiKey = typeof resolveApiKey === 'function' ? resolveApiKey(provider) : undefined;
   const timeoutMs =
     task.timeoutMs ?? (Number(process.env.COPILOT_TIMEOUT_MS) || 120_000);
   const inheritedContext = getSkillExecutionContext();
@@ -197,12 +187,4 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
     unregisterTaskAbortController(taskRecord.id);
     await Promise.resolve(adapter?.destroy?.()).catch(() => {});
   }
-}
-
-export async function runAgentPipeline(tasks: AgentTask[]): Promise<AgentResult[]> {
-  const results: AgentResult[] = [];
-  for (const task of tasks) {
-    results.push(await runAgentTask(task));
-  }
-  return results;
 }

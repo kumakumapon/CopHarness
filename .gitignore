@@ -63,4 +63,5 @@ policy.json
 memory_nudges.json
 
 # audit log (generated at runtime)
+audit.jsonl
 logs/audit.jsonl

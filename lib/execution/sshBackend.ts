@@ -12,7 +12,6 @@
  *   EXECUTION_SSH_WORKDIR   — working directory on remote host (default: "~")
  */
 
-import { spawn } from 'node:child_process';
 import {
   type ExecutionBackend,
   type ExecutionBackendDescription,
@@ -25,16 +24,16 @@ import {
   type ListDirRequest,
   type ListDirResult,
   type ListDirEntry,
+  DEFAULT_TIMEOUT_MS,
 } from './types';
 import {
   enforceAllowedPath,
   enforceNetworkPolicy,
+  enforceRelativePath,
   getAllowedPathPrefixes,
   getNetworkPolicy,
 } from './policy';
-
-const MAX_OUTPUT_CHARS = 10_000;
-const DEFAULT_TIMEOUT_MS = 10_000;
+import { spawnToResult } from './spawnUtils';
 
 /**
  * Wrap a value in single quotes, escaping any embedded single quotes
@@ -47,45 +46,6 @@ export function shellQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\"'\"'") + "'";
 }
 
-function spawnToResult(
-  cmd: string,
-  args: string[],
-  timeoutMs: number,
-  stdin?: string,
-): Promise<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean }> {
-  return new Promise((resolve) => {
-    let timedOut = false;
-    const child = spawn(cmd, args, { shell: false });
-    let stdout = '';
-    let stderr = '';
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGTERM');
-    }, timeoutMs);
-
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (stdout.length > MAX_OUTPUT_CHARS) stdout = stdout.slice(0, MAX_OUTPUT_CHARS) + '\n[truncated]';
-      if (stderr.length > MAX_OUTPUT_CHARS) stderr = stderr.slice(0, MAX_OUTPUT_CHARS) + '\n[truncated]';
-      resolve({ stdout, stderr, exitCode: code, timedOut });
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ stdout: '', stderr: err.message, exitCode: -1, timedOut: false });
-    });
-
-    if (stdin !== undefined) {
-      child.stdin.write(stdin, 'utf8');
-      child.stdin.end();
-    }
-  });
-}
-
 /**
  * Resolve the configured workdir to a path usable inside a quoted remote
  * command. SSH remote commands start in the login user's home directory,
@@ -96,19 +56,6 @@ function remoteWorkdirPath(workdir: string): string {
   if (workdir === '~' || workdir === '~/') return '.';
   if (workdir.startsWith('~/')) return workdir.slice(2);
   return workdir;
-}
-
-/**
- * Enforce relative path: no leading '/', no '..' segments.
- */
-function enforceRelativePath(relativePath: string): void {
-  if (relativePath.startsWith('/')) {
-    throw new Error(`Path "${relativePath}" must be relative (no leading slash).`);
-  }
-  const segments = relativePath.split(/[\\/]/);
-  if (segments.some((s) => s === '..')) {
-    throw new Error(`Path "${relativePath}" must not contain '..' segments.`);
-  }
 }
 
 export interface SshBackendConfig {

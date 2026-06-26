@@ -1,6 +1,7 @@
 import { startSpan } from './tracer';
 import { recordTokenUsage } from './tokenTracker';
 import { eventBus } from '../events/bus';
+import { isRetryableError } from '../adapters/retryAdapter';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../adapter';
 
 export class InstrumentedAdapter implements LLMAdapter {
@@ -57,8 +58,7 @@ export class InstrumentedAdapter implements LLMAdapter {
       span.end({}, err instanceof Error ? err : new Error(String(err)));
 
       const errMsg = err instanceof Error ? err.message : String(err);
-      const status = (err as { status?: number }).status;
-      const retryable = status === 429 || (status !== undefined && status >= 500);
+      const retryable = isRetryableError(err);
       eventBus.emit('adapter:error', {
         provider: this.inner.provider,
         model: this.inner.model,
@@ -126,8 +126,7 @@ export class InstrumentedAdapter implements LLMAdapter {
       span.end({ 'llm.stream.chunks': chunkCount }, err instanceof Error ? err : new Error(String(err)));
 
       const errMsg = err instanceof Error ? err.message : String(err);
-      const status = (err as { status?: number }).status;
-      const retryable = status === 429 || (status !== undefined && status >= 500);
+      const retryable = isRetryableError(err);
       eventBus.emit('adapter:error', {
         provider: this.inner.provider,
         model: this.inner.model,

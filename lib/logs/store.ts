@@ -14,6 +14,9 @@ function storePath(): string {
 /** Maximum number of log entries retained on disk. */
 const MAX_LOGS = 200;
 
+/** Serializes mutations to prevent concurrent read-modify-write races. */
+let writeQueue = Promise.resolve();
+
 function loadStore(): LogStore {
   const p = storePath();
   if (!fs.existsSync(p)) return { logs: [] };
@@ -34,17 +37,20 @@ async function saveStore(store: LogStore): Promise<void> {
 
 /** Start a new in-progress log entry and return its id. */
 export async function startLog(entry: Pick<ExecutionLog, 'scheduleId' | 'scheduleName' | 'prompt' | 'reason'>): Promise<string> {
-  const store = loadStore();
   const id = crypto.randomUUID();
-  store.logs.push({
-    id,
-    scheduleId: entry.scheduleId,
-    scheduleName: entry.scheduleName,
-    prompt: entry.prompt,
-    reason: entry.reason,
-    startedAt: new Date().toISOString(),
+  writeQueue = writeQueue.then(async () => {
+    const store = loadStore();
+    store.logs.push({
+      id,
+      scheduleId: entry.scheduleId,
+      scheduleName: entry.scheduleName,
+      prompt: entry.prompt,
+      reason: entry.reason,
+      startedAt: new Date().toISOString(),
+    });
+    await saveStore(store);
   });
-  await saveStore(store);
+  await writeQueue;
   return id;
 }
 
@@ -54,17 +60,20 @@ export async function finishLog(
   status: LogStatus,
   resultOrError?: string,
 ): Promise<void> {
-  const store = loadStore();
-  const entry = store.logs.find((l) => l.id === id);
-  if (!entry) return;
-  entry.finishedAt = new Date().toISOString();
-  entry.status = status;
-  if (status === 'success') {
-    entry.result = resultOrError;
-  } else {
-    entry.error = resultOrError;
-  }
-  await saveStore(store);
+  writeQueue = writeQueue.then(async () => {
+    const store = loadStore();
+    const entry = store.logs.find((l) => l.id === id);
+    if (!entry) return;
+    entry.finishedAt = new Date().toISOString();
+    entry.status = status;
+    if (status === 'success') {
+      entry.result = resultOrError;
+    } else {
+      entry.error = resultOrError;
+    }
+    await saveStore(store);
+  });
+  await writeQueue;
 }
 
 /** Return the most recent `limit` log entries, newest first. */

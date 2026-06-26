@@ -12,44 +12,52 @@ import { CachedAdapter } from './cache/cachedAdapter';
 import { isCacheEnabled } from './cache/responseCache';
 
 /**
+ * Creates a raw (unwrapped) LLM adapter for the given options.
+ * Used internally by createAdapter and createAdapterWithFallback.
+ */
+function createRawAdapter(options: AdapterOptions): LLMAdapter {
+  switch (options.provider) {
+    case 'openai':
+      if (!options.apiKey) throw new Error('apiKey is required for the OpenAI adapter');
+      return new OpenAIAdapter(
+        options.model,
+        options.apiKey,
+        options.apiBaseUrl,
+        options.timeoutMs,
+      );
+    case 'anthropic':
+      if (!options.apiKey) throw new Error('apiKey is required for the Anthropic adapter');
+      return new AnthropicAdapter(
+        options.model,
+        options.apiKey,
+        options.apiBaseUrl,
+        options.timeoutMs,
+      );
+    case 'lmstudio':
+      return new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs);
+    case 'lemonade':
+      return new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs);
+    case 'antigravity': {
+      const antigravityKey = options.apiKey || process.env.GEMINI_API_KEY;
+      if (!antigravityKey) throw new Error('apiKey is required for the Antigravity adapter');
+      return new AntigravityAdapter(
+        options.model,
+        antigravityKey,
+        options.timeoutMs,
+      );
+    }
+    case 'copilot':
+    default:
+      return new CopilotAdapter(options.model, options.timeoutMs);
+  }
+}
+
+/**
  * Creates the appropriate LLM adapter based on the given options.
  * Falls back to the Copilot SDK when no explicit provider is configured.
  */
 export function createAdapter(options: AdapterOptions): LLMAdapter {
-  switch (options.provider) {
-    case 'openai':
-      if (!options.apiKey) throw new Error('apiKey is required for the OpenAI adapter');
-      return wrapAdapter(new OpenAIAdapter(
-        options.model,
-        options.apiKey,
-        options.apiBaseUrl,
-        options.timeoutMs,
-      ));
-    case 'anthropic':
-      if (!options.apiKey) throw new Error('apiKey is required for the Anthropic adapter');
-      return wrapAdapter(new AnthropicAdapter(
-        options.model,
-        options.apiKey,
-        options.apiBaseUrl,
-        options.timeoutMs,
-      ));
-    case 'lmstudio':
-      return wrapAdapter(new LmStudioAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
-    case 'lemonade':
-      return wrapAdapter(new LemonadeAdapter(options.model, options.apiBaseUrl, options.timeoutMs));
-    case 'antigravity': {
-      const antigravityKey = options.apiKey || process.env.GEMINI_API_KEY;
-      if (!antigravityKey) throw new Error('apiKey is required for the Antigravity adapter');
-      return wrapAdapter(new AntigravityAdapter(
-        options.model,
-        antigravityKey,
-        options.timeoutMs,
-      ));
-    }
-    case 'copilot':
-    default:
-      return wrapAdapter(new CopilotAdapter(options.model, options.timeoutMs));
-  }
+  return wrapAdapter(createRawAdapter(options));
 }
 
 function wrapAdapter(adapter: LLMAdapter): LLMAdapter {
@@ -124,22 +132,22 @@ export function createAdapterWithFallback(options: AdapterOptions): LLMAdapter {
     return createAdapter(options);
   }
 
-  const adapters: LLMAdapter[] = [createAdapter(options)];
+  const rawAdapters: LLMAdapter[] = [createRawAdapter(options)];
   for (const provider of fallbackProviders) {
     try {
       const key = resolveApiKey(provider);
       const model = resolveModel(provider);
-      adapters.push(createAdapter({ provider, model, apiKey: key, timeoutMs: options.timeoutMs }));
+      rawAdapters.push(createRawAdapter({ provider, model, apiKey: key, timeoutMs: options.timeoutMs }));
     } catch {
       // Skip providers that can't be constructed (e.g. missing API key)
     }
   }
 
-  if (adapters.length <= 1) {
-    return adapters[0];
+  if (rawAdapters.length <= 1) {
+    return wrapAdapter(rawAdapters[0]);
   }
 
-  return wrapAdapter(new FallbackAdapter(adapters));
+  return wrapAdapter(new FallbackAdapter(rawAdapters));
 }
 
 export function resolveProvider(): ProviderType {

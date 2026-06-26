@@ -40,4 +40,3 @@ export class CachedAdapter implements LLMAdapter {
   }
 }
 
-export { isCacheEnabled };
