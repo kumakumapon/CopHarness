@@ -20,6 +20,8 @@ import {
   type ListDirRequest,
   type ListDirResult,
   type ListDirEntry,
+  MAX_OUTPUT_CHARS,
+  DEFAULT_TIMEOUT_MS,
 } from './types';
 import {
   enforceAllowedPath,
@@ -27,9 +29,6 @@ import {
   getAllowedPathPrefixes,
   getNetworkPolicy,
 } from './policy';
-
-const MAX_OUTPUT_CHARS = 10_000;
-const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** Resolve and return the absolute sandbox directory path, creating it if needed. */
 async function getSandboxDir(): Promise<string> {

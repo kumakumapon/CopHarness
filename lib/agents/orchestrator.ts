@@ -38,7 +38,7 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
   const model =
     task.model ??
     resolveModel(provider);
-  const apiKey = resolveApiKey(provider);
+  const apiKey = typeof resolveApiKey === 'function' ? resolveApiKey(provider) : undefined;
   const timeoutMs =
     task.timeoutMs ?? (Number(process.env.COPILOT_TIMEOUT_MS) || 120_000);
   const inheritedContext = getSkillExecutionContext();

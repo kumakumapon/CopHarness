@@ -7,7 +7,6 @@
  *   EXECUTION_DOCKER_WORKDIR   — working directory inside container (default: /workspace)
  */
 
-import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,70 +22,17 @@ import {
   type ListDirRequest,
   type ListDirResult,
   type ListDirEntry,
+  DEFAULT_TIMEOUT_MS,
 } from './types';
 import { shellQuote } from './sshBackend';
 import {
   enforceAllowedPath,
   enforceNetworkPolicy,
+  enforceRelativePath,
   getAllowedPathPrefixes,
   getNetworkPolicy,
 } from './policy';
-
-const MAX_OUTPUT_CHARS = 10_000;
-const DEFAULT_TIMEOUT_MS = 10_000;
-
-function spawnToResult(
-  cmd: string,
-  args: string[],
-  timeoutMs: number,
-  stdin?: string,
-): Promise<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean }> {
-  return new Promise((resolve) => {
-    let timedOut = false;
-    const child = spawn(cmd, args, { shell: false });
-    let stdout = '';
-    let stderr = '';
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGTERM');
-    }, timeoutMs);
-
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (stdout.length > MAX_OUTPUT_CHARS) stdout = stdout.slice(0, MAX_OUTPUT_CHARS) + '\n[truncated]';
-      if (stderr.length > MAX_OUTPUT_CHARS) stderr = stderr.slice(0, MAX_OUTPUT_CHARS) + '\n[truncated]';
-      resolve({ stdout, stderr, exitCode: code, timedOut });
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ stdout: '', stderr: err.message, exitCode: -1, timedOut: false });
-    });
-
-    if (stdin !== undefined) {
-      child.stdin.write(stdin, 'utf8');
-      child.stdin.end();
-    }
-  });
-}
-
-/**
- * Enforce relative path: no leading '/', no '..' segments.
- * Returns the relative path unchanged if valid, throws otherwise.
- */
-function enforceRelativePath(relativePath: string): void {
-  if (relativePath.startsWith('/')) {
-    throw new Error(`Path "${relativePath}" must be relative (no leading slash).`);
-  }
-  const segments = relativePath.split(/[\\/]/);
-  if (segments.some((s) => s === '..')) {
-    throw new Error(`Path "${relativePath}" must not contain '..' segments.`);
-  }
-}
+import { spawnToResult } from './spawnUtils';
 
 export function createDockerBackend(): DockerBackend {
   const container = process.env.EXECUTION_DOCKER_CONTAINER;
