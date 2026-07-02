@@ -8,6 +8,7 @@ export function createApprovalRequest(
   args: Record<string, unknown>,
   requestedBy?: string,
   policyRuleId?: string,
+  preview?: ApprovalRequest['preview'],
 ): ApprovalRequest {
   const id = crypto.randomBytes(8).toString('hex');
   const req: ApprovalRequest = {
@@ -18,6 +19,7 @@ export function createApprovalRequest(
     status: 'pending',
     requestedBy,
     policyRuleId,
+    preview,
   };
   store.set(id, req);
   return req;

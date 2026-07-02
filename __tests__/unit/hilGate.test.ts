@@ -92,15 +92,18 @@ describe('wrapWithGate() — policy decision routing', () => {
     expect(result).toEqual({ content: 'ok' });
   });
 
-  it('calls original handler when policy decision is "dry_run_allowed"', async () => {
+  it('returns a dry-run preview without calling original handler when policy decision is "dry_run_allowed"', async () => {
     mockEvaluateToolPolicy.mockReturnValue({ decision: 'dry_run_allowed', mode: 'allowWithDryRun', reason: 'dry run' });
-    const skill = makeSkill();
+    const skill = makeSkill({
+      dryRun: jest.fn().mockResolvedValue({ summary: 'Would do the thing', targets: ['target.txt'] }),
+    });
     const wrapped = wrapWithGate(skill);
 
     const result = await wrapped.handler({});
 
-    expect(skill.handler).toHaveBeenCalled();
-    expect(result).toEqual({ content: 'ok' });
+    expect(skill.handler).not.toHaveBeenCalled();
+    expect(result.content).toContain('Dry-run preview: Would do the thing');
+    expect(result.content).toContain('Targets: target.txt');
   });
 
   it('returns an error result when policy decision is "denied"', async () => {
@@ -141,7 +144,7 @@ describe('wrapWithGate() — approval_required flow', () => {
     const wrapped = wrapWithGate(skill);
     await wrapped.handler({ param: 'value' });
 
-    expect(mockCreateApprovalRequest).toHaveBeenCalledWith('gatedSkill', { param: 'value' }, 'p1', 'r1');
+    expect(mockCreateApprovalRequest).toHaveBeenCalledWith('gatedSkill', { param: 'value' }, 'p1', 'r1', expect.objectContaining({ available: false }));
     expect(mockWaitForApproval).toHaveBeenCalledWith('approval-1', expect.any(Number));
   });
 
@@ -187,7 +190,7 @@ describe('wrapWithGate() — approval_required flow', () => {
     const wrapped = wrapWithGate(skill);
     await wrapped.handler({});
 
-    expect(mockCreateApprovalRequest).toHaveBeenCalledWith('chanSkill', {}, 'chan-99', 'r1');
+    expect(mockCreateApprovalRequest).toHaveBeenCalledWith('chanSkill', {}, 'chan-99', 'r1', expect.objectContaining({ available: false }));
   });
 });
 
