@@ -117,4 +117,42 @@ describe('searchInFiles ExecutionBackend integration', () => {
     expect(backend.listDir).toHaveBeenCalledWith({ relativePath: 'secret' });
     expect(backend.readFile).toHaveBeenCalledWith({ relativePath: 'secret', maxBytes: 1_000_001 });
   });
+
+  it('skips files larger than the configured per-file byte limit', async () => {
+    const backend = makeBackend({
+      'large.txt': 'hello but metadata says it is too large',
+      'small.txt': 'hello small',
+    });
+    backend.listDir.mockResolvedValueOnce({
+      backend: 'local',
+      entries: [
+        { name: 'large.txt', type: 'file', size: 1_000_001 },
+        { name: 'small.txt', type: 'file', size: 11 },
+      ],
+    });
+    mockGetExecutionBackend.mockReturnValue(backend);
+
+    const result = await searchInFiles.handler({ pattern: 'hello' });
+
+    expect(result.content).toBe('small.txt:1: hello small');
+    expect(backend.readFile).not.toHaveBeenCalledWith({ relativePath: 'large.txt', maxBytes: 1_000_001 });
+  });
+
+  it('returns a timeout error when the search deadline is exhausted', async () => {
+    const originalTimeout = process.env.SEARCH_IN_FILES_TIMEOUT_MS;
+    process.env.SEARCH_IN_FILES_TIMEOUT_MS = '0';
+    const backend = makeBackend({ 'data.txt': 'hello' });
+    mockGetExecutionBackend.mockReturnValue(backend);
+
+    const result = await searchInFiles.handler({ pattern: 'hello' });
+
+    expect(result).toEqual({ content: 'Error: searchInFiles timed out.', isError: true });
+    expect(backend.listDir).not.toHaveBeenCalled();
+
+    if (originalTimeout === undefined) {
+      delete process.env.SEARCH_IN_FILES_TIMEOUT_MS;
+    } else {
+      process.env.SEARCH_IN_FILES_TIMEOUT_MS = originalTimeout;
+    }
+  });
 });
