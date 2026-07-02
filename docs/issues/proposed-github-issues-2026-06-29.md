@@ -2,6 +2,9 @@
 
 このドキュメントは、CopHarness の現状機能と既存ロードマップを踏まえ、GitHub Issues に個別投稿しやすい粒度へ分割した改善・拡張案をまとめる。
 
+> **投稿済み（2026-06-29）**: 本ドキュメントの Issue 1〜10 は GitHub Issue **#88〜#97** として投稿済み。
+> トリアージ状況は `issue-triage-2026-07-02.md` を参照（#88 は実装済みでクローズ、#89 / #92 / #94 / #96 は部分実装）。
+
 ## 前提
 
 CopHarness は既に CLI、Discord Bot、LINE Bot、HTTP API、SSE ストリーミング、ダッシュボード、スケジューラー、スキル、MCP クライアント、マルチエージェント、OpenTelemetry、Human-in-the-Loop を備えている。
