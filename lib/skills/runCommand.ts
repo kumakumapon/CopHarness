@@ -43,6 +43,22 @@ export const runCommand: SkillDefinition = {
   },
   category: 'system',
   riskLevel: 'high',
+  dryRun: async (args) => {
+    const command = String(args.command ?? '').trim();
+    const commandArgs: string[] = Array.isArray(args.args)
+      ? (args.args as unknown[]).map((a) => String(a))
+      : [];
+    if (!command) throw new Error('command is required');
+    if (!ALLOWED_COMMANDS.has(command)) throw new Error(`command \"${command}\" is not allowed`);
+    if (hasDangerousArg(commandArgs)) throw new Error('one or more arguments contain disallowed characters');
+    const rendered = [command, ...commandArgs].join(' ');
+    return {
+      summary: `Run whitelisted command: ${rendered}`,
+      command: rendered,
+      details: { command, args: commandArgs, backend: getExecutionBackend().kind },
+      riskAttributes: ['process-execution'],
+    };
+  },
   handler: async (args) => {
     const command = String(args.command ?? '').trim();
     if (!command) return { content: 'Error: command is required', isError: true };
