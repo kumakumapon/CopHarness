@@ -255,6 +255,19 @@ interface IdentitiesData {
   total: number;
 }
 
+interface ApprovalPreview {
+  summary: string;
+  generatedAt: number;
+  available: boolean;
+  details?: Record<string, unknown>;
+  diff?: string;
+  command?: string;
+  targets?: string[];
+  externalDestinations?: string[];
+  riskAttributes?: string[];
+  unavailableReason?: string;
+}
+
 interface ApprovalRequest {
   id: string;
   skillName: string;
@@ -263,6 +276,8 @@ interface ApprovalRequest {
   resolvedAt?: number;
   status: 'pending' | 'approved' | 'rejected' | 'timeout';
   requestedBy?: string;
+  policyRuleId?: string;
+  preview?: ApprovalPreview;
 }
 
 interface ApprovalsData {
@@ -2121,6 +2136,20 @@ function ApprovalsPanel({
                       {new Date(req.createdAt).toLocaleString('ja-JP')}
                     </span>
                   </div>
+                  {req.preview && (
+                    <div className="text-xs rounded p-3 mb-2 space-y-2"
+                      style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}>
+                      <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>Dry-run preview</div>
+                      <div>{req.preview.summary}</div>
+                      {req.preview.command && <div className="font-mono">$ {req.preview.command}</div>}
+                      {req.preview.targets?.length ? <div>Targets: {req.preview.targets.join(', ')}</div> : null}
+                      {req.preview.riskAttributes?.length ? <div>Risk: {req.preview.riskAttributes.join(', ')}</div> : null}
+                      {req.preview.unavailableReason && <div>Unavailable: {req.preview.unavailableReason}</div>}
+                      {req.preview.diff && (
+                        <pre className="font-mono text-[11px] overflow-x-auto whitespace-pre-wrap">{req.preview.diff}</pre>
+                      )}
+                    </div>
+                  )}
                   <div className="text-xs rounded p-2 font-mono overflow-x-auto"
                     style={{ background: 'var(--primary-bg)', color: 'var(--text-secondary)' }}>
                     {JSON.stringify(req.args, null, 2)}

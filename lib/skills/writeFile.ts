@@ -1,6 +1,26 @@
 import { type SkillDefinition } from '../skill';
 import { getExecutionBackend } from '../execution';
 
+function makeUnifiedDiff(filePath: string, before: string, after: string): string {
+  const beforeLines = before.split('\n');
+  const afterLines = after.split('\n');
+  const maxLines = 80;
+  const lines = [`--- a/${filePath}`, `+++ b/${filePath}`];
+  const count = Math.max(beforeLines.length, afterLines.length);
+  for (let i = 0; i < count && lines.length < maxLines; i++) {
+    const oldLine = beforeLines[i];
+    const newLine = afterLines[i];
+    if (oldLine === newLine) {
+      lines.push(` ${oldLine ?? ''}`);
+    } else {
+      if (oldLine !== undefined) lines.push(`-${oldLine}`);
+      if (newLine !== undefined) lines.push(`+${newLine}`);
+    }
+  }
+  if (count + 2 > maxLines) lines.push('[diff truncated]');
+  return lines.join('\n');
+}
+
 export const writeFile: SkillDefinition = {
   name: 'writeFile',
   description:
@@ -26,6 +46,28 @@ export const writeFile: SkillDefinition = {
   },
   category: 'file',
   riskLevel: 'medium',
+  dryRun: async (args) => {
+    const userPath = String(args.path ?? '').trim();
+    const content = String(args.content ?? '');
+    const append = args.append === true;
+    if (!userPath) throw new Error('path is required');
+    const backend = getExecutionBackend();
+    let before = '';
+    let existed = true;
+    try {
+      before = (await backend.readFile({ relativePath: userPath, maxBytes: 100_000 })).content;
+    } catch {
+      existed = false;
+    }
+    const after = append ? before + content : content;
+    return {
+      summary: `${append ? 'Append to' : existed ? 'Overwrite' : 'Create'} file ${userPath} (${content.length} characters).`,
+      targets: [userPath],
+      diff: makeUnifiedDiff(userPath, before, after),
+      details: { path: userPath, append, existed, characters: content.length, backend: backend.kind },
+      riskAttributes: ['file-write'],
+    };
+  },
   handler: async (args) => {
     const userPath = String(args.path ?? '').trim();
     const content = String(args.content ?? '');
