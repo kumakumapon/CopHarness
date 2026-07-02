@@ -4,6 +4,20 @@ import { type ExecutionBackend } from '../execution/types';
 
 const MAX_RESULTS = 200;
 const MAX_FILE_SIZE_BYTES = 1_000_000;
+const DEFAULT_SEARCH_TIMEOUT_MS = 10_000;
+
+function getSearchTimeoutMs(): number {
+  const raw = process.env.SEARCH_IN_FILES_TIMEOUT_MS ?? process.env.EXECUTION_TIMEOUT_MS;
+  if (!raw) return DEFAULT_SEARCH_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_SEARCH_TIMEOUT_MS;
+}
+
+function assertNotTimedOut(deadlineMs: number): void {
+  if (Date.now() >= deadlineMs) {
+    throw new Error('searchInFiles timed out.');
+  }
+}
 
 function joinRelativePath(base: string, name: string): string {
   if (base === '.' || base === '') return name;
@@ -13,15 +27,19 @@ function joinRelativePath(base: string, name: string): string {
 async function tryReadFile(
   backend: ExecutionBackend,
   relativePath: string,
+  deadlineMs: number,
 ): Promise<string | null> {
+  assertNotTimedOut(deadlineMs);
   try {
     const result = await backend.readFile({
       relativePath,
       maxBytes: MAX_FILE_SIZE_BYTES + 1,
     });
+    assertNotTimedOut(deadlineMs);
     if (result.truncated || result.content.length > MAX_FILE_SIZE_BYTES) return null;
     return result.content;
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message === 'searchInFiles timed out.') throw err;
     return null;
   }
 }
@@ -46,11 +64,13 @@ async function searchFile(
   relativePath: string,
   regex: RegExp,
   matches: string[],
-  size?: number,
+  size: number | undefined,
+  deadlineMs: number,
 ): Promise<void> {
+  assertNotTimedOut(deadlineMs);
   if (matches.length >= MAX_RESULTS) return;
   if (size !== undefined && size > MAX_FILE_SIZE_BYTES) return;
-  const content = await tryReadFile(backend, relativePath);
+  const content = await tryReadFile(backend, relativePath, deadlineMs);
   if (content === null) return;
   collectLineMatches(content, relativePath, regex, matches);
 }
@@ -60,16 +80,19 @@ async function searchDirectory(
   relativePath: string,
   regex: RegExp,
   matches: string[],
+  deadlineMs: number,
 ): Promise<void> {
+  assertNotTimedOut(deadlineMs);
   if (matches.length >= MAX_RESULTS) return;
   const result = await backend.listDir({ relativePath });
+  assertNotTimedOut(deadlineMs);
   for (const entry of result.entries) {
     if (matches.length >= MAX_RESULTS) break;
     const childPath = joinRelativePath(relativePath, entry.name);
     if (entry.type === 'directory') {
-      await searchDirectory(backend, childPath, regex, matches);
+      await searchDirectory(backend, childPath, regex, matches, deadlineMs);
     } else if (entry.type === 'file') {
-      await searchFile(backend, childPath, regex, matches, entry.size);
+      await searchFile(backend, childPath, regex, matches, entry.size, deadlineMs);
     }
   }
 }
@@ -79,11 +102,13 @@ async function searchPath(
   relativePath: string,
   regex: RegExp,
   matches: string[],
+  deadlineMs: number,
 ): Promise<void> {
+  assertNotTimedOut(deadlineMs);
   try {
-    await searchDirectory(backend, relativePath, regex, matches);
+    await searchDirectory(backend, relativePath, regex, matches, deadlineMs);
   } catch (dirErr) {
-    const content = await tryReadFile(backend, relativePath);
+    const content = await tryReadFile(backend, relativePath, deadlineMs);
     if (content === null) {
       throw dirErr;
     }
@@ -133,7 +158,8 @@ export const searchInFiles: SkillDefinition = {
     try {
       const backend = getExecutionBackend();
       const matches: string[] = [];
-      await searchPath(backend, userPath, regex, matches);
+      const deadlineMs = Date.now() + getSearchTimeoutMs();
+      await searchPath(backend, userPath, regex, matches, deadlineMs);
 
       if (matches.length === 0) return { content: 'No matches found.' };
       const header = matches.length >= MAX_RESULTS ? `(first ${MAX_RESULTS} matches)\n` : '';
