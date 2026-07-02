@@ -3,6 +3,7 @@ import { createApprovalRequest, waitForApproval } from './store';
 import { getSkillExecutionContext, updateSkillExecutionContext } from '../skills/executionContext';
 import { evaluateToolPolicy } from '../toolPolicy/policy';
 import { grantSessionPermission } from '../toolPolicy/sessionPermissions';
+import { buildDryRunPreview, formatDryRunPreview } from '../toolPolicy/dryRun';
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -29,12 +30,19 @@ export function wrapWithGate(skill: SkillDefinition): SkillDefinition {
         return { content: `スキル "${skill.name}" の実行はポリシーにより拒否されました。${policy.ruleId ? ` (rule=${policy.ruleId})` : ''}`, isError: true };
       }
 
+      if (policy.decision === 'dry_run_allowed') {
+        const preview = await buildDryRunPreview(skill, args);
+        updateSkillExecutionContext({ policyDecision: 'dry_run_allowed' });
+        return { content: formatDryRunPreview(preview), isError: !preview.available };
+      }
+
       if (policy.decision !== 'approval_required') {
         return skill.handler(args);
       }
 
       const context = getSkillExecutionContext();
-      const req = createApprovalRequest(skill.name, args, context?.personId ?? context?.channelKey, policy.ruleId);
+      const preview = await buildDryRunPreview(skill, args);
+      const req = createApprovalRequest(skill.name, args, context?.personId ?? context?.channelKey, policy.ruleId, preview);
       updateSkillExecutionContext({ approvalId: req.id, policyDecision: 'approval_required' });
       console.info(`[HIL] Awaiting approval for "${skill.name}" (id=${req.id})`);
 

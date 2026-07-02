@@ -1,3 +1,5 @@
+import type { ApprovalPreview } from '../toolPolicy/dryRun';
+
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'timeout';
 
 export interface ApprovalRequest {
@@ -9,5 +11,6 @@ export interface ApprovalRequest {
   status: ApprovalStatus;
   requestedBy?: string;
   policyRuleId?: string;
+  preview?: ApprovalPreview;
 }
 

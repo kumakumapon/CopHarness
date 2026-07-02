@@ -82,6 +82,19 @@ export interface SkillDefinition {
    * records any violations in the schema violation log.
    */
   outputSchema?: SkillOutputSchema;
+  /** Optional non-mutating preview used by tool policy dry-runs and approval UI. */
+  dryRun?: (args: Record<string, unknown>) => Promise<SkillDryRunPreview>;
+}
+
+export interface SkillDryRunPreview {
+  summary: string;
+  details?: Record<string, unknown>;
+  diff?: string;
+  command?: string;
+  targets?: string[];
+  externalDestinations?: string[];
+  riskAttributes?: string[];
+  unavailableReason?: string;
 }
 
 export interface SkillResult {
