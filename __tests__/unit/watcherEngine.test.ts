@@ -134,4 +134,28 @@ describe('watcher engine', () => {
     expect(runner).toHaveBeenCalledTimes(2);
     expect(listWatchers().filter((watcher) => watcher.triggerCount === 1)).toHaveLength(2);
   });
+
+  it('matches GitHub watchers by normalized metadata filters', () => {
+    addWatcher({
+      name: 'Bug issue watcher',
+      type: 'github',
+      prompt: 'Handle bugs',
+      metadata: { eventTypes: ['issues.opened'], labels: ['bug'], authors: ['octocat'] },
+    });
+    addWatcher({
+      name: 'Docs issue watcher',
+      type: 'github',
+      prompt: 'Handle docs',
+      metadata: { labels: ['documentation'] },
+    });
+
+    const matches = findMatchingWatchers({
+      source: 'github',
+      type: 'issues.opened',
+      subject: 'sj55576/CopHarness #89 Bug report',
+      payload: { labels: ['bug'], author: 'octocat', repository: 'sj55576/CopHarness' },
+    });
+
+    expect(matches.map((watcher) => watcher.name)).toEqual(['Bug issue watcher']);
+  });
 });
