@@ -30,6 +30,29 @@ export const sendNotification: SkillDefinition = {
   category: 'external',
   riskLevel: 'high',
   requiresEnv: ['SLACK_WEBHOOK_URL', 'DISCORD_WEBHOOK_URL'],
+  dryRun: async (args) => {
+    const message = String(args.message ?? '').trim();
+    if (!message) throw new Error('message is required');
+    const target = String(args.target ?? 'all').toLowerCase();
+    const destinations = target === 'slack'
+      ? ['slack']
+      : target === 'discord'
+        ? ['discord']
+        : ['slack', 'discord'];
+    return {
+      summary: `Send notification to ${destinations.join(' and ')} (${message.length} characters).`,
+      externalDestinations: destinations,
+      details: {
+        target,
+        messagePreview: message.length > 240 ? `${message.slice(0, 240)}…` : message,
+        configured: {
+          slack: Boolean(process.env.SLACK_WEBHOOK_URL),
+          discord: Boolean(process.env.DISCORD_WEBHOOK_URL),
+        },
+      },
+      riskAttributes: ['external-send', 'webhook-notification'],
+    };
+  },
   handler: async (args) => {
     const message = String(args.message ?? '').trim();
     if (!message) return { content: 'Error: message is required', isError: true };
