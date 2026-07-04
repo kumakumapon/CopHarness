@@ -1,6 +1,7 @@
 import { buildDryRunPreview, formatDryRunPreview } from '../../lib/toolPolicy/dryRun';
 import { writeFile } from '../../lib/skills/writeFile';
 import { runCommand } from '../../lib/skills/runCommand';
+import { sendNotification } from '../../lib/skills/sendNotification';
 import { _resetExecutionBackendForTests } from '../../lib/execution';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -40,6 +41,16 @@ describe('tool policy dry-run previews', () => {
     expect(preview.command).toBe('echo hello');
     expect(preview.riskAttributes).toContain('process-execution');
     expect(formatDryRunPreview(preview)).toContain('Command: echo hello');
+  });
+
+
+  it('generates external destination previews for notification sends', async () => {
+    const preview = await buildDryRunPreview(sendNotification, { message: 'Deploy finished', target: 'slack' });
+
+    expect(preview.available).toBe(true);
+    expect(preview.summary).toContain('Send notification to slack');
+    expect(preview.externalDestinations).toEqual(['slack']);
+    expect(preview.riskAttributes).toContain('external-send');
   });
 
   it('redacts secrets from preview text', async () => {
