@@ -20,6 +20,35 @@ function stableStringify(value: unknown): string {
   }
 }
 
+function payloadRecord(event: WatcherEvent): Record<string, unknown> {
+  return typeof event.payload === 'object' && event.payload !== null && !Array.isArray(event.payload)
+    ? event.payload as Record<string, unknown>
+    : {};
+}
+
+function metadataStringList(value: unknown): string[] {
+  if (typeof value === 'string') return value.split(',').map((entry) => entry.trim()).filter(Boolean);
+  if (Array.isArray(value)) return value.map((entry) => String(entry).trim()).filter(Boolean);
+  return [];
+}
+
+function watcherMatchesMetadataFilters(watcher: WatcherDefinition, event: WatcherEvent): boolean {
+  const metadata = watcher.metadata ?? {};
+  const payload = payloadRecord(event);
+  const eventTypes = metadataStringList(metadata.eventTypes ?? metadata.githubEventTypes);
+  if (eventTypes.length && !eventTypes.includes(String(event.type ?? ''))) return false;
+  const labels = metadataStringList(metadata.labels ?? metadata.githubLabels);
+  if (labels.length) {
+    const eventLabels = metadataStringList(payload.labels);
+    if (!labels.some((label) => eventLabels.includes(label))) return false;
+  }
+  const authors = metadataStringList(metadata.authors ?? metadata.githubAuthors);
+  if (authors.length && !authors.includes(String(payload.author ?? payload.sender ?? ''))) return false;
+  const branches = metadataStringList(metadata.branches ?? metadata.githubBranches);
+  if (branches.length && !branches.includes(String(payload.branch ?? payload.baseBranch ?? ''))) return false;
+  return true;
+}
+
 export function buildWatcherPrompt(watcher: WatcherDefinition, event: WatcherEvent): string {
   const receivedAt = event.receivedAt ?? new Date().toISOString();
   return `${watcher.prompt}
@@ -35,6 +64,7 @@ export function watcherMatchesEvent(
 ): boolean {
   if (options.manualOverride && event.type === 'manual') return true;
   if (watcher.type !== 'manual' && event.source !== watcher.type) return false;
+  if (!watcherMatchesMetadataFilters(watcher, event)) return false;
 
   const pattern = watcher.eventPattern?.trim();
   if (!pattern) return true;
