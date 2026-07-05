@@ -21,6 +21,7 @@ import {
 } from './store';
 import { runProposalCode, runProposalTests } from './sandbox';
 import { runProposalCodeOnBackend } from './backendRunner';
+import { validateGeneratedSkillManifest } from './manifest';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -190,6 +191,8 @@ export async function rejectProposal(id: string, reason?: string): Promise<Skill
 // ---------------------------------------------------------------------------
 
 export function registerProposalSkill(proposal: SkillProposal): SkillDefinition {
+  validateGeneratedSkillManifest(proposal.manifest);
+
   // Enforce minimum risk level of 'medium' for generated skills
   const effectiveRisk: 'medium' | 'high' =
     proposal.riskLevel === 'high' ? 'high' : 'medium';

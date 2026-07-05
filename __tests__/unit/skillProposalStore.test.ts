@@ -250,3 +250,57 @@ describe('SkillProposalStore', () => {
     expect(names).toContain('envOverride');
   });
 });
+
+describe('Generated skill manifest validation', () => {
+  it('adds a default manifest for new proposals', async () => {
+    const name = `manifestDefaultX${Date.now()}`;
+    const proposal = await createSkillProposal(makeInput({ name }));
+
+    expect(proposal.manifest).toEqual({
+      name,
+      version: '0.1.0',
+      riskLevel: 'low',
+      permissions: [],
+      allowedEnv: [],
+      allowedNetworkDestinations: [],
+      npmDependencies: [],
+    });
+    expect(proposal.manifestHistory).toHaveLength(1);
+  });
+
+  it('rejects unapproved generated skill dependencies', async () => {
+    const name = `manifestDepsX${Date.now()}`;
+    await expect(createSkillProposal(makeInput({
+      name,
+      manifest: {
+        name,
+        version: '0.1.0',
+        riskLevel: 'low',
+        permissions: ['dependencies'],
+        allowedEnv: [],
+        allowedNetworkDestinations: [],
+        npmDependencies: ['left-pad'],
+      },
+    }))).rejects.toThrow(/dependency "left-pad" is not approved/);
+  });
+
+  it('accepts allowlisted generated skill dependencies', async () => {
+    process.env.GENERATED_SKILL_ALLOWED_DEPENDENCIES = 'left-pad';
+    const name = `manifestAllowDepsX${Date.now()}`;
+    const proposal = await createSkillProposal(makeInput({
+      name,
+      manifest: {
+        name,
+        version: '0.1.0',
+        riskLevel: 'low',
+        permissions: ['dependencies'],
+        allowedEnv: [],
+        allowedNetworkDestinations: [],
+        npmDependencies: ['left-pad'],
+      },
+    }));
+
+    expect(proposal.manifest.npmDependencies).toEqual(['left-pad']);
+    delete process.env.GENERATED_SKILL_ALLOWED_DEPENDENCIES;
+  });
+});
