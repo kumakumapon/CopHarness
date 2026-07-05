@@ -143,6 +143,16 @@ LINE 公式アカウントにメッセージを送ると LLM が返答します�
 
 ---
 
+
+## Slack チャネル
+
+Slack Events API の `url_verification`、DM（`message` / `channel_type=im`）、`app_mention` payload は `normalizeSlackEvent` で共通形式に正規化できます。Slack ユーザーは `slack:<userId>` の `channelKey` として扱われ、Discord / LINE / API と同じ IdentityStore 連携に載せやすい形になります。スレッド単位の会話分離には `slack:<channelId>:<thread_ts|ts>` の `threadKey` を使います。
+
+```env
+SLACK_BOT_TOKEN=
+SLACK_SIGNING_SECRET=
+```
+
 ## Discord Bot
 
 ### Discord アプリの作成
@@ -331,6 +341,21 @@ npm run schedule run
 # 例: 特定スキルのみ有効にする
 ENABLED_SKILLS=currentDateTime,calculator,getWeather,memorySet,memoryGet,memoryList,hashText,regexMatch
 ```
+
+
+### 生成スキル manifest と依存許可
+
+`proposeSkill` で作られる generated skill は、承認・登録前に manifest を検証します。manifest には `name`、`version`、`riskLevel`、`permissions`、`allowedEnv`、`allowedNetworkDestinations`、`npmDependencies` を含められます。既存データに manifest がない場合は、読み込み時に依存・環境変数・ネットワーク権限なしの既定 manifest が補完されます。
+
+依存 package、環境変数、ネットワーク宛先を要求する manifest は、それぞれ以下の allowlist に含まれていない限り登録されません。
+
+```env
+GENERATED_SKILL_ALLOWED_DEPENDENCIES=
+GENERATED_SKILL_ALLOWED_ENV=
+GENERATED_SKILL_ALLOWED_NETWORK=
+```
+
+`npmDependencies` を指定する場合は `permissions` に `dependencies`、`allowedEnv` を指定する場合は `env`、`allowedNetworkDestinations` を指定する場合は `network` も含める必要があります。
 
 ### スキルのカスタム定義
 

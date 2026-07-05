@@ -11,6 +11,12 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
 import { getSkill } from '../skill';
+import {
+  defaultGeneratedSkillManifest,
+  normalizeGeneratedSkillManifest,
+  validateGeneratedSkillManifest,
+  type GeneratedSkillManifest,
+} from './manifest';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,6 +61,8 @@ export interface SkillProposal {
   createdAt: string;
   updatedAt: string;
   errorPreview?: string;
+  manifest: GeneratedSkillManifest;
+  manifestHistory?: Array<{ manifest: GeneratedSkillManifest; changedAt: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +128,12 @@ function getStore(): SkillProposalStoreFile {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<SkillProposalStoreFile>;
     const proposals =
       parsed.proposals && typeof parsed.proposals === 'object' ? parsed.proposals : {};
+    for (const proposal of Object.values(proposals) as SkillProposal[]) {
+      if (!proposal.manifest) {
+        proposal.manifest = defaultGeneratedSkillManifest(proposal);
+        proposal.manifestHistory = [{ manifest: proposal.manifest, changedAt: proposal.updatedAt ?? proposal.createdAt ?? new Date().toISOString() }];
+      }
+    }
     const order = Array.isArray(parsed.order)
       ? parsed.order.filter((id) => typeof id === 'string' && proposals[id])
       : Object.keys(proposals);
@@ -173,6 +187,8 @@ function scheduleWrite(): Promise<void> {
 // Validation
 // ---------------------------------------------------------------------------
 
+export { type GeneratedSkillManifest } from './manifest';
+
 function validateName(name: string): void {
   if (!NAME_PATTERN.test(name)) {
     throw new Error(
@@ -185,7 +201,9 @@ function validateName(name: string): void {
 // Public API
 // ---------------------------------------------------------------------------
 
-export type CreateSkillProposalInput = Omit<SkillProposal, 'id' | 'status' | 'createdAt' | 'updatedAt'>;
+export type CreateSkillProposalInput = Omit<SkillProposal, 'id' | 'status' | 'createdAt' | 'updatedAt' | 'manifest' | 'manifestHistory'> & {
+  manifest?: Partial<GeneratedSkillManifest>;
+};
 
 export async function createSkillProposal(input: CreateSkillProposalInput): Promise<SkillProposal> {
   validateName(input.name);
@@ -212,8 +230,19 @@ export async function createSkillProposal(input: CreateSkillProposalInput): Prom
   const now = new Date().toISOString();
   const id = `proposal-${randomUUID()}`;
 
+  const manifest = normalizeGeneratedSkillManifest(input.manifest, { name: input.name, riskLevel: input.riskLevel });
+  if (manifest.name !== input.name) {
+    throw new Error(`Generated skill manifest name "${manifest.name}" must match proposal name "${input.name}".`);
+  }
+  if (manifest.riskLevel !== input.riskLevel) {
+    throw new Error(`Generated skill manifest riskLevel "${manifest.riskLevel}" must match proposal riskLevel "${input.riskLevel}".`);
+  }
+  validateGeneratedSkillManifest(manifest);
+
   const proposal: SkillProposal = {
     ...input,
+    manifest,
+    manifestHistory: [{ manifest, changedAt: now }],
     id,
     status: 'draft',
     createdAt: now,
@@ -230,16 +259,26 @@ export async function createSkillProposal(input: CreateSkillProposalInput): Prom
 
 export async function updateSkillProposal(
   id: string,
-  patch: Partial<Omit<SkillProposal, 'id' | 'createdAt'>>,
+  patch: Partial<Omit<SkillProposal, 'id' | 'createdAt' | 'manifest'>> & { manifest?: Partial<GeneratedSkillManifest> },
 ): Promise<SkillProposal | undefined> {
   const store = getStore();
   const existing = store.proposals[id];
   if (!existing) return undefined;
 
   const now = new Date().toISOString();
+  const manifest = patch.manifest
+    ? normalizeGeneratedSkillManifest(patch.manifest, { name: patch.name ?? existing.name, riskLevel: patch.riskLevel ?? existing.riskLevel })
+    : existing.manifest ?? defaultGeneratedSkillManifest(existing);
+  validateGeneratedSkillManifest(manifest);
+
+  const manifestChanged = JSON.stringify(manifest) !== JSON.stringify(existing.manifest);
   const updated: SkillProposal = {
     ...existing,
     ...patch,
+    manifest,
+    manifestHistory: manifestChanged
+      ? [...(existing.manifestHistory ?? []), { manifest, changedAt: now }]
+      : existing.manifestHistory,
     id,
     createdAt: existing.createdAt,
     updatedAt: now,
