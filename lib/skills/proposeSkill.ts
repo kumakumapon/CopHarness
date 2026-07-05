@@ -54,6 +54,10 @@ export const proposeSkill: SkillDefinition = {
         enum: ['low', 'medium', 'high'],
         description: 'スキルのリスクレベル（low/medium/high）',
       },
+      manifestJson: {
+        type: 'string',
+        description: '任意。生成スキル manifest のJSON。例: {"version":"0.1.0","permissions":[],"allowedEnv":[],"allowedNetworkDestinations":[],"npmDependencies":[]}',
+      },
       testPlanJson: {
         type: 'string',
         description:
@@ -69,6 +73,7 @@ export const proposeSkill: SkillDefinition = {
     const code = String(args.code ?? '').trim();
     const riskLevelRaw = String(args.riskLevel ?? '').trim();
     const testPlanJsonRaw = String(args.testPlanJson ?? '').trim();
+    const manifestJsonRaw = String(args.manifestJson ?? '').trim();
 
     // Validate riskLevel
     if (!['low', 'medium', 'high'].includes(riskLevelRaw)) {
@@ -104,6 +109,15 @@ export const proposeSkill: SkillDefinition = {
       };
     }
 
+    let manifest;
+    if (manifestJsonRaw) {
+      try {
+        manifest = JSON.parse(manifestJsonRaw);
+      } catch {
+        return { content: 'エラー: manifestJson のJSONパースに失敗しました。', isError: true };
+      }
+    }
+
     // Get execution context for personId/channelKey/taskId
     const context = getSkillExecutionContext();
 
@@ -116,6 +130,7 @@ export const proposeSkill: SkillDefinition = {
         problem,
         proposedCode: code,
         riskLevel,
+        manifest,
         testPlan: testPlan as Array<{
           description?: string;
           args: Record<string, unknown>;
