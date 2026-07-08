@@ -378,7 +378,7 @@ describe('RetryAdapter — stream()', () => {
   it('does NOT retry stream on 401', async () => {
     const err = makeError('Unauthorized', 401);
     const inner = alwaysFailStreamAdapter(err);
-    const streamSpy = jest.spyOn(inner, 'stream' as keyof typeof inner);
+    const streamSpy = jest.spyOn(inner, 'stream');
     const adapter = new RetryAdapter(inner, { maxRetries: 3, initialDelayMs: 100 });
 
     let caughtError: unknown;
