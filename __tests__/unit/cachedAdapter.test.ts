@@ -32,7 +32,7 @@ describe('CachedAdapter – bypass when skills present', () => {
     const cache = new ResponseCache();
     const adapter = new CachedAdapter(inner, cache);
 
-    const request = makeRequest({ skills: [{ name: 'calculator', description: 'math', parameters: {} as never, execute: jest.fn() }] });
+    const request = makeRequest({ skills: [{ name: 'calculator', description: 'math', parameters: { type: 'object', properties: {} }, handler: jest.fn() }] });
     await adapter.complete(request);
 
     expect(inner.complete).toHaveBeenCalledTimes(1);
