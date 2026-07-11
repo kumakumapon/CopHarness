@@ -748,6 +748,25 @@ POST /api/dashboard/approvals/{id}/reject  # 拒否
 npm test
 ```
 
+### Eval / CI quality gate
+
+LLM を使った組み込み評価を実行し、合格率が閾値を下回ると終了コード 1 を返します。プロバイダに対応する API キーが必要です。
+
+```bash
+npm run eval
+EVAL_PASS_THRESHOLD=0.9 npm run eval
+```
+
+CI向けに、標準出力へJSONまたはJUnit XMLを出力できます。機械可読形式では進捗ログを標準出力へ混在させません。
+
+```bash
+npm run eval -- --json
+npm run eval -- --junit --output reports/eval.xml
+```
+
+カスタムケースは `EVAL_CASES_FILE` でJSONファイルを指定します。終了コードは合格が `0`、品質ゲート未達が `1`、引数・設定・実行エラーが `2` です。fork由来のPull RequestにはLLM APIキーを渡さず、信頼できるブランチまたは手動workflowで実行してください。
+
+
 ---
 
 ## 対応プロバイダ
