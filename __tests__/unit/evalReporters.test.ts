@@ -82,6 +82,7 @@ describe('eval reporters', () => {
     );
     const xml = formatJunitReport(errorReport);
     expect(xml).toContain('errors="1"');
+    expect(xml).toContain('failures="0"');
     expect(xml).toContain('<error message="timeout &amp; retry">');
   });
 });
