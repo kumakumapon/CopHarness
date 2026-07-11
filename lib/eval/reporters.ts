@@ -46,6 +46,8 @@ function escapeXml(value: string): string {
 export function formatJunitReport(report: EvalReport): string {
   const { summary, results } = report;
   const durationSeconds = results.reduce((sum, result) => sum + result.durationMs, 0) / 1000;
+  const errorCount = results.filter((result) => result.error).length;
+  const failureCount = summary.failed - errorCount;
   const cases = results.map((result) => {
     const attributes =
       `name="${escapeXml(result.name)}" classname="eval.${escapeXml(result.mode)}" time="${(result.durationMs / 1000).toFixed(3)}"`;
@@ -61,7 +63,7 @@ export function formatJunitReport(report: EvalReport): string {
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    `<testsuite name="CopHarness eval" tests="${summary.total}" failures="${summary.failed}" errors="${results.filter((result) => result.error).length}" time="${durationSeconds.toFixed(3)}" timestamp="${escapeXml(report.generatedAt)}">`,
+    `<testsuite name="CopHarness eval" tests="${summary.total}" failures="${failureCount}" errors="${errorCount}" time="${durationSeconds.toFixed(3)}" timestamp="${escapeXml(report.generatedAt)}">`,
     ...cases,
     '</testsuite>',
   ].join('\n');
