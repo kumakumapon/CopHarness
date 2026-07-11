@@ -1,5 +1,5 @@
 import { runTestCase, summariseResults, type EvalResult } from '../../lib/eval/evaluator';
-import { checkCiGate } from '../../lib/eval/ciGate';
+import { checkCiGate, resolveCiThreshold } from '../../lib/eval/ciGate';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
 
 // ---------------------------------------------------------------------------
@@ -213,13 +213,11 @@ describe('checkCiGate', () => {
 
 describe('resolveCiThreshold', () => {
   test('accepts boundary values including zero', () => {
-    const { resolveCiThreshold } = jest.requireActual('../../lib/eval/ciGate');
     expect(resolveCiThreshold('0')).toBe(0);
     expect(resolveCiThreshold('1')).toBe(1);
   });
 
   test.each(['NaN', '-0.1', '1.1'])('rejects invalid threshold %s', (value) => {
-    const { resolveCiThreshold } = jest.requireActual('../../lib/eval/ciGate');
     expect(() => resolveCiThreshold(value)).toThrow(/between 0 and 1/);
   });
 });
