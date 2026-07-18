@@ -55,6 +55,8 @@ cp .env.example .env.local
 3. スコープで **`read:user`** と **`copilot`** を選択してトークンを生成
 4. GitHub Copilot Individual または Business のサブスクリプションが有効であることを確認
 
+> ⚠️ **免責事項**: GitHub Copilot プロバイダは、Copilot API を公式クライアント以外から利用する形になります。この利用形態は [GitHub の利用規約](https://docs.github.com/site-policy/github-terms/github-terms-for-additional-products-and-features)（GitHub Copilot に関する条項）に抵触する可能性があります。利用する場合は、最新の規約をご自身で確認のうえ、自己責任でご利用ください。規約違反によるアカウント停止等について、本プロジェクトは一切の責任を負いません。規約リスクを避けたい場合は、OpenAI / Anthropic / Gemini / ローカル LLM（LM Studio / Lemonade）プロバイダの利用を推奨します。
+
 ### 2. 依存パッケージのインストール
 
 ```bash
