@@ -46,6 +46,8 @@ cp .env.example .env.local
 | `HIL_ENABLED` | `true` または `1` に設定するとリスク高スキルに承認ゲートを適用 |
 | `HIL_APPROVAL_TIMEOUT_MS` | 承認待ちタイムアウト（ミリ秒、デフォルト: `300000`） |
 | `COPHARNESS_API_KEY` | HTTP API の Bearer 認証キー（設定時のみ認証が有効） |
+| `TRUSTED_PROXY_IPS` | レート制限のクライアント IP 解決で信頼する自前プロキシの IP（カンマ区切り）。`X-Forwarded-For` を右から走査し、リストにない最初のアドレスをクライアントとみなす。`TRUSTED_PROXY_COUNT` より優先。完全一致のみで CIDR は非対応（指定すると警告のうえ無視） |
+| `TRUSTED_PROXY_COUNT` | `X-Forwarded-For` に追記する信頼済みプロキシの段数。右から数えてその段数目のアドレスをクライアントとみなす（`TRUSTED_PROXY_IPS` 未設定時のみ使用） |
 
 どれか一つの LLM キーがあれば自動判定されます。複数セット時は `COPILOT_PROVIDER` で明示指定も可能です。
 
@@ -504,6 +506,13 @@ npm run dev
 | `POST` | `/api/dashboard/approvals/[id]/approve` | 指定リクエストを承認する |
 | `POST` | `/api/dashboard/approvals/[id]/reject` | 指定リクエストを拒否する |
 
+### イベントストリーム API
+
+`GET /api/dashboard/events` は SSE でイベントをリアルタイム配信し、`POST /api/dashboard/events` は履歴を JSON で返します（現時点ではダッシュボード UI 自体はこのエンドポイントを購読していません）。`COPHARNESS_API_KEY` 設定時はどちらも認証が必須です。
+
+- `DASHBOARD_EVENTS_SKILL_ARGS` — `skill:start` イベントの引数の扱い。`redacted`（既定、秘匿情報をマスク）/ `omit`（値を省略し `argKeys` のみ返す）/ `raw`（無加工、非推奨）
+- `DASHBOARD_EVENTS_ALLOW_QUERY_TOKEN` — `true` にすると `GET` が `?access_token=` クエリパラメータでの認証も受け付ける（ブラウザの `EventSource` は `Authorization` ヘッダーを送れないため）。既定は無効。URL に埋め込まれた認証情報はアクセスログやブラウザ履歴に残るため、可能であれば `Authorization` ヘッダー付きの `fetch` ベースの購読を推奨
+
 ---
 
 ## ストリーミング API
@@ -638,7 +647,7 @@ const result2 = await runAgentTask({
 
 ### A2A エンドポイント
 
-Google が提唱する [Agent2Agent (A2A) プロトコル](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/)に準拠したエンドポイントです。
+Google が提唱する [Agent2Agent (A2A) プロトコル](https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/)に準拠したエンドポイントです。他の HTTP API と同様、`COPHARNESS_API_KEY` 設定時は `Authorization: Bearer` 認証とレート制限が適用されます。`task.timeoutMs` は `COPILOT_TIMEOUT_MS`（既定 120000ms）を上限にクランプされます。
 
 **POST /api/a2a**
 
@@ -831,4 +840,6 @@ LEMONADE_MODEL=your-model-name
 - `.env.local` は `.gitignore` に含まれています。コミットしないよう注意してください。
 - Discord Bot を使用する場合、**Message Content Intent** が必要です。
 - `schedules.json` にはプロンプトの内容が平文で保存されます。機密情報を含めないよう注意してください。
+- `COPHARNESS_API_KEY` 設定時、`/api/copilot` 系エンドポイントに加えて `/api/a2a` と `/api/dashboard/events` も認証必須です。
+- レート制限のバケットは `COPHARNESS_API_KEY` 認証済みリクエストなら API キー単位、それ以外は `X-Forwarded-For` から解決したクライアント IP 単位で分かれます。**リバースプロキシ配下で運用する場合は `TRUSTED_PROXY_COUNT`（通常は `1`）または `TRUSTED_PROXY_IPS` を設定してください**。未設定のままだと `X-Forwarded-For` は信頼されず、未認証リクエストはすべて 1 つのグローバルバケットを共有します（IP ごとの制限にはなりません）。既存のプロキシ配下デプロイをアップグレードする際は移行手順としてこの設定を確認してください。
 - `logs.json` にはスケジュール実行結果（プロンプト・LLM の返答）が平文で保存されます。同様に機密情報を含めないよう注意してください。

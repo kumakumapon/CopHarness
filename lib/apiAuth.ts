@@ -1,12 +1,29 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 
-export function requireApiKey(req: NextRequest): NextResponse | null {
+/**
+ * Minimal request shape the auth check needs. Both `NextRequest` and the plain
+ * `Request` handed to route handlers satisfy it.
+ */
+export interface AuthRequest {
+  headers: { get(name: string): string | null };
+}
+
+/**
+ * Reject the request unless it carries the configured API key.
+ *
+ * `queryToken` lets callers supply a credential from somewhere other than the
+ * `Authorization` header — needed for `EventSource`, which cannot set headers.
+ * Only pass it where the operator has explicitly opted in: URLs end up in
+ * access logs and browser history.
+ */
+export function requireApiKey(req: AuthRequest, queryToken?: string | null): NextResponse | null {
   const expectedApiKey = process.env.COPHARNESS_API_KEY;
   if (!expectedApiKey) return null;
 
   const authHeader = req.headers.get('Authorization');
-  const provided = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const provided = headerToken ?? (queryToken?.trim() ? queryToken.trim() : null);
   if (!provided) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

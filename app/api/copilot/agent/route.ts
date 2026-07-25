@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
 import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
 import { requireApiKey } from '../../../../lib/apiAuth';
-import { defaultRateLimiter, rateLimitResponse } from '../../../../lib/rateLimit';
+import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/rateLimit';
 import { resolveConversationKey } from '../../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../../lib/skills/executionContext';
 import { finishTask, startTask } from '../../../../lib/tasks/ledger';
@@ -14,8 +14,7 @@ export async function POST(req: NextRequest) {
   const unauthorized = requireApiKey(req);
   if (unauthorized) return unauthorized;
 
-  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  const rl = defaultRateLimiter.consume(clientIp);
+  const rl = defaultRateLimiter.consume(resolveRateLimitKey(req));
   if (!rl.allowed) return rateLimitResponse(rl);
 
   const provider = resolveProvider();

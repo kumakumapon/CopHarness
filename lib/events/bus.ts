@@ -60,6 +60,8 @@ export interface SkillStartPayload {
   skillName: string;
   args: Record<string, unknown>;
   taskId?: string;
+  /** Populated when `args` are omitted from the dashboard event stream (see lib/events/redact.ts). */
+  argKeys?: string[];
 }
 
 export interface SkillEndPayload {
