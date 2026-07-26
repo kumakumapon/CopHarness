@@ -1,5 +1,7 @@
 import { eventBus } from '@/lib/events/bus';
 import type { BusEvent, EventType } from '@/lib/events/bus';
+import { requireApiKey } from '@/lib/apiAuth';
+import { redactBusEvent } from '@/lib/events/redact';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +18,18 @@ export async function GET(request: Request): Promise<Response> {
   const typesParam = url.searchParams.get('types');
   const since = url.searchParams.get('since') ?? undefined;
 
+  // `EventSource` cannot set an Authorization header, so we allow the API key
+  // to be supplied as a query parameter — but only when the operator has
+  // explicitly opted in via DASHBOARD_EVENTS_ALLOW_QUERY_TOKEN. Default-off is
+  // deliberate: URL-embedded credentials leak into access logs, so operators
+  // must opt in to enable browser EventSource subscriptions.
+  const queryToken =
+    process.env.DASHBOARD_EVENTS_ALLOW_QUERY_TOKEN === 'true'
+      ? url.searchParams.get('access_token')
+      : null;
+  const authError = requireApiKey(request, queryToken);
+  if (authError) return authError;
+
   const filterTypes: EventType[] | undefined = typesParam
     ? (typesParam.split(',').map((s) => s.trim()) as EventType[])
     : undefined;
@@ -30,8 +44,9 @@ export async function GET(request: Request): Promise<Response> {
         if (closed) return;
         if (filterTypes && !filterTypes.includes(event.type)) return;
         try {
-          const data = JSON.stringify(event);
-          controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${data}\n\n`));
+          const redacted = redactBusEvent(event);
+          const data = JSON.stringify(redacted);
+          controller.enqueue(encoder.encode(`event: ${redacted.type}\ndata: ${data}\n\n`));
         } catch {
           // Stream may be closed
         }
@@ -97,6 +112,9 @@ export async function GET(request: Request): Promise<Response> {
  * we expose this as a POST endpoint for JSON history queries.
  */
 export async function POST(request: Request): Promise<Response> {
+  const authError = requireApiKey(request);
+  if (authError) return authError;
+
   const body = (await request.json().catch(() => ({}))) as {
     type?: EventType;
     since?: string;
@@ -109,5 +127,7 @@ export async function POST(request: Request): Promise<Response> {
     limit: body.limit ?? 100,
   });
 
-  return Response.json({ events: history, count: history.length });
+  const events = history.map(redactBusEvent);
+
+  return Response.json({ events, count: events.length });
 }
