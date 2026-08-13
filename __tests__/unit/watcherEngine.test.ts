@@ -152,8 +152,8 @@ describe('watcher engine', () => {
     const matches = findMatchingWatchers({
       source: 'github',
       type: 'issues.opened',
-      subject: 'sj55576/CopHarness #89 Bug report',
-      payload: { labels: ['bug'], author: 'octocat', repository: 'sj55576/CopHarness' },
+      subject: 'kumakumapon/CopHarness #89 Bug report',
+      payload: { labels: ['bug'], author: 'octocat', repository: 'kumakumapon/CopHarness' },
     });
 
     expect(matches.map((watcher) => watcher.name)).toEqual(['Bug issue watcher']);
