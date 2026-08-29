@@ -1,4 +1,7 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { TokenUsage } from '../adapter';
+import { dataPath } from '../utils/dataDir';
 import { getPricing } from './costEstimator';
 
 export class BudgetExceededError extends Error {
@@ -14,6 +17,7 @@ interface Usage {
 }
 
 const usage = new Map<string, Usage>();
+let loadedDay: string | undefined;
 
 function dayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -28,7 +32,34 @@ function scopeKey(scope: string, id?: string): string | undefined {
   return id ? `${dayKey()}:${scope}:${id}` : undefined;
 }
 
+function usageFile(): string {
+  return dataPath('budget-usage.json');
+}
+
+function ensureLoaded(): void {
+  const today = dayKey();
+  if (loadedDay === today) return;
+  usage.clear();
+  loadedDay = today;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(usageFile(), 'utf8')) as { day?: string; usage?: Record<string, Usage> };
+    if (parsed.day !== today || !parsed.usage) return;
+    for (const [key, value] of Object.entries(parsed.usage)) {
+      if (Number.isFinite(value.tokens) && Number.isFinite(value.costUsd)) usage.set(key, value);
+    }
+  } catch {
+    // A missing or malformed historical file starts a new daily budget period.
+  }
+}
+
+function persist(): void {
+  ensureLoaded();
+  fs.mkdirSync(path.dirname(usageFile()), { recursive: true });
+  fs.writeFileSync(usageFile(), JSON.stringify({ day: loadedDay, usage: Object.fromEntries(usage) }, null, 2), 'utf8');
+}
+
 function getUsage(key: string): Usage {
+  ensureLoaded();
   return usage.get(key) ?? { tokens: 0, costUsd: 0 };
 }
 
@@ -70,6 +101,7 @@ function add(key: string | undefined, entry: Usage): void {
   if (!key) return;
   const current = getUsage(key);
   usage.set(key, { tokens: current.tokens + entry.tokens, costUsd: current.costUsd + entry.costUsd });
+  persist();
 }
 
 /** Attributes post-request usage to every budget scope. */
@@ -101,4 +133,5 @@ export function getBudgetUsageForTests(key: string): Usage | undefined {
 
 export function _resetBudgetsForTests(): void {
   usage.clear();
+  loadedDay = dayKey();
 }
