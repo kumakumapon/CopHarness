@@ -2,6 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { TokenUsage } from '../adapter';
 import { dataPath } from '../utils/dataDir';
+import { createApprovalRequest, listApprovalRequests } from '../humanInLoop/store';
+import { isHilEnabled } from '../humanInLoop/gate';
 import { getPricing } from './costEstimator';
 
 export class BudgetExceededError extends Error {
@@ -17,6 +19,7 @@ interface Usage {
 }
 
 const usage = new Map<string, Usage>();
+const consumedOverrides = new Set<string>();
 let loadedDay: string | undefined;
 
 function dayKey(): string {
@@ -80,11 +83,38 @@ export interface BudgetContext {
 }
 
 /** Blocks an LLM call once an applicable daily, user, or task budget is exhausted. */
+function requestOrConsumeHilOverride(scope: string, context: BudgetContext, reason: string): boolean {
+  if (!isHilEnabled() || process.env.BUDGET_HIL_OVERRIDE !== 'true') return false;
+  const approved = listApprovalRequests('approved').find((request) =>
+    request.skillName === 'budgetOverride' && request.args.scope === scope && request.args.personId === context.personId,
+  );
+  if (approved && !consumedOverrides.has(approved.id)) {
+    consumedOverrides.add(approved.id);
+    return true;
+  }
+  const pending = listApprovalRequests('pending').find((request) =>
+    request.skillName === 'budgetOverride' && request.args.scope === scope && request.args.personId === context.personId,
+  );
+  if (pending) throw new BudgetExceededError(`${reason}; awaiting approval ${pending.id}`);
+  const request = createApprovalRequest('budgetOverride', { scope, personId: context.personId, reason }, context.personId);
+  throw new BudgetExceededError(`${reason}; approval required: ${request.id}`);
+}
+
 export function assertBudgetAvailable(context: BudgetContext = {}): void {
   const day = dayKey();
-  check(`${day}:global`, limit('BUDGET_MAX_TOKENS'), limit('BUDGET_MAX_COST_USD'), 'global daily');
-  check(scopeKey('person', context.personId), limit('BUDGET_USER_MAX_TOKENS'), limit('BUDGET_USER_MAX_COST_USD'), 'user daily');
-  check(scopeKey('task', context.taskId), limit('BUDGET_TASK_MAX_TOKENS'), limit('BUDGET_TASK_MAX_COST_USD'), 'task');
+  const scopes: Array<[string, number | undefined, number | undefined, string]> = [
+    [`${day}:global`, limit('BUDGET_MAX_TOKENS'), limit('BUDGET_MAX_COST_USD'), 'global daily'],
+    [scopeKey('person', context.personId) ?? '', limit('BUDGET_USER_MAX_TOKENS'), limit('BUDGET_USER_MAX_COST_USD'), 'user daily'],
+    [scopeKey('task', context.taskId) ?? '', limit('BUDGET_TASK_MAX_TOKENS'), limit('BUDGET_TASK_MAX_COST_USD'), 'task'],
+  ];
+  for (const [scope, tokenLimit, costLimit, label] of scopes) {
+    try {
+      check(scope || undefined, tokenLimit, costLimit, label);
+    } catch (error) {
+      if (error instanceof BudgetExceededError && requestOrConsumeHilOverride(scope, context, error.message)) continue;
+      throw error;
+    }
+  }
 }
 
 function usageCost(provider: string, model: string, tokens: TokenUsage): number {
@@ -151,5 +181,6 @@ export function getBudgetUsageForTests(key: string): Usage | undefined {
 
 export function _resetBudgetsForTests(): void {
   usage.clear();
+  consumedOverrides.clear();
   loadedDay = dayKey();
 }
