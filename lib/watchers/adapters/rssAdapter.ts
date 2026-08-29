@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { dataPath } from '../../utils/dataDir';
+import { safeFetch } from '../../utils/urlGuard';
 import { dispatchWatcherEvent } from '../engine';
 import type { WatcherDefinition } from '../types';
 
@@ -152,7 +153,7 @@ export class RssWatcherAdapter {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       try {
-        const response = await fetch(this.feedUrl, { signal: controller.signal });
+        const response = await safeFetch(this.feedUrl, { signal: controller.signal });
         xml = await response.text();
       } finally {
         clearTimeout(timeout);
