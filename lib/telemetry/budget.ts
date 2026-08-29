@@ -81,6 +81,20 @@ export function recordBudgetUsage(provider: string, model: string, tokens: Token
   add(scopeKey('task', context.taskId), entry);
 }
 
+export function getBudgetSummary(): { global: Usage; limits: Record<string, number | undefined> } {
+  return {
+    global: getUsage(`${dayKey()}:global`),
+    limits: {
+      maxTokens: limit('BUDGET_MAX_TOKENS'),
+      maxCostUsd: limit('BUDGET_MAX_COST_USD'),
+      userMaxTokens: limit('BUDGET_USER_MAX_TOKENS'),
+      userMaxCostUsd: limit('BUDGET_USER_MAX_COST_USD'),
+      taskMaxTokens: limit('BUDGET_TASK_MAX_TOKENS'),
+      taskMaxCostUsd: limit('BUDGET_TASK_MAX_COST_USD'),
+    },
+  };
+}
+
 export function getBudgetUsageForTests(key: string): Usage | undefined {
   return usage.get(key);
 }
