@@ -66,7 +66,7 @@ export function validateSlackSignature(
   secret: string,
   now = Date.now(),
 ): boolean {
-  if (!timestamp || !signature || !secret || !/^\\d+$/.test(timestamp)) return false;
+  if (!timestamp || !signature || !secret || !/^\d+$/.test(timestamp)) return false;
   if (Math.abs(now - Number(timestamp) * 1000) > 5 * 60 * 1000) return false;
   const expected = 'v0=' + createHmac('sha256', secret).update('v0:' + timestamp + ':' + rawBody).digest('hex');
   const supplied = Buffer.from(signature);
