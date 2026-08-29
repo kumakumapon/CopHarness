@@ -1,4 +1,4 @@
-import { assertBudgetAvailable, BudgetExceededError, recordBudgetUsage, _resetBudgetsForTests } from '../../lib/telemetry/budget';
+import { assertBudgetAvailable, BudgetExceededError, getBudgetSummary, recordBudgetUsage, _resetBudgetsForTests } from '../../lib/telemetry/budget';
 
 const original = { ...process.env };
 
@@ -36,4 +36,12 @@ describe('LLM budget enforcement', () => {
     recordBudgetUsage('openai', 'gpt-4o', { promptTokens: 4000, totalTokens: 4000 });
     expect(() => assertBudgetAvailable()).toThrow(BudgetExceededError);
   });
+});
+
+
+it('reports a warning when global daily usage reaches 80 percent', () => {
+  process.env.BUDGET_MAX_TOKENS = '100';
+  recordBudgetUsage('openai', 'gpt-4o', { totalTokens: 80 });
+  expect(getBudgetSummary().utilization.tokens).toBeCloseTo(0.8);
+  expect(getBudgetSummary().warnings).toContain('Global daily token budget is at or above 80%.');
 });
