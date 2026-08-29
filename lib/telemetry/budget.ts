@@ -1,0 +1,90 @@
+import type { TokenUsage } from '../adapter';
+import { getPricing } from './costEstimator';
+
+export class BudgetExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'BudgetExceededError';
+  }
+}
+
+interface Usage {
+  tokens: number;
+  costUsd: number;
+}
+
+const usage = new Map<string, Usage>();
+
+function dayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function limit(name: string): number | undefined {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function scopeKey(scope: string, id?: string): string | undefined {
+  return id ? `${dayKey()}:${scope}:${id}` : undefined;
+}
+
+function getUsage(key: string): Usage {
+  return usage.get(key) ?? { tokens: 0, costUsd: 0 };
+}
+
+function check(key: string | undefined, tokenLimit: number | undefined, costLimit: number | undefined, label: string): void {
+  if (!key) return;
+  const current = getUsage(key);
+  if (tokenLimit !== undefined && current.tokens >= tokenLimit) {
+    throw new BudgetExceededError(`${label} token budget has been exhausted`);
+  }
+  if (costLimit !== undefined && current.costUsd >= costLimit) {
+    throw new BudgetExceededError(`${label} cost budget has been exhausted`);
+  }
+}
+
+export interface BudgetContext {
+  personId?: string;
+  taskId?: string;
+}
+
+/** Blocks an LLM call once an applicable daily, user, or task budget is exhausted. */
+export function assertBudgetAvailable(context: BudgetContext = {}): void {
+  const day = dayKey();
+  check(`${day}:global`, limit('BUDGET_MAX_TOKENS'), limit('BUDGET_MAX_COST_USD'), 'global daily');
+  check(scopeKey('person', context.personId), limit('BUDGET_USER_MAX_TOKENS'), limit('BUDGET_USER_MAX_COST_USD'), 'user daily');
+  check(scopeKey('task', context.taskId), limit('BUDGET_TASK_MAX_TOKENS'), limit('BUDGET_TASK_MAX_COST_USD'), 'task');
+}
+
+function usageCost(provider: string, model: string, tokens: TokenUsage): number {
+  const pricing = getPricing(provider, model);
+  if (!pricing) return 0;
+  const prompt = (tokens.promptTokens ?? 0) / 1000 * pricing.promptPer1kTokens;
+  const completion = (tokens.completionTokens ?? 0) / 1000 * pricing.completionPer1kTokens;
+  const cacheRead = pricing.cacheReadPer1kTokens ? (tokens.cacheReadInputTokens ?? 0) / 1000 * pricing.cacheReadPer1kTokens : 0;
+  const cacheWrite = pricing.cacheWritePer1kTokens ? (tokens.cacheCreationInputTokens ?? 0) / 1000 * pricing.cacheWritePer1kTokens : 0;
+  return prompt + completion + cacheRead + cacheWrite;
+}
+
+function add(key: string | undefined, entry: Usage): void {
+  if (!key) return;
+  const current = getUsage(key);
+  usage.set(key, { tokens: current.tokens + entry.tokens, costUsd: current.costUsd + entry.costUsd });
+}
+
+/** Attributes post-request usage to every budget scope. */
+export function recordBudgetUsage(provider: string, model: string, tokens: TokenUsage, context: BudgetContext = {}): void {
+  const entry = { tokens: tokens.totalTokens ?? (tokens.promptTokens ?? 0) + (tokens.completionTokens ?? 0), costUsd: usageCost(provider, model, tokens) };
+  const day = dayKey();
+  add(`${day}:global`, entry);
+  add(scopeKey('person', context.personId), entry);
+  add(scopeKey('task', context.taskId), entry);
+}
+
+export function getBudgetUsageForTests(key: string): Usage | undefined {
+  return usage.get(key);
+}
+
+export function _resetBudgetsForTests(): void {
+  usage.clear();
+}
