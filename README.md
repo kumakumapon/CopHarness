@@ -843,3 +843,16 @@ LEMONADE_MODEL=your-model-name
 - `COPHARNESS_API_KEY` 設定時、`/api/copilot` 系エンドポイントに加えて `/api/a2a` と `/api/dashboard/events` も認証必須です。
 - レート制限のバケットは `COPHARNESS_API_KEY` 認証済みリクエストなら API キー単位、それ以外は `X-Forwarded-For` から解決したクライアント IP 単位で分かれます。**リバースプロキシ配下で運用する場合は `TRUSTED_PROXY_COUNT`（通常は `1`）または `TRUSTED_PROXY_IPS` を設定してください**。未設定のままだと `X-Forwarded-For` は信頼されず、未認証リクエストはすべて 1 つのグローバルバケットを共有します（IP ごとの制限にはなりません）。既存のプロキシ配下デプロイをアップグレードする際は移行手順としてこの設定を確認してください。
 - `logs.json` にはスケジュール実行結果（プロンプト・LLM の返答）が平文で保存されます。同様に機密情報を含めないよう注意してください。
+
+
+## Slack channel
+
+Configure `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN`, then point the Slack Events API to `/api/slack`. The webhook verifies Slack's `v0` HMAC signature and rejects stale requests. Direct messages and `app_mention` events are handled as conversations; replies stay in the originating Slack thread.
+
+## Outbound HTTP safety
+
+LLM-supplied URLs used by `fetchUrl`, `rssFeed`, and RSS watchers are restricted to HTTP(S) hosts that do not resolve to loopback, private, link-local, multicast, or other special-use addresses. Redirect targets are checked before they are requested. Set `SKILL_HTTP_ALLOW_PRIVATE_NETWORKS=true` only for an intentional trusted-network deployment, or use `SKILL_HTTP_ALLOWED_HOSTS` for a narrowly scoped exception.
+
+## LLM budgets
+
+Set `BUDGET_MAX_TOKENS` / `BUDGET_MAX_COST_USD` for global daily limits, and the corresponding `BUDGET_USER_*` and `BUDGET_TASK_*` variables for scoped limits. The adapter blocks further requests once an applicable limit is exhausted. `GET /api/dashboard/budgets` reports daily usage, utilization, and 80% warnings.
