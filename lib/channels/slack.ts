@@ -14,6 +14,7 @@ export interface SlackEventEnvelope {
     ts?: string;
     thread_ts?: string;
     bot_id?: string;
+    files?: Array<{ url_private_download?: string; url_private?: string; mimetype?: string; size?: number }>;
   };
 }
 
@@ -26,6 +27,7 @@ export interface NormalizedSlackEvent {
   text?: string;
   channelKey?: string;
   shouldRespond: boolean;
+  files?: Array<{ url: string; mimeType: string; size?: number }>;
 }
 
 function slackChannelKey(userId: string): string {
@@ -54,6 +56,10 @@ export function normalizeSlackEvent(payload: SlackEventEnvelope): NormalizedSlac
     threadKey: channelId && timestamp ? `slack:${channelId}:${timestamp}` : undefined,
     text: event.text,
     channelKey: userId ? slackChannelKey(userId) : undefined,
+    files: (event.files ?? []).flatMap((file) => {
+      const url = file.url_private_download ?? file.url_private;
+      return url && file.mimetype ? [{ url, mimeType: file.mimetype, size: file.size }] : [];
+    }),
     shouldRespond: Boolean(userId && channelId && event.text),
   };
 }
