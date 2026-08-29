@@ -1,4 +1,5 @@
 import { type SkillDefinition } from '../skill';
+import { safeFetch } from '../utils/urlGuard';
 
 /** Very simple HTML → plain-text conversion (no external dependencies). */
 function htmlToText(html: string): string {
@@ -75,7 +76,7 @@ export const fetchUrl: SkillDefinition = {
       const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
       let response: Response;
       try {
-        response = await fetch(url, {
+        response = await safeFetch(url, {
           signal: controller.signal,
           headers: { 'User-Agent': 'CopHarness/1.0 (+https://github.com)' },
         });
