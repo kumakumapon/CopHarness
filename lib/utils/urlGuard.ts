@@ -52,7 +52,7 @@ export async function assertSafeHttpUrl(rawUrl: string): Promise<URL> {
   }
   if (url.username || url.password) throw new UnsafeUrlError('URLs with credentials are not allowed');
 
-  const hostname = url.hostname.toLowerCase().replace(/^\\[|\\]$/g, '');
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (hasPrivateNetworkOptIn() || allowedHosts().has(hostname)) return url;
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     throw new UnsafeUrlError('private network destinations are not allowed');
