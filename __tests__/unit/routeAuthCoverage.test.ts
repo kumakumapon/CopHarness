@@ -20,6 +20,8 @@ const ALLOWLIST: Record<string, string> = {
   'app/api/health/route.ts': "public liveness probe, returns no sensitive data",
   // Authenticated by LINE's `validateSignature` request signature.
   'app/api/line/route.ts': "authenticated by LINE's validateSignature request signature",
+  // Authenticated by Slack's request HMAC verification.
+  'app/api/slack/route.ts': "authenticated by Slack request signature",
   // Authenticated by GitHub webhook HMAC verification.
   'app/api/watchers/github/route.ts': 'authenticated by GitHub webhook HMAC verification',
 };
