@@ -1,4 +1,5 @@
 import { assertBudgetAvailable, BudgetExceededError, getBudgetSummary, recordBudgetUsage, _resetBudgetsForTests } from '../../lib/telemetry/budget';
+import { listApprovalRequests, resolveApprovalRequest } from '../../lib/humanInLoop/store';
 
 const original = { ...process.env };
 
@@ -10,6 +11,8 @@ beforeEach(() => {
   delete process.env.BUDGET_USER_MAX_COST_USD;
   delete process.env.BUDGET_TASK_MAX_TOKENS;
   delete process.env.BUDGET_TASK_MAX_COST_USD;
+  delete process.env.HIL_ENABLED;
+  delete process.env.BUDGET_HIL_OVERRIDE;
 });
 
 afterAll(() => {
@@ -44,4 +47,18 @@ it('reports a warning when global daily usage reaches 80 percent', () => {
   recordBudgetUsage('openai', 'gpt-4o', { totalTokens: 80 });
   expect(getBudgetSummary().utilization.tokens).toBeCloseTo(0.8);
   expect(getBudgetSummary().warnings).toContain('Global daily token budget is at or above 80%.');
+});
+
+
+it('permits one continuation after an explicit HIL approval', () => {
+  process.env.BUDGET_USER_MAX_TOKENS = '1';
+  process.env.HIL_ENABLED = 'true';
+  process.env.BUDGET_HIL_OVERRIDE = 'true';
+  recordBudgetUsage('openai', 'gpt-4o', { totalTokens: 1 }, { personId: 'person_hil' });
+  expect(() => assertBudgetAvailable({ personId: 'person_hil' })).toThrow(BudgetExceededError);
+  const request = listApprovalRequests('pending').find((item) => item.skillName === 'budgetOverride');
+  expect(request).toBeDefined();
+  expect(resolveApprovalRequest(request!.id, 'approved')).toBe(true);
+  expect(() => assertBudgetAvailable({ personId: 'person_hil' })).not.toThrow();
+  expect(() => assertBudgetAvailable({ personId: 'person_hil' })).toThrow(BudgetExceededError);
 });
