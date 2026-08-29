@@ -113,17 +113,35 @@ export function recordBudgetUsage(provider: string, model: string, tokens: Token
   add(scopeKey('task', context.taskId), entry);
 }
 
-export function getBudgetSummary(): { global: Usage; limits: Record<string, number | undefined> } {
+export function getBudgetSummary(): {
+  global: Usage;
+  limits: Record<string, number | undefined>;
+  utilization: { tokens?: number; costUsd?: number };
+  warnings: string[];
+} {
+  const global = getUsage(`${dayKey()}:global`);
+  const maxTokens = limit('BUDGET_MAX_TOKENS');
+  const maxCostUsd = limit('BUDGET_MAX_COST_USD');
+  const utilization = {
+    tokens: maxTokens ? global.tokens / maxTokens : undefined,
+    costUsd: maxCostUsd ? global.costUsd / maxCostUsd : undefined,
+  };
+  const warnings = [
+    utilization.tokens !== undefined && utilization.tokens >= 0.8 ? 'Global daily token budget is at or above 80%.' : undefined,
+    utilization.costUsd !== undefined && utilization.costUsd >= 0.8 ? 'Global daily cost budget is at or above 80%.' : undefined,
+  ].filter((warning): warning is string => Boolean(warning));
   return {
-    global: getUsage(`${dayKey()}:global`),
+    global,
     limits: {
-      maxTokens: limit('BUDGET_MAX_TOKENS'),
-      maxCostUsd: limit('BUDGET_MAX_COST_USD'),
+      maxTokens,
+      maxCostUsd,
       userMaxTokens: limit('BUDGET_USER_MAX_TOKENS'),
       userMaxCostUsd: limit('BUDGET_USER_MAX_COST_USD'),
       taskMaxTokens: limit('BUDGET_TASK_MAX_TOKENS'),
       taskMaxCostUsd: limit('BUDGET_TASK_MAX_COST_USD'),
     },
+    utilization,
+    warnings,
   };
 }
 
