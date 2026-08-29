@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 export type SlackEventType = 'url_verification' | 'message' | 'app_mention' | 'unsupported';
 
 export interface SlackEventEnvelope {
@@ -54,4 +56,20 @@ export function normalizeSlackEvent(payload: SlackEventEnvelope): NormalizedSlac
     channelKey: userId ? slackChannelKey(userId) : undefined,
     shouldRespond: Boolean(userId && channelId && event.text),
   };
+}
+
+
+export function validateSlackSignature(
+  rawBody: string,
+  timestamp: string | null,
+  signature: string | null,
+  secret: string,
+  now = Date.now(),
+): boolean {
+  if (!timestamp || !signature || !secret || !/^\\d+$/.test(timestamp)) return false;
+  if (Math.abs(now - Number(timestamp) * 1000) > 5 * 60 * 1000) return false;
+  const expected = 'v0=' + createHmac('sha256', secret).update('v0:' + timestamp + ':' + rawBody).digest('hex');
+  const supplied = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  return supplied.length === expectedBuffer.length && timingSafeEqual(supplied, expectedBuffer);
 }
