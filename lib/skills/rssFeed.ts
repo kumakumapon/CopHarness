@@ -1,5 +1,6 @@
 import { type SkillDefinition } from '../skill';
 import { parseRss, type RssItem } from './techNews';
+import { safeFetch } from '../utils/urlGuard';
 
 /**
  * RSS feed reader skill.
@@ -17,7 +18,7 @@ async function fetchRssFeed(url: string, sourceName: string): Promise<RssItem[]>
   const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await safeFetch(url, {
       signal: controller.signal,
       headers: { 'User-Agent': 'CopHarness/1.0 (RSS reader)' },
     });

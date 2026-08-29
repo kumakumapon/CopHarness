@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 export type SlackEventType = 'url_verification' | 'message' | 'app_mention' | 'unsupported';
 
 export interface SlackEventEnvelope {
@@ -12,6 +14,7 @@ export interface SlackEventEnvelope {
     ts?: string;
     thread_ts?: string;
     bot_id?: string;
+    files?: Array<{ url_private_download?: string; url_private?: string; mimetype?: string; size?: number }>;
   };
 }
 
@@ -24,6 +27,7 @@ export interface NormalizedSlackEvent {
   text?: string;
   channelKey?: string;
   shouldRespond: boolean;
+  files?: Array<{ url: string; mimeType: string; size?: number }>;
 }
 
 function slackChannelKey(userId: string): string {
@@ -52,6 +56,26 @@ export function normalizeSlackEvent(payload: SlackEventEnvelope): NormalizedSlac
     threadKey: channelId && timestamp ? `slack:${channelId}:${timestamp}` : undefined,
     text: event.text,
     channelKey: userId ? slackChannelKey(userId) : undefined,
+    files: (event.files ?? []).flatMap((file) => {
+      const url = file.url_private_download ?? file.url_private;
+      return url && file.mimetype ? [{ url, mimeType: file.mimetype, size: file.size }] : [];
+    }),
     shouldRespond: Boolean(userId && channelId && event.text),
   };
+}
+
+
+export function validateSlackSignature(
+  rawBody: string,
+  timestamp: string | null,
+  signature: string | null,
+  secret: string,
+  now = Date.now(),
+): boolean {
+  if (!timestamp || !signature || !secret || !/^\d+$/.test(timestamp)) return false;
+  if (Math.abs(now - Number(timestamp) * 1000) > 5 * 60 * 1000) return false;
+  const expected = 'v0=' + createHmac('sha256', secret).update('v0:' + timestamp + ':' + rawBody).digest('hex');
+  const supplied = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  return supplied.length === expectedBuffer.length && timingSafeEqual(supplied, expectedBuffer);
 }
