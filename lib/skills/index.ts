@@ -17,7 +17,7 @@ import { jsonFormat } from './jsonFormat';
 import { hashText } from './hashText';
 import { regexMatch } from './regexMatch';
 import { textStats } from './textStats';
-import { generatePassword } from './generatePassword';
+import { credentialGeneratorSkill } from './generatePassword';
 import { csvParse } from './csvParse';
 
 // Phase 2: file
@@ -93,7 +93,7 @@ const allSkills = [
   hashText,
   regexMatch,
   textStats,
-  generatePassword,
+  credentialGeneratorSkill,
   csvParse,
   readFile,
   writeFile,

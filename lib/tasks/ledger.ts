@@ -50,7 +50,7 @@ function ledgerFilePath(): string {
 }
 
 function emptyLedger(): TaskLedgerFile {
-  return { tasks: {}, order: [] };
+  return { tasks: Object.create(null) as Record<string, TaskRecord>, order: [] };
 }
 
 function getLedger(): TaskLedgerFile {
@@ -63,7 +63,9 @@ function getLedger(): TaskLedgerFile {
 
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<TaskLedgerFile>;
-    const tasks = parsed.tasks && typeof parsed.tasks === 'object' ? parsed.tasks : {};
+    // Never inherit Object.prototype through externally supplied task IDs.
+    const tasks: Record<string, TaskRecord> = Object.assign(Object.create(null),
+      parsed.tasks && typeof parsed.tasks === 'object' ? parsed.tasks : {});
     const order = Array.isArray(parsed.order) ? parsed.order.filter((id) => typeof id === 'string' && tasks[id]) : Object.keys(tasks);
     _ledger = { tasks, order };
   } catch {
@@ -140,6 +142,7 @@ export async function finishTask(
   error?: unknown,
 ): Promise<TaskRecord | undefined> {
   const ledger = getLedger();
+  if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
   const task = ledger.tasks[id];
   if (!task) return undefined;
   const now = new Date().toISOString();
@@ -155,7 +158,9 @@ export async function finishTask(
 }
 
 export function getTask(id: string): TaskRecord | undefined {
-  const task = getLedger().tasks[id];
+  const tasks = getLedger().tasks;
+  if (!Object.prototype.hasOwnProperty.call(tasks, id)) return undefined;
+  const task = tasks[id];
   return task ? { ...task, metadata: task.metadata ? { ...task.metadata } : undefined } : undefined;
 }
 
@@ -164,6 +169,7 @@ export async function updateTaskMetadata(
   patch: Record<string, unknown>,
 ): Promise<TaskRecord | undefined> {
   const ledger = getLedger();
+  if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
   const task = ledger.tasks[id];
   if (!task) return undefined;
   const now = new Date().toISOString();
