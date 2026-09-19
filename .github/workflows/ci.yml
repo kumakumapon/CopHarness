@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    name: Lint & Test
+    name: Lint, types, tests, mock evaluation & build
     runs-on: ubuntu-latest
 
     steps:
@@ -31,3 +31,12 @@ jobs:
 
       - name: Run all tests
         run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Deterministic agent evaluation
+        run: npm run eval:mock
+
+      - name: Production build
+        run: npm run build

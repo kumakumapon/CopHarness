@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../lib/skill';
 import { requireApiKey } from '../../../lib/apiAuth';
@@ -21,17 +21,9 @@ export async function POST(req: NextRequest) {
   const rl = defaultRateLimiter.consume(resolveRateLimitKey(req));
   if (!rl.allowed) return rateLimitResponse(rl);
 
-  // プロバイダ自動判定
-  const provider = resolveProvider();
-  // Copilot, OpenAI, Anthropic などで環境変数名が異なるため柔軟に取得
-  const localProviders = ['lmstudio', 'lemonade'];
-  const apiKey = process.env.COPILOT_PROVIDER_API_KEY || process.env.COPILOT_API_KEY || process.env.GITHUB_COPILOT_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey && !localProviders.includes(provider)) {
-    return NextResponse.json(
-      { error: 'Missing API key (COPILOT_PROVIDER_API_KEY, OPENAI_API_KEY, etc)' },
-      { status: 401 }
-    );
-  }
+  const config = resolveRuntimeConfig();
+  const { provider, model, apiKey } = config;
+  if (!config.configured) return NextResponse.json({ error: 'Missing API key for selected provider. Run npm run doctor.' }, { status: 401 });
 
   let body: { messages?: LLMMessage[]; attachments?: LLMAttachment[]; timeoutMs?: number; skills?: string[]; subject?: string; displayName?: string; taskId?: string }
   try {
@@ -50,7 +42,6 @@ export async function POST(req: NextRequest) {
 
   try {
     // モデル名は環境変数またはデフォルト
-    const model = resolveModel(provider);
     const defaultTimeout = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
     // Cap user-supplied timeoutMs to the server default to prevent resource exhaustion.
     const timeoutMs =

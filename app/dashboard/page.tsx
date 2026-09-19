@@ -177,7 +177,7 @@ interface SkillExecutionFilters {
 interface DashboardTask {
   id: string;
   kind: string;
-  status: 'running' | 'succeeded' | 'failed' | 'cancelled';
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'iteration_limit' | 'stalled' | 'waiting_input';
   personId?: string;
   channelKey?: string;
   conversationKey?: string;
@@ -222,7 +222,7 @@ interface TasksData {
 }
 
 interface TaskFilters {
-  status: '' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  status: '' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'iteration_limit' | 'stalled' | 'waiting_input';
   kindQuery: string;
   personQuery: string;
   channelQuery: string;
@@ -1543,6 +1543,9 @@ const TASK_STATUS_STYLES: Record<string, { bg: string; text: string; label: stri
   running: { bg: 'bg-blue-100', text: 'text-blue-700', label: '実行中' },
   succeeded: { bg: 'bg-green-100', text: 'text-green-700', label: '成功' },
   failed: { bg: 'bg-red-100', text: 'text-red-700', label: '失敗' },
+  iteration_limit: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '反復上限' },
+  stalled: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '応答停止' },
+  waiting_input: { bg: 'bg-blue-100', text: 'text-blue-700', label: '回答待ち' },
   cancelled: { bg: 'bg-gray-100', text: 'text-gray-600', label: '取消' },
 };
 
@@ -1772,6 +1775,9 @@ function TasksPanel({
                 <option value="succeeded">成功</option>
                 <option value="failed">失敗</option>
                 <option value="cancelled">取消</option>
+                <option value="iteration_limit">反復上限</option>
+                <option value="stalled">応答停止</option>
+                <option value="waiting_input">回答待ち</option>
               </select>
             </label>
             <label className="flex flex-col gap-1" style={{ color: 'var(--text-secondary)' }}>

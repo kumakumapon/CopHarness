@@ -36,7 +36,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapterWithFallback, resolveProvider, resolveModel, resolveApiKey } from '../lib/adapterFactory';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/adapterFactory';
 import { type LLMAdapter, type LLMMessage, type ProviderType } from '../lib/adapter';
 import {
   saveConversation,
@@ -46,10 +46,13 @@ import {
 } from '../lib/history/conversationPersistence';
 import '../lib/skills/index';
 import { listActiveSkills } from '../lib/skill';
-import { runAgentLoop, type AgentLoopCallbacks, type AgentLoopResult } from '../lib/agents/agentLoop';
+import { type AgentLoopCallbacks, type AgentLoopResult } from '../lib/agents/agentLoop';
 import { compactMessages, estimateConversationTokens } from '../lib/context/compactor';
 
-const LOCAL_PROVIDERS: ProviderType[] = ['copilot', 'lmstudio', 'lemonade'];
+import { acquireAgentSession, loadAgentSession, listAgentSessions, newAgentSessionId, runAgentSession, validateResume } from '../lib/agents/sessions';
+import { startTask, finishTask, updateTaskMetadata } from '../lib/tasks/ledger';
+import { withSkillExecutionContext } from '../lib/skills/executionContext';
+import { getExecutionBackend } from '../lib/execution';
 
 function buildAdapter(provider: ProviderType, model: string, apiKey: string | undefined): LLMAdapter {
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
@@ -71,6 +74,8 @@ function printHelp(): void {
   console.log(`
 Available commands:
   /agent <goal>       Run the agent loop toward a specific goal
+  /resume <id> [answer] Resume a saved agent session (answer a pending question)
+  /sessions           List saved agent sessions
   /skills             List available skills with names and risk levels
   /model <name>       Switch to a different model mid-session
   /provider <name>    Switch to a different provider mid-session
@@ -83,6 +88,7 @@ Available commands:
   /delete <id>        Delete a saved conversation
   /autosave           Toggle auto-save after each exchange
   /help               Show this help message
+  End a line with \\ for multiline input; Tab completes commands.
   exit / quit         Exit the CLI (auto-saves if there are messages)
 `);
 }
@@ -109,6 +115,10 @@ async function runAgentMode(
   adapter: LLMAdapter,
   rl: readline.Interface,
   abortController: AbortController,
+  context: LLMMessage[],
+  sessionId = newAgentSessionId(),
+  resume = false,
+  answer?: string,
 ): Promise<AgentLoopResult> {
   const skills = listActiveSkills();
   const systemPrompt = process.env.COPILOT_SYSTEM_PROMPT || undefined;
@@ -137,50 +147,47 @@ async function runAgentMode(
     onCompaction(beforeTokens, afterTokens) {
       console.log(`  📦 Context compacted: ${beforeTokens} → ${afterTokens} tokens`);
     },
-    async onRequestInput(question) {
-      return new Promise((resolve) => {
-        rl.question(`  ❓ ${question}\nYou: `, (answer) => {
-          resolve(answer.trim());
-        });
-      });
-    },
   };
 
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
 
-  return runAgentLoop({
-    goal,
-    adapter,
-    skills,
-    systemPrompt,
-    maxIterations: Number(process.env.AGENT_MAX_ITERATIONS) || 25,
-    timeoutMs,
-    callbacks,
-    abortSignal: abortController.signal,
-  });
+  getExecutionBackend();
+  const release = acquireAgentSession(sessionId);
+  console.log('Session ID: ' + sessionId);
+  let started = false;
+  try {
+    if (resume) {
+      const saved = loadAgentSession(sessionId);
+      if (!saved) throw new Error('Session not found');
+      validateResume(saved, 'cli', answer);
+    }
+    await startTask({ id: sessionId, kind: 'agent', channelKey: 'cli', title: goal.slice(0, 120), metadata: { sessionId } });
+    started = true;
+    const result = await withSkillExecutionContext({ taskId: sessionId, channelKey: 'cli' }, () => runAgentSession({
+      goal, adapter, skills, systemPrompt, sessionId, owner: 'cli', resume, answer,
+      messages: resume ? undefined : [{ role: 'system', content: systemPrompt || 'Work toward the goal using tools. Use markComplete only for success, markFailed if impossible, and requestUserInput when information is missing.' }, ...context, { role: 'user', content: goal }],
+      maxIterations: Number(process.env.AGENT_MAX_ITERATIONS) || 25,
+      timeoutMs, callbacks, abortSignal: abortController.signal,
+    }));
+    await updateTaskMetadata(sessionId, { stopReason: result.stopReason, sessionId, pendingQuestion: result.pendingQuestion, summary: result.summary });
+    await finishTask(sessionId, result.stopReason, result.error);
+    if (result.pendingQuestion) console.log('Question: ' + result.pendingQuestion);
+    if (!result.completed) console.log('Continue: /resume ' + sessionId + ' [answer or instruction]');
+    return result;
+  } catch (err) {
+    if (started) await finishTask(sessionId, abortController.signal.aborted ? 'cancelled' : 'failed', err);
+    throw err;
+  } finally { release(); }
 }
 
 async function main() {
-  let provider = resolveProvider();
-  let apiKey = resolveApiKey(provider) ??
-    process.env.COPILOT_PROVIDER_API_KEY ??
-    process.env.COPILOT_API_KEY ??
-    process.env.GITHUB_COPILOT_API_KEY ??
-    process.env.OPENAI_API_KEY ??
-    process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey && !LOCAL_PROVIDERS.includes(provider)) {
-    console.error(
-      'Error: No API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY',
-    );
-    process.exit(1);
-  }
-
-  let model = resolveModel(provider);
+  const config = resolveRuntimeConfig();
+  if (!config.configured) throw new Error('Missing provider API key. Run npm run doctor.');
+  let { provider, apiKey, model } = config;
   let adapter = buildAdapter(provider, model, apiKey);
 
   console.log(`CopHarness Agent CLI — provider: ${provider}, model: ${model}`);
-  console.log('Commands: /agent, /skills, /model, /provider, /compact, /clear, /save, /load, /conversations, /delete, /autosave, /help');
+  console.log('Commands: /agent, /resume, /sessions, /skills, /model, /provider, /compact, /clear, /save, /load, /conversations, /delete, /autosave, /help');
   console.log('Type your message or use a command. Type "exit" to quit.\n');
 
   const messages: LLMMessage[] = [];
@@ -193,7 +200,9 @@ async function main() {
   let autosaveEnabled = false;
   let currentConvId: string | undefined;
 
+  const commands = ['/agent', '/resume', '/sessions', '/skills', '/model', '/provider', '/compact', '/clear', '/save', '/load', '/conversations', '/autosave', '/help'];
   const rl = readline.createInterface({
+    completer: (line: string) => [commands.filter(command => command.startsWith(line)), line],
     input: process.stdin,
     output: process.stdout,
     terminal: true,
@@ -202,7 +211,7 @@ async function main() {
   let agentAbortController: AbortController | null = null;
   let sigintCount = 0;
 
-  process.on('SIGINT', () => {
+  const onInterrupt = () => {
     if (agentAbortController) {
       sigintCount++;
       if (sigintCount === 1) {
@@ -218,11 +227,20 @@ async function main() {
       rl.close();
       process.exit(0);
     }
-  });
+  };
+  process.on('SIGINT', onInterrupt);
+  rl.on('SIGINT', onInterrupt);
 
+  const inputLines: string[] = [];
   const ask = () => {
-    rl.question('You: ', async (input) => {
-      const trimmed = input.trim();
+    rl.question(inputLines.length ? '... ' : 'You: ', async (input) => {
+      if (input.endsWith('\\')) {
+        inputLines.push(input.slice(0, -1));
+        ask();
+        return;
+      }
+      const trimmed = [...inputLines, input].join('\n').trim();
+      inputLines.length = 0;
       if (!trimmed) {
         ask();
         return;
@@ -307,35 +325,51 @@ async function main() {
               if (!validProviders.includes(newProvider)) {
                 console.error(`Unknown provider: ${rest}. Valid: ${validProviders.join(', ')}\n`);
               } else {
-                const oldAdapter = adapter;
-                provider = newProvider;
-                apiKey = resolveApiKey(provider) ??
-                  process.env.COPILOT_PROVIDER_API_KEY ??
-                  process.env.COPILOT_API_KEY;
-                model = resolveModel(provider);
-                adapter = buildAdapter(provider, model, apiKey);
-                console.log(`Switched provider to: ${provider}, model: ${model}\n`);
-                if (oldAdapter.destroy) await oldAdapter.destroy();
+                const nextConfig = resolveRuntimeConfig(newProvider);
+                if (!nextConfig.configured) {
+                  console.error('Missing API key for ' + newProvider + '. Run npm run doctor.');
+                  break;
+                }
+                try {
+                  const nextAdapter = buildAdapter(nextConfig.provider, nextConfig.model, nextConfig.apiKey);
+                  const oldAdapter = adapter;
+                  ({ provider, model, apiKey } = nextConfig);
+                  adapter = nextAdapter;
+                  console.log('Switched provider to: ' + provider + ', model: ' + model);
+                  await oldAdapter.destroy?.();
+                } catch (err) { console.error('Provider switch failed: ' + (err instanceof Error ? err.message : String(err))); }
               }
             }
             break;
           }
 
+          case '/sessions': {
+            for (const session of listAgentSessions('cli')) console.log(session.id + ' [' + session.status + '] ' + session.goal);
+            break;
+          }
+          case '/resume':
           case '/agent': {
             if (!rest) {
-              console.log('Usage: /agent <goal>\n');
+              console.log(command === '/resume' ? 'Usage: /resume <id> [answer or instruction]\n' : 'Usage: /agent <goal>\n');
               break;
             }
             console.log(`\nStarting agent loop for goal: "${rest}"\n`);
             agentAbortController = new AbortController();
             sigintCount = 0;
             try {
-              const result = await runAgentMode(rest, adapter, rl, agentAbortController);
-              if (result.completed && result.summary) {
+              const resuming = command === '/resume';
+              const [id, ...words] = rest.split(/\s+/);
+              const saved = resuming ? loadAgentSession(id) : undefined;
+              if (resuming && (!saved || saved.owner !== 'cli')) throw new Error('Session not found');
+              const result = await runAgentMode(saved?.goal ?? rest, adapter, rl, agentAbortController, messages, resuming ? id : undefined, resuming, words.join(' '));
+              messages.push({ role: 'user', content: resuming ? 'Resume: ' + rest : rest },
+                { role: 'assistant', content: '[' + result.stopReason + '] ' + (result.summary ?? result.content) });
+              if (autosaveEnabled) currentConvId = saveConversation(messages, provider, model, currentConvId);
+              if (result.completed) {
                 console.log(`\n✅ Agent completed in ${result.iterations} iterations (${(result.durationMs / 1000).toFixed(1)}s, ${result.toolCallCount} tool calls)`);
                 console.log(`Summary: ${result.summary}\n`);
               } else if (!result.completed) {
-                const reason = agentAbortController.signal.aborted ? 'aborted by user' : 'reached iteration limit';
+                const reason = result.stopReason + (result.error ? ': ' + result.error : '');
                 console.log(`\n⚠️  Agent stopped (${reason}) after ${result.iterations} iterations\n`);
               }
             } catch (err) {

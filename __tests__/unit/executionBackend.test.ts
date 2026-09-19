@@ -768,12 +768,8 @@ describe('getExecutionBackend (factory)', () => {
     expect(b.kind).toBe('ssh');
   });
 
-  it('falls back to local on unknown backend value and warns', () => {
+  it('rejects unknown backend rather than executing locally', () => {
     process.env.EXECUTION_BACKEND = 'kubernetes';
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const b = getExecutionBackend();
-    expect(b.kind).toBe('local');
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('kubernetes'));
-    warnSpy.mockRestore();
+    expect(() => getExecutionBackend()).toThrow('Invalid EXECUTION_BACKEND');
   });
 });

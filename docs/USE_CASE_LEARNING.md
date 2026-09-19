@@ -6,7 +6,7 @@ CopHarness は CLI、HTTP API、Discord / LINE Bot、ダッシュボード、ス
 
 | レイヤー | できること | 最初に触る場所 |
 | --- | --- | --- |
-| 対話 | CLI、Discord、LINE、HTTP API から LLM と会話する | `npm run cli`、`/api/copilot` |
+| 対話 | CLI、Discord、LINE、HTTP API から LLM と会話する | `npm run agent-cli`、`/api/copilot` |
 | 自動化 | cron スケジュールやイベント監視でプロンプトを実行する | `/dashboard` のスケジューラー / ウォッチャー |
 | 拡張 | スキルでファイル、検索、通知、計算などを呼び出す | `docs/SKILLS_GUIDE.md`、`/dashboard` のスキル一覧 |
 | 運用 | ログ、コスト、トークン、承認待ちを確認する | `/dashboard` のログ / コスト / 承認 |
@@ -19,7 +19,7 @@ CopHarness は CLI、HTTP API、Discord / LINE Bot、ダッシュボード、ス
 1. `.env.example` を `.env.local` にコピーします。
 2. OpenAI、Anthropic、Gemini、Copilot、LM Studio など、利用するプロバイダのキーまたは URL を 1 つ設定します。
 3. `npm install` を実行します。
-4. `npm run cli` で CLI を起動します。
+4. `npm run agent-cli` で CLI を起動します。
 5. 「このリポジトリの使い方を 3 行で説明して」と入力し、応答を確認します。
 
 **確認ポイント:**

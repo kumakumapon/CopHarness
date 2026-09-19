@@ -72,7 +72,7 @@ npm install
 ## CLI（対話型コマンドライン）
 
 ```bash
-npm run cli
+npm run agent-cli
 ```
 
 起動すると `You:` プロンプトが表示されます。メッセージを入力して Enter を押すと LLM の返答が表示されます。会話履歴は同一セッション中は保持されます。
@@ -95,7 +95,7 @@ Goodbye!
 | `COPILOT_MODEL` | 使用するモデル名（全プロバイダ共通） | `gpt-5-mini` |
 | `OPENAI_MODEL` | OpenAI 用モデル名（`COPILOT_MODEL` より優先度低） | （なし） |
 | `ANTHROPIC_MODEL` | Anthropic 用モデル名 | （なし） |
-| `GEMINI_MODEL` | Gemini 用モデル名 | `gemini-1.5-pro` |
+| `ANTIGRAVITY_MODEL` | Gemini 用モデル名（`GEMINI_MODEL` も別名として利用可能） | `gemini-2.0-flash` |
 | `LMSTUDIO_MODEL` | LM Studio 用モデル名 | （ロード済みモデル） |
 | `LEMONADE_MODEL` | Lemonade Server 用モデル名 | （なし） |
 | `COPILOT_TIMEOUT_MS` | LLM タイムアウト（ミリ秒） | `120000` |
@@ -341,7 +341,7 @@ npm run schedule run
 
 ### スキルの有効/無効設定
 
-`ENABLED_SKILLS` 環境変数（カンマ区切りのスキル名）を設定すると、そのスキルのみが利用可能になります。未設定時は全スキルが有効です。
+`ENABLED_SKILLS` 環境変数（カンマ区切りのスキル名）を設定すると、そのスキルのみが利用可能になります。未設定時はリスクが low のスキルのみ有効です。書き込み・通知などは必要なスキルを明示的に有効化してください。
 
 ```env
 # 例: 特定スキルのみ有効にする
@@ -856,3 +856,10 @@ LLM-supplied URLs used by `fetchUrl`, `rssFeed`, and RSS watchers are restricted
 ## LLM budgets
 
 Set `BUDGET_MAX_TOKENS` / `BUDGET_MAX_COST_USD` for global daily limits, and the corresponding `BUDGET_USER_*` and `BUDGET_TASK_*` variables for scoped limits. The adapter blocks further requests once an applicable limit is exhausted. `GET /api/dashboard/budgets` reports daily usage, utilization, and 80% warnings.
+
+### 設定診断とエージェントの再開
+
+`npm run doctor` で設定と保存先を確認し、`npm run agent-cli` の `/agent` で実行します。
+`/sessions` で保存済みの実行を確認し、`/resume <id> [回答]` で再開できます。
+追加質問・中断・API エラー・反復上限は異なる終了状態として CLI、SSE、管理画面に表示されます。
+詳細は [診断・終了状態・復旧ガイド](docs/AGENT_RECOVERY.md) を参照してください。

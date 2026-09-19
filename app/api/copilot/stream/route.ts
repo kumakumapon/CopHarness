@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../../lib/adapterFactory';
 import { type LLMMessage, type LLMAttachment } from '../../../../lib/adapter';
 import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
 import { requireApiKey } from '../../../../lib/apiAuth';
@@ -18,17 +18,9 @@ export async function POST(req: NextRequest) {
   const rl = defaultRateLimiter.consume(resolveRateLimitKey(req));
   if (!rl.allowed) return rateLimitResponse(rl);
 
-  const provider = resolveProvider();
-  const localProviders = ['lmstudio', 'lemonade'];
-  const apiKey =
-    process.env.COPILOT_PROVIDER_API_KEY ||
-    process.env.COPILOT_API_KEY ||
-    process.env.GITHUB_COPILOT_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    process.env.ANTHROPIC_API_KEY;
-  if (!apiKey && !localProviders.includes(provider)) {
-    return new Response(JSON.stringify({ error: 'Missing API key' }), { status: 401 });
-  }
+  const config = resolveRuntimeConfig();
+  const { provider, model, apiKey } = config;
+  if (!config.configured) return Response.json({ error: 'Missing API key for selected provider. Run npm run doctor.' }, { status: 401 });
 
   let body: {
     messages?: LLMMessage[];
@@ -52,7 +44,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const model = resolveModel(provider);
   const defaultTimeout = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
   const timeoutMs =
     body.timeoutMs != null

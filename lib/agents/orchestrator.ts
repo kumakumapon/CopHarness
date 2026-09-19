@@ -118,7 +118,7 @@ export async function runAgentTask(task: AgentTask): Promise<AgentResult> {
         completed: loopResult.completed,
       });
 
-      await finishTask(taskRecord.id, 'succeeded');
+      await finishTask(taskRecord.id, loopResult.stopReason, loopResult.completed ? undefined : loopResult.stopReason);
       return {
         taskId: taskRecord.id,
         role: roleName,

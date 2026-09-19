@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireApiKey } from '../../../../lib/apiAuth';
 import { queryTasks, type TaskStatus } from '../../../../lib/tasks/ledger';
 
-const VALID_STATUSES = new Set<TaskStatus>(['running', 'succeeded', 'failed', 'cancelled']);
+const VALID_STATUSES = new Set<TaskStatus>(['running', 'succeeded', 'failed', 'cancelled', 'iteration_limit', 'stalled', 'waiting_input']);
 
 function optionalParam(url: URL, name: string): string | undefined {
   const value = url.searchParams.get(name)?.trim();

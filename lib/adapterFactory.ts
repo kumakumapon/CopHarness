@@ -83,7 +83,7 @@ export function resolveModel(provider?: ProviderType): string {
     case 'lmstudio':  return process.env.LMSTUDIO_MODEL  || 'gpt-5-mini';
     case 'openai':    return process.env.OPENAI_MODEL    || 'gpt-5-mini';
     case 'anthropic': return process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
-    case 'antigravity': return process.env.ANTIGRAVITY_MODEL || 'gemini-2.0-flash';
+    case 'antigravity': return process.env.ANTIGRAVITY_MODEL || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
     default:          return 'gpt-5-mini';
   }
 }
@@ -174,4 +174,13 @@ export function resolveProvider(): ProviderType {
   const byokKey = process.env.COPILOT_PROVIDER_API_KEY ?? process.env.COPILOT_API_KEY ?? '';
   if (byokKey) return 'openai';
   return 'copilot';
+}
+
+/** Shared configuration for CLI, HTTP and diagnostics; never mixes provider keys. */
+export function resolveRuntimeConfig(provider = resolveProvider(), model = resolveModel(provider)) {
+  const apiKey = resolveApiKey(provider);
+  const requiresApiKey = !['copilot', 'lmstudio', 'lemonade'].includes(provider);
+  const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
+  return { provider, model, apiKey, timeoutMs, requiresApiKey,
+    configured: !requiresApiKey || Boolean(apiKey) };
 }

@@ -93,8 +93,8 @@ describe('runAgentLoop – immediate completion', () => {
 
     expect(result.completed).toBe(true);
     expect(result.summary).toBe('Done on first try');
-    // markComplete was invoked before the loop incremented; iteration counter stays at 0
-    expect(result.iterations).toBe(0);
+    expect(result.iterations).toBe(1);
+    expect(result.stopReason).toBe('succeeded');
     expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
   });
 });
@@ -124,8 +124,7 @@ describe('runAgentLoop – loops until markComplete', () => {
 
     expect(result.completed).toBe(true);
     expect(result.summary).toBe('Finished after looping');
-    // The loop counter incremented once before the second adapter call
-    expect(result.iterations).toBe(1);
+    expect(result.iterations).toBe(2);
   });
 });
 
@@ -377,7 +376,7 @@ describe('runAgentLoop – requestUserInput', () => {
     // No callbacks.onRequestInput provided
     await runAgentLoop(makeBaseOptions({ adapter }));
 
-    expect(capturedSkillResult).toBe('User input not available in this mode.');
+    expect(capturedSkillResult).toBe('Waiting for user input. Stop calling tools.');
   });
 });
 

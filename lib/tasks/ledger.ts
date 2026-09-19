@@ -11,10 +11,10 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
-import { indexTaskRecord } from '../search/index';
+import { indexTaskRecord, _resetSearchIndexForTests } from '../search/index';
 
 export type TaskKind = 'conversation' | 'api' | 'wizard' | 'schedule' | 'agent' | string;
-export type TaskStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type TaskStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'iteration_limit' | 'stalled' | 'waiting_input';
 
 export interface TaskRecord {
   id: string;
@@ -243,6 +243,8 @@ export function listTasks(limit = 50): TaskRecord[] {
 
 /** Test helper: clear in-memory state so env-controlled file paths are re-read. */
 export function _resetTaskLedgerForTests(): void {
+  // The ledger opens the search index indirectly; close it before tests remove DATA_DIR.
+  if (typeof _resetSearchIndexForTests === 'function') _resetSearchIndexForTests();
   _ledger = null;
   _writeQueue = Promise.resolve();
 }

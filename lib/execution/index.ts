@@ -23,7 +23,7 @@ let _cachedBackend: ExecutionBackend | null = null;
 /**
  * Return the singleton ExecutionBackend instance.
  * The backend is selected based on the EXECUTION_BACKEND environment variable.
- * An unknown value causes a warning and falls back to local.
+ * An unknown value is a configuration error; never silently run locally.
  */
 export function getExecutionBackend(): ExecutionBackend {
   if (_cachedBackend !== null) return _cachedBackend;
@@ -41,11 +41,7 @@ export function getExecutionBackend(): ExecutionBackend {
       _cachedBackend = createSshBackend();
       break;
     default:
-      console.warn(
-        `[ExecutionBackend] Unknown EXECUTION_BACKEND value "${kind}". Falling back to "local".`,
-      );
-      _cachedBackend = new LocalBackend();
-      break;
+      throw new Error('Invalid EXECUTION_BACKEND. Use local, docker or ssh.');
   }
 
   return _cachedBackend;

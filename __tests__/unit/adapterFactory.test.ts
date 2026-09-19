@@ -83,7 +83,7 @@ jest.mock('../../lib/cache/cachedAdapter', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { resolveProvider, resolveModel, createAdapter, createAdapterWithFallback, resolveApiKey } from '../../lib/adapterFactory';
+import { resolveProvider, resolveModel, createAdapter, createAdapterWithFallback, resolveApiKey, resolveRuntimeConfig } from '../../lib/adapterFactory';
 import { CopilotAdapter } from '../../lib/adapters/copilotAdapter';
 import { OpenAIAdapter } from '../../lib/adapters/openaiAdapter';
 import { AnthropicAdapter } from '../../lib/adapters/anthropicAdapter';
@@ -107,6 +107,7 @@ const ALL_PROVIDER_VARS = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_MODEL',
   'GEMINI_API_KEY',
+  'GEMINI_MODEL',
   'LMSTUDIO_BASE_URL',
   'LMSTUDIO_MODEL',
   'LEMONADE_BASE_URL',
@@ -442,5 +443,23 @@ describe('createAdapterWithFallback()', () => {
     createAdapterWithFallback({ provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' });
     expect(OpenAIAdapter).toHaveBeenCalledTimes(1);
     expect(AnthropicAdapter).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('shared runtime configuration', () => {
+  it('uses Gemini-only credentials and its model alias', () => {
+    process.env.GEMINI_API_KEY = 'gemini-test'; process.env.GEMINI_MODEL = 'gemini-test-model';
+    expect(resolveRuntimeConfig()).toMatchObject({ provider: 'antigravity', model: 'gemini-test-model', apiKey: 'gemini-test', configured: true });
+  });
+  it('does not leak an unrelated provider key when several are configured', () => {
+    process.env.COPILOT_PROVIDER = 'anthropic'; process.env.OPENAI_API_KEY = 'openai-test'; process.env.GEMINI_API_KEY = 'gemini-test';
+    expect(resolveRuntimeConfig()).toMatchObject({ provider: 'anthropic', configured: false });
+    expect(resolveRuntimeConfig().apiKey).toBeUndefined();
+    process.env.ANTHROPIC_API_KEY = 'anthropic-test';
+    expect(resolveRuntimeConfig().apiKey).toBe('anthropic-test');
+  });
+  it.each(['copilot', 'lmstudio', 'lemonade'])('allows %s without a cloud API key', provider => {
+    process.env.COPILOT_PROVIDER = provider;
+    expect(resolveRuntimeConfig()).toMatchObject({ provider, configured: true, requiresApiKey: false });
   });
 });
