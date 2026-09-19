@@ -6,13 +6,16 @@
     "dev": "concurrently --names \"next,discord\" --prefix-colors \"cyan,magenta\" \"next dev\" \"node scripts/run-discord-maybe.js\"",
     "build": "next build",
     "start": "concurrently --names \"next,discord\" --prefix-colors \"cyan,magenta\" \"next start\" \"node scripts/run-discord-maybe.js\"",
-    "lint": "next lint",
+    "lint": "eslint . --ext .js,.ts,.tsx",
     "test": "jest",
     "cli": "tsx scripts/cli.ts",
     "agent-cli": "tsx scripts/agentCli.ts",
     "discord": "tsx discord/bot.ts",
     "schedule": "tsx scripts/schedule.ts",
-    "eval": "tsx scripts/eval.ts"
+    "eval": "tsx scripts/eval.ts",
+    "typecheck": "tsc --noEmit",
+    "doctor": "tsx scripts/doctor.ts",
+    "eval:mock": "tsx scripts/evalMock.ts"
   },
   "dependencies": {
     "@github/copilot-sdk": "^0.2.2",
@@ -29,10 +32,12 @@
     "swr": "^2.4.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@types/jest": "^29.5.14",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
     "autoprefixer": "^10",
     "concurrently": "^10.0.0",
     "eslint": "^9",

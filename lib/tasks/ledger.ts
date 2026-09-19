@@ -11,10 +11,10 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
-import { indexTaskRecord } from '../search/index';
+import { indexTaskRecord, _resetSearchIndexForTests } from '../search/index';
 
 export type TaskKind = 'conversation' | 'api' | 'wizard' | 'schedule' | 'agent' | string;
-export type TaskStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type TaskStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'iteration_limit' | 'stalled' | 'waiting_input';
 
 export interface TaskRecord {
   id: string;
@@ -50,7 +50,7 @@ function ledgerFilePath(): string {
 }
 
 function emptyLedger(): TaskLedgerFile {
-  return { tasks: {}, order: [] };
+  return { tasks: Object.create(null) as Record<string, TaskRecord>, order: [] };
 }
 
 function getLedger(): TaskLedgerFile {
@@ -63,7 +63,9 @@ function getLedger(): TaskLedgerFile {
 
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<TaskLedgerFile>;
-    const tasks = parsed.tasks && typeof parsed.tasks === 'object' ? parsed.tasks : {};
+    // Never inherit Object.prototype through externally supplied task IDs.
+    const tasks: Record<string, TaskRecord> = Object.assign(Object.create(null),
+      parsed.tasks && typeof parsed.tasks === 'object' ? parsed.tasks : {});
     const order = Array.isArray(parsed.order) ? parsed.order.filter((id) => typeof id === 'string' && tasks[id]) : Object.keys(tasks);
     _ledger = { tasks, order };
   } catch {
@@ -140,6 +142,7 @@ export async function finishTask(
   error?: unknown,
 ): Promise<TaskRecord | undefined> {
   const ledger = getLedger();
+  if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
   const task = ledger.tasks[id];
   if (!task) return undefined;
   const now = new Date().toISOString();
@@ -155,7 +158,9 @@ export async function finishTask(
 }
 
 export function getTask(id: string): TaskRecord | undefined {
-  const task = getLedger().tasks[id];
+  const tasks = getLedger().tasks;
+  if (!Object.prototype.hasOwnProperty.call(tasks, id)) return undefined;
+  const task = tasks[id];
   return task ? { ...task, metadata: task.metadata ? { ...task.metadata } : undefined } : undefined;
 }
 
@@ -164,6 +169,7 @@ export async function updateTaskMetadata(
   patch: Record<string, unknown>,
 ): Promise<TaskRecord | undefined> {
   const ledger = getLedger();
+  if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
   const task = ledger.tasks[id];
   if (!task) return undefined;
   const now = new Date().toISOString();
@@ -243,6 +249,8 @@ export function listTasks(limit = 50): TaskRecord[] {
 
 /** Test helper: clear in-memory state so env-controlled file paths are re-read. */
 export function _resetTaskLedgerForTests(): void {
+  // The ledger opens the search index indirectly; close it before tests remove DATA_DIR.
+  if (typeof _resetSearchIndexForTests === 'function') _resetSearchIndexForTests();
   _ledger = null;
   _writeQueue = Promise.resolve();
 }

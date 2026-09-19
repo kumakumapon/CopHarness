@@ -23,7 +23,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapter, resolveProvider, resolveModel } from '../lib/adapterFactory';
+import { createAdapter, resolveRuntimeConfig } from '../lib/adapterFactory';
 import { runEvalSuite, summariseResults, type EvalResult } from '../lib/eval/evaluator';
 import { checkCiGate } from '../lib/eval/ciGate';
 import { createEvalReport, formatJsonReport, formatJunitReport } from '../lib/eval/reporters';
@@ -83,15 +83,7 @@ async function main(): Promise<void> {
     if (!machineReadable) console.log(dim(`  Loaded ${custom.length} custom test case(s) from ${customFile}`));
   }
 
-  const provider = resolveProvider();
-  const apiKey =
-    process.env.COPILOT_PROVIDER_API_KEY ||
-    process.env.COPILOT_API_KEY ||
-    process.env.GITHUB_COPILOT_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    process.env.ANTHROPIC_API_KEY ||
-    process.env.GEMINI_API_KEY;
-  const model = resolveModel(provider);
+  const { provider, model, apiKey } = resolveRuntimeConfig();
   const adapter = createAdapter({ provider, model, apiKey, timeoutMs: 60_000 });
 
   if (!machineReadable) {

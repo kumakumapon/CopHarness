@@ -13,6 +13,7 @@ jest.mock('../../lib/adapterFactory', () => ({
   createAdapterWithFallback: jest.fn(),
   resolveProvider: jest.fn(),
   resolveModel: jest.fn(),
+  resolveRuntimeConfig: jest.fn(),
 }));
 import * as adapterFactory from '../../lib/adapterFactory';
 import * as adapterModule from '../../lib/adapter';
@@ -40,6 +41,7 @@ describe('POST /api/copilot', () => {
       provider: 'copilot',
       model: 'gpt-5-mini',
     } as unknown as adapterModule.LLMAdapter);
+    (adapterFactory.resolveRuntimeConfig as jest.Mock).mockReturnValue({ provider: 'copilot', model: 'gpt-5-mini', configured: true });
     (adapterFactory.resolveProvider as jest.Mock).mockReturnValue('copilot');
     (adapterFactory.resolveModel as jest.Mock).mockReturnValue('gpt-5-mini');
   });
@@ -49,7 +51,8 @@ describe('POST /api/copilot', () => {
     jest.clearAllMocks();
   });
 
-  it('returns 401 when no API key is set', async () => {
+  it('returns 401 when the selected provider requires an absent API key', async () => {
+    (adapterFactory.resolveRuntimeConfig as jest.Mock).mockReturnValue({ provider: 'openai', configured: false });
     delete process.env.GITHUB_COPILOT_API_KEY;
     delete process.env.COPILOT_PROVIDER_API_KEY;
     delete process.env.COPILOT_API_KEY;

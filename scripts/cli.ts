@@ -30,7 +30,7 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapterWithFallback, resolveProvider, resolveModel } from '../lib/adapterFactory';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/adapterFactory';
 import { type LLMMessage } from '../lib/adapter';
 import '../lib/skills/index';
 import { listActiveSkills } from '../lib/skill';
@@ -38,29 +38,13 @@ import { listActiveSkills } from '../lib/skill';
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
 
 async function main() {
-  const provider = resolveProvider();
-  const apiKey =
-    process.env.COPILOT_PROVIDER_API_KEY ||
-    process.env.COPILOT_API_KEY ||
-    process.env.GITHUB_COPILOT_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    process.env.ANTHROPIC_API_KEY;
-
-  const localProviders = ['copilot', 'lmstudio', 'lemonade'];
-  if (!apiKey && !localProviders.includes(provider)) {
-    console.error(
-      'Error: No API key found. Set one of: GITHUB_COPILOT_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY',
-    );
-    process.exit(1);
-  }
-
-  const model = resolveModel(provider);
-
-  const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-
-  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
+  const config = resolveRuntimeConfig();
+  if (!config.configured) throw new Error('Missing provider API key. Run npm run doctor.');
+  const { provider, model, timeoutMs } = config;
+  const adapter = createAdapterWithFallback(config);
 
   console.log(`CopHarness CLI — provider: ${provider}, model: ${model}`);
+  console.log('Basic CLI. For streaming, saved conversations and resumable tasks: npm run agent-cli');
   console.log('Type your message and press Enter. Type "exit" or "quit" to quit.\n');
 
   const messages: LLMMessage[] = [];

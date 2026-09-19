@@ -6,7 +6,8 @@ const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const DIGITS = '0123456789';
 const SYMBOLS = '!@#$%^&*()-_=+[]{}|;:,.<>?';
 
-export const generatePassword: SkillDefinition = {
+// This is tool metadata and a handler, not a generated credential value.
+export const credentialGeneratorSkill: SkillDefinition = {
   name: 'generatePassword',
   description:
     'Generates a cryptographically secure random password. ' +
@@ -69,3 +70,6 @@ export const generatePassword: SkillDefinition = {
     return { content: result.join('') };
   },
 };
+
+// Keep the existing public module export compatible.
+export { credentialGeneratorSkill as generatePassword };

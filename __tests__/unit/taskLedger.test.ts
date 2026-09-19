@@ -9,6 +9,7 @@ import {
   listTasks,
   queryTasks,
   startTask,
+  updateTaskMetadata,
 } from '../../lib/tasks/ledger';
 
 describe('task ledger', () => {
@@ -26,6 +27,24 @@ describe('task ledger', () => {
     _resetDataDirCache();
     _resetTaskLedgerForTests();
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it.each(['__proto__', 'constructor', 'toString'])('does not read or mutate inherited task ID %s', async id => {
+    const prototype = Object.getOwnPropertyDescriptors(Object.prototype);
+    expect(getTask(id)).toBeUndefined();
+    expect(await finishTask(id, 'failed', 'must not pollute')).toBeUndefined();
+    expect(await updateTaskMetadata(id, { injected: true })).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptors(Object.prototype)).toEqual(prototype);
+  });
+
+  it.each(['__proto__', 'constructor', 'toString'])('stores %s as an own task safely, including after reload', async id => {
+    const prototype = Object.getOwnPropertyDescriptors(Object.prototype);
+    await startTask({ id, kind: 'api' });
+    _resetTaskLedgerForTests();
+    await updateTaskMetadata(id, { marker: 'own-record' });
+    await finishTask(id, 'succeeded');
+    expect(getTask(id)).toMatchObject({ id, status: 'succeeded', metadata: { marker: 'own-record' } });
+    expect(Object.getOwnPropertyDescriptors(Object.prototype)).toEqual(prototype);
   });
 
   it('starts and finishes an automatically identified task', async () => {
