@@ -161,7 +161,7 @@ export {
   hashText,
   regexMatch,
   textStats,
-  generatePassword,
+  credentialGeneratorSkill as generatePassword,
   csvParse,
   readFile,
   writeFile,
