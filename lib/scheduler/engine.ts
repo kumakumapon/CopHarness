@@ -5,7 +5,8 @@ import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
 import { withSkillExecutionContext } from '../skills/executionContext';
-import { finishTask, startTask } from '../tasks/ledger';
+import { finishTask, startTask, updateTaskMetadata } from '../tasks/ledger';
+import { redactPreviewText } from '../toolPolicy/redaction';
 import {
   isAbortError,
   registerTaskAbortController,
@@ -134,7 +135,8 @@ export async function runPrompt(
   try {
     if (!scheduledContext) return await execute(abortSignal);
 
-    const task = await startTask(automationTaskInput(scheduledContext));
+    const input = automationTaskInput(scheduledContext);
+    const task = await startTask({ ...input, metadata: { ...input.metadata, prompt: redactPreviewText(prompt).slice(0, 8000) } });
     // Register a task-scoped controller so chat "stop <taskId>" can abort the
     // in-flight LLM call, in addition to the schedule-level stopRequested flag.
     const taskAbort = new AbortController();
@@ -148,6 +150,7 @@ export async function runPrompt(
         { channelKey: task.channelKey, taskId: task.id },
         () => execute(signal),
       );
+      await updateTaskMetadata(task.id, { output: redactPreviewText(result).slice(0, 8000) });
       await finishTask(task.id, 'succeeded');
       return result;
     } catch (err) {

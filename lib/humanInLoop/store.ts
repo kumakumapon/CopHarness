@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import type { ApprovalRequest, ApprovalStatus } from './types';
+import { getSkillExecutionContext } from '../skills/executionContext';
 
 const store = new Map<string, ApprovalRequest>();
 
@@ -18,6 +19,7 @@ export function createApprovalRequest(
     createdAt: Date.now(),
     status: 'pending',
     requestedBy,
+    taskId: getSkillExecutionContext()?.taskId,
     policyRuleId,
     preview,
   };

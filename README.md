@@ -863,3 +863,5 @@ Set `BUDGET_MAX_TOKENS` / `BUDGET_MAX_COST_USD` for global daily limits, and the
 `/sessions` で保存済みの実行を確認し、`/resume <id> [回答]` で再開できます。
 追加質問・中断・API エラー・反復上限は異なる終了状態として CLI、SSE、管理画面に表示されます。
 詳細は [診断・終了状態・復旧ガイド](docs/AGENT_RECOVERY.md) を参照してください。
+
+調査→保存、定期通知、承認付きファイル変更は [3つの通しチュートリアル](docs/WORKFLOW_TUTORIALS.md) で設定から結果確認まで試せます。管理画面の「運用」でタスクを開くと、入力・ツール結果・承認・最終出力・終了理由をまとめて確認できます。

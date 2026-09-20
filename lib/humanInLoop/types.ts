@@ -10,6 +10,7 @@ export interface ApprovalRequest {
   resolvedAt?: number;
   status: ApprovalStatus;
   requestedBy?: string;
+  taskId?: string;
   policyRuleId?: string;
   preview?: ApprovalPreview;
 }

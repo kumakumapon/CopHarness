@@ -7,7 +7,7 @@
 import { validateSkillOutput } from './guardrails/outputValidator';
 import { recordViolation } from './guardrails/violationLog';
 import { recordSkillExecution } from './skills/executionLog';
-import { getSkillExecutionContext } from './skills/executionContext';
+import { getSkillExecutionContext, withSkillExecutionContext } from './skills/executionContext';
 import { startSpan } from './telemetry/tracer';
 import { eventBus } from './events/bus';
 
@@ -183,7 +183,9 @@ export function registerSkill(skill: SkillDefinition): void {
   const originalHandler = skill.handler;
   const schema = skill.outputSchema;
 
-  skill.handler = async (args) => {
+  // Copy the caller context so one gate cannot mutate sibling tool approvals.
+  // Explicit approval context supplied by an outer gate remains supported.
+  skill.handler = async (args) => withSkillExecutionContext({ ...getSkillExecutionContext() }, async () => {
     const validationErrors = validateSkillArgs(args, skill.parameters);
     if (validationErrors.length > 0) {
       return {
@@ -241,6 +243,7 @@ export function registerSkill(skill: SkillDefinition): void {
         channelKey: context?.channelKey,
         taskId: context?.taskId,
         approvalId: context?.approvalId,
+        approvalStatus: context?.approvalStatus,
       });
       span.end({
         'skill.execution.id': executionRecord.id,
@@ -277,6 +280,7 @@ export function registerSkill(skill: SkillDefinition): void {
         channelKey: context?.channelKey,
         taskId: context?.taskId,
         approvalId: context?.approvalId,
+        approvalStatus: context?.approvalStatus,
       });
       span.end({
         'skill.execution.id': executionRecord.id,
@@ -290,7 +294,7 @@ export function registerSkill(skill: SkillDefinition): void {
       }, error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
-  };
+  });
 
   skillRegistry.set(skill.name, skill);
 }
