@@ -6,7 +6,7 @@
 
 1. `.env.example` を参考に `.env.local` に provider を1つ設定し、`npm ci`、`npm run doctor` を実行します。
 2. `DATA_DIR` と `SKILL_FILE_SANDBOX_DIR` をそれぞれ専用ディレクトリに設定します。CLI とサーバーから同じ実行を確認する場合は、同じ絶対パスを使います。
-3. `npm run dev` で管理画面を起動し、`/dashboard` の Operations からタスクを開きます。HTTP 認証を設定した場合は API キーを入力します。
+3. `npm run dev` で管理画面を起動し、`/dashboard` の「運用」からタスクを開きます。HTTP 認証を設定した場合は API キーを入力します。台帳・スキル履歴にはプロセス内キャッシュがあるため、別プロセスの CLI の結果が出ない場合は作業終了後に管理画面側のサーバーを再起動します。
 4. `npm run agent-cli` で作業を開始します。表示される session ID を控えます。
 
 スキルは未設定では low のみです。以下の各シナリオでは `ENABLED_SKILLS` を明示し、設定変更後はプロセスを再起動します。保存先は sandbox 内の相対パスです。

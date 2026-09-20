@@ -1872,7 +1872,8 @@ function TasksPanel({
                         <td className="px-3 py-2 whitespace-nowrap"><span className={`inline-block px-1.5 py-0.5 rounded ${st.bg} ${st.text}`}>{st.label}</span></td>
                         <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{task.kind}</td>
                         <td className="px-3 py-2 max-w-[260px]">
-                          <div className="truncate" style={{ color: 'var(--text-primary)' }} title={task.title || task.id}>{task.title || '—'}</div>
+                          <button type="button" className="block max-w-full truncate text-left underline" style={{ color: 'var(--text-primary)' }} title={task.title || task.id}
+                            aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); toggleExpanded(task.id); }}>{task.title || task.id}</button>
                           <div className="font-mono truncate" style={{ color: 'var(--text-secondary)' }} title={task.id}>{task.id}</div>
                         </td>
                         <td className="px-3 py-2 font-mono max-w-[220px]" style={{ color: 'var(--text-secondary)' }}>
@@ -1975,7 +1976,7 @@ function TaskRunDetail({ taskId }: { taskId: string }) {
   if (error) return <div role="alert">タスク詳細を取得できません。<button type="button" className="underline ml-2" onClick={() => void reload()}>再読込</button></div>;
   if (!data) return <p role="status">実行記録を読み込み中…</p>;
   const block = (label: string, text: string) => <div><h3 className="font-semibold mb-1">{label}</h3><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto rounded p-2" style={{ background: 'var(--secondary-bg)' }}>{text || '記録なし'}</pre></div>;
-  return <section aria-label="タスク実行詳細" className="space-y-3" style={{ color: 'var(--text-primary)' }}>
+  return <section aria-label="タスク実行詳細" className="space-y-3 max-w-[calc(100vw-5rem)] md:max-w-none" style={{ color: 'var(--text-primary)' }}>
     {block('入力・目標', data.input)}
     <h3 className="font-semibold">ツール・成果物の記録</h3>
     <p>結果内の保存先や通知先を確認できます。表示は機密値を伏せたプレビューです。</p>
