@@ -22,6 +22,7 @@ export interface SkillExecutionRecord {
   channelKey?: string;
   taskId?: string;
   approvalId?: string;
+  approvalStatus?: string;
   startedAt: string;
   finishedAt: string;
   durationMs: number;
@@ -122,6 +123,7 @@ export async function recordSkillExecution(input: {
   channelKey?: string;
   taskId?: string;
   approvalId?: string;
+  approvalStatus?: string;
 }): Promise<SkillExecutionRecord> {
   ensureLoaded();
   const record: SkillExecutionRecord = {
@@ -131,6 +133,7 @@ export async function recordSkillExecution(input: {
     channelKey: input.channelKey,
     taskId: input.taskId,
     approvalId: input.approvalId,
+    approvalStatus: input.approvalStatus,
     startedAt: input.startedAt.toISOString(),
     finishedAt: input.finishedAt.toISOString(),
     durationMs: input.durationMs,

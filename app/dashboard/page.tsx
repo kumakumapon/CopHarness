@@ -2,6 +2,7 @@
 
 import useSWR, { mutate } from 'swr';
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from 'react';
+import type { TaskDetail } from '../../lib/tasks/detail';
 import {
   CheckCircle,
   XCircle,
@@ -1928,6 +1929,7 @@ function TasksPanel({
                                   </div>
                                 </div>
                               </div>
+                              <TaskRunDetail taskId={task.id} />
                               {task.errorPreview && (
                                 <div>
                                   <div className="font-semibold mb-1 text-red-600">エラー</div>
@@ -1966,6 +1968,40 @@ function TasksPanel({
       </div>
     </section>
   );
+}
+
+function TaskRunDetail({ taskId }: { taskId: string }) {
+  const { data, error, mutate: reload } = useSWR<TaskDetail>(`/api/dashboard/tasks/${encodeURIComponent(taskId)}`, fetcher, { refreshInterval: 5000 });
+  if (error) return <div role="alert">タスク詳細を取得できません。<button type="button" className="underline ml-2" onClick={() => void reload()}>再読込</button></div>;
+  if (!data) return <p role="status">実行記録を読み込み中…</p>;
+  const block = (label: string, text: string) => <div><h3 className="font-semibold mb-1">{label}</h3><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto rounded p-2" style={{ background: 'var(--secondary-bg)' }}>{text || '記録なし'}</pre></div>;
+  return <section aria-label="タスク実行詳細" className="space-y-3" style={{ color: 'var(--text-primary)' }}>
+    {block('入力・目標', data.input)}
+    <h3 className="font-semibold">ツール・成果物の記録</h3>
+    <p>結果内の保存先や通知先を確認できます。表示は機密値を伏せたプレビューです。</p>
+    {data.tools.length === 0 && data.executions.length === 0 && <p>ツール記録なし</p>}
+    {data.tools.map((tool, i) => <details key={i} className="rounded border p-2">
+      <summary>{tool.name} — {tool.state}{tool.isError ? ' / error' : ''} / {tool.replay === 'reuse' ? '保存結果を再利用' : '再実行可能'}</summary>
+      {block('引数', tool.argsPreview)}{block('結果・保存先', tool.resultPreview)}
+    </details>)}
+    {data.executions.map(e => <details key={e.id} className="rounded border p-2">
+      <summary>{e.skillName} — {e.status} / {e.finishedAt}</summary>
+      {block('引数', e.argsPreview)}{block('結果', e.errorPreview || e.resultPreview)}
+      {e.approvalId && <p>承認 ID: {e.approvalId}</p>}
+    </details>)}
+    <h3 className="font-semibold">承認</h3>
+    {data.approvals.length === 0 ? <p>関連する承認記録なし</p> : data.approvals.map(a => <details key={a.id} className="rounded border p-2">
+      <summary>{a.skillName} — {a.status} / {a.id}</summary>
+      {block('承認対象', a.argsPreview)}{a.preview && block('変更プレビュー', a.preview)}
+      {a.status === 'pending' && <p>承認パネルでこの ID の内容を確認して承認または拒否してください。</p>}
+    </details>)}
+    {block('最終出力', data.output)}
+    {block('終了理由', [data.stopReason, data.summary, data.error].filter(Boolean).join('\n'))}
+    {data.pendingQuestion && block('回答待ち', data.pendingQuestion)}
+    {data.checkpointWarning && <p role="alert">{data.checkpointWarning}</p>}
+    {data.checkpointStatus && data.checkpointStatus !== data.status && <p role="alert">台帳と保存セッションの状態が異なります（保存: {data.checkpointStatus}）。再開前に実行記録を確認してください。</p>}
+    <p>履歴は保持期間内の記録です。旧記録や別プロセスの承認待ちは表示できない場合があります。</p>
+  </section>;
 }
 
 function IdentitiesPanel({ data }: { data: IdentitiesData | undefined }) {
