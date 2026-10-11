@@ -1,4 +1,5 @@
 import { type LLMAdapter, type LLMRequest, type LLMResponse } from '../adapter';
+import type { AssistantMessageEvent } from '@github/copilot-sdk';
 import { createSession } from '../initCopilot';
 
 export class CopilotAdapter implements LLMAdapter {
@@ -26,12 +27,12 @@ export class CopilotAdapter implements LLMAdapter {
       const sendPromise = session.sendAndWait(
         {
           prompt,
-          attachments: request.attachments as any,
+          attachments: request.attachments,
         },
         timeout,
       );
 
-      let resp: any;
+      let resp: AssistantMessageEvent | undefined;
       const abortSignal = request.abortSignal;
       if (abortSignal) {
         const abortPromise = new Promise<never>((_, reject) => {
@@ -58,7 +59,7 @@ export class CopilotAdapter implements LLMAdapter {
         resp = await sendPromise;
       }
 
-      const content = (resp && (resp as any).data && (resp as any).data.content) || '';
+      const content = resp?.data?.content || '';
       return { content, model, provider: 'copilot' };
     } finally {
       await session.disconnect().catch(() => {});

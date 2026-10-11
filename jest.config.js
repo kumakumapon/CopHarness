@@ -8,7 +8,7 @@ const customJestConfig = {
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    '^@github/copilot-sdk$': '<rootDir>/__mocks__/copilot-sdk.js',
+    '^@github/copilot-sdk$': '<rootDir>/__mocks__/copilot-sdk.ts',
   },
   setupFilesAfterEnv: ['./jest.setup.ts'],
 }
