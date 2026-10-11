@@ -69,7 +69,7 @@ const BUILTIN_TOOLSETS: ToolsetDefinition[] = [
       'githubSearch',
       'githubRepo',
       'diffText',
-      'markdownToHtmlSkill',
+      'markdownToHtml',
     ],
   },
   {
@@ -90,9 +90,6 @@ const BUILTIN_TOOLSETS: ToolsetDefinition[] = [
     description: 'Memory management, notes, weather, date/time, notifications.',
     source: 'builtin',
     skills: [
-      'memorySet',
-      'memoryGet',
-      'memoryList',
       'memoryUpsert',
       'memorySearch',
       'memoryForget',

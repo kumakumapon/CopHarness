@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listSchedules, setEnabled, addSchedule } from '../../../../lib/scheduler/store';
-import { nextRunDate, normalizeCron } from '../../../../lib/scheduler/cron';
+import { isValidCronInput, nextRunDate, normalizeCron } from '../../../../lib/scheduler/cron';
 import { requireApiKey } from '../../../../lib/apiAuth';
 
 export async function GET(req: NextRequest) {
@@ -32,6 +32,9 @@ export async function POST(req: NextRequest) {
   }
   if (typeof cron !== 'string' || !cron.trim()) {
     return NextResponse.json({ error: 'cron (string) is required' }, { status: 400 });
+  }
+  if (!isValidCronInput(cron.trim())) {
+    return NextResponse.json({ error: 'cron is not a valid 5-field cron expression or HH:MM' }, { status: 400 });
   }
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return NextResponse.json({ error: 'prompt (string) is required' }, { status: 400 });

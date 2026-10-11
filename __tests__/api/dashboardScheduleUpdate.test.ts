@@ -101,6 +101,28 @@ describe('dashboard schedule PATCH API - toolsets', () => {
     expect(updated?.toolsets).toEqual([]);
   });
 
+  it('発火しない cron（範囲外）で PATCH すると 400 を返し、保存済みの cron は変わらない', async () => {
+    const schedule = createSchedule();
+    const res = await PATCH(
+      patchRequest(schedule.id, { cron: '0 25 * * *' }),
+      { params: Promise.resolve({ id: schedule.id }) },
+    );
+    expect(res.status).toBe(400);
+    const { listSchedules } = await import('../../lib/scheduler/store');
+    expect(listSchedules().find((s) => s.id === schedule.id)?.cron).toBe('0 * * * *');
+  });
+
+  it('有効な cron / HH:MM で PATCH すると 200 で正規化されて保存される', async () => {
+    const schedule = createSchedule();
+    const res = await PATCH(
+      patchRequest(schedule.id, { cron: '09:30' }),
+      { params: Promise.resolve({ id: schedule.id }) },
+    );
+    expect(res.status).toBe(200);
+    const { listSchedules } = await import('../../lib/scheduler/store');
+    expect(listSchedules().find((s) => s.id === schedule.id)?.cron).toBe('30 9 * * *');
+  });
+
   it('存在しない ID で PATCH すると 404 を返す', async () => {
     const res = await PATCH(
       patchRequest('nonexistent-id', { toolsets: ['research'] }),
