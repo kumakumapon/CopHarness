@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setEnabled, listSchedules, removeSchedule, updateSchedule } from '../../../../../lib/scheduler/store';
-import { nextRunDate, normalizeCron } from '../../../../../lib/scheduler/cron';
+import { isValidCronInput, nextRunDate, normalizeCron } from '../../../../../lib/scheduler/cron';
 import { requireApiKey } from '../../../../../lib/apiAuth';
 
 export async function PATCH(
@@ -33,7 +33,12 @@ export async function PATCH(
   // field update
   const updates: { name?: string; cron?: string; prompt?: string; discordChannelId?: string; lineUserId?: string; toolsets?: string[] } = {};
   if (typeof body.name === 'string' && body.name.trim()) updates.name = body.name.trim();
-  if (typeof body.cron === 'string' && body.cron.trim()) updates.cron = normalizeCron(body.cron.trim());
+  if (typeof body.cron === 'string' && body.cron.trim()) {
+    if (!isValidCronInput(body.cron.trim())) {
+      return NextResponse.json({ error: 'cron is not a valid 5-field cron expression or HH:MM' }, { status: 400 });
+    }
+    updates.cron = normalizeCron(body.cron.trim());
+  }
   if (typeof body.prompt === 'string' && body.prompt.trim()) updates.prompt = body.prompt.trim();
   if (typeof body.discordChannelId === 'string') {
     updates.discordChannelId = body.discordChannelId.trim() || undefined;

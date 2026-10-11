@@ -46,20 +46,55 @@ export function matchesCron(cron: string, date: Date): boolean {
     matchField(hourF, date.getHours()) &&
     matchField(dayF, date.getDate()) &&
     matchField(monthF, date.getMonth() + 1) &&
-    matchField(wdayF, date.getDay())
+    (matchField(wdayF, date.getDay()) || (date.getDay() === 0 && matchField(wdayF, 7)))
   );
 }
 
+/** Allowed [min, max] for each of the 5 cron fields (weekday accepts 7 = Sunday). */
+const FIELD_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0, 59],
+  [0, 23],
+  [1, 31],
+  [1, 12],
+  [0, 7],
+];
+
+function parseCronNumber(text: string, min: number, max: number): number | null {
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n >= min && n <= max ? n : null;
+}
+
+/** Validate one cron field: *, N, N-M, *\/N, N-M/N, N/N and comma lists of those. */
+function isValidField(field: string, min: number, max: number): boolean {
+  if (field === '') return false;
+  return field.split(',').every((part) => {
+    const [range, step, extra] = part.split('/');
+    if (extra !== undefined) return false;
+    if (step !== undefined && (parseCronNumber(step, 1, max) === null)) return false;
+    if (range === '*') return true;
+    const bounds = range.split('-');
+    if (bounds.length > 2) return false;
+    const lo = parseCronNumber(bounds[0], min, max);
+    if (lo === null) return false;
+    if (bounds.length === 2) {
+      const hi = parseCronNumber(bounds[1], min, max);
+      return hi !== null && lo <= hi;
+    }
+    return true;
+  });
+}
+
 /**
- * Return true if the input is already a valid cron expression (5-field or HH:MM shorthand).
+ * Return true if the input is a valid cron expression (5-field or HH:MM
+ * shorthand). Every field is range-checked, so out-of-range expressions that
+ * could never fire (e.g. "0 25 * * *", "0 0 32 * *") are rejected. Calendar
+ * impossibilities such as "0 0 31 2 *" are still accepted.
  */
 export function isValidCronInput(input: string): boolean {
-  try {
-    const normalized = normalizeCron(input);
-    return normalized.trim().split(/\s+/).length === 5;
-  } catch {
-    return false;
-  }
+  const fields = normalizeCron(input).trim().split(/\s+/);
+  if (fields.length !== 5) return false;
+  return fields.every((f, i) => isValidField(f, FIELD_RANGES[i][0], FIELD_RANGES[i][1]));
 }
 
 /**

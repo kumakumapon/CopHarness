@@ -5,6 +5,7 @@ import { _resetDataDirCache } from '../../lib/utils/dataDir';
 
 // Must import skills before toolsets so the skill registry is populated
 import '../../lib/skills/index';
+import { listSkills } from '../../lib/skill';
 import {
   listToolsets,
   getToolset,
@@ -48,6 +49,21 @@ describe('matchesGlob', () => {
   it('handles special regex characters in pattern', () => {
     expect(matchesGlob('a.b', 'axb')).toBe(false); // dot is literal
     expect(matchesGlob('a.b', 'a.b')).toBe(true);
+  });
+});
+
+describe('built-in toolsets reference only registered skills', () => {
+  it('every skill pattern in every built-in toolset matches at least one registered skill', () => {
+    const registered = listSkills().map((s) => s.name);
+    const dangling: string[] = [];
+    for (const toolset of listToolsets().filter((t) => t.source === 'builtin')) {
+      for (const pattern of toolset.skills) {
+        if (!registered.some((name) => matchesGlob(pattern, name))) {
+          dangling.push(`${toolset.name}: ${pattern}`);
+        }
+      }
+    }
+    expect(dangling).toEqual([]);
   });
 });
 
