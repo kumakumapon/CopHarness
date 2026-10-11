@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
-import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
+import { createSharedJsonStore } from '../utils/sharedJsonStore';
 import { getSkill } from '../skill';
 import {
   defaultGeneratedSkillManifest,
@@ -95,9 +95,6 @@ const NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]{2,63}$/;
 // In-memory state
 // ---------------------------------------------------------------------------
 
-let _store: SkillProposalStoreFile | null = null;
-let _writeQueue: Promise<void> = Promise.resolve();
-
 // ---------------------------------------------------------------------------
 // File path
 // ---------------------------------------------------------------------------
@@ -116,32 +113,30 @@ function emptyStore(): SkillProposalStoreFile {
   return { proposals: {}, order: [] };
 }
 
-function getStore(): SkillProposalStoreFile {
-  if (_store) return _store;
-  const filePath = storeFilePath();
-  if (!fs.existsSync(filePath)) {
-    _store = emptyStore();
-    return _store;
-  }
-
-  try {
-    const parsed = readJsonFileSync<Partial<SkillProposalStoreFile>>(filePath, () => ({}));
-    const proposals =
-      parsed.proposals && typeof parsed.proposals === 'object' ? parsed.proposals : {};
-    for (const proposal of Object.values(proposals) as SkillProposal[]) {
-      if (!proposal.manifest) {
-        proposal.manifest = defaultGeneratedSkillManifest(proposal);
-        proposal.manifestHistory = [{ manifest: proposal.manifest, changedAt: proposal.updatedAt ?? proposal.createdAt ?? new Date().toISOString() }];
-      }
+function parseStore(raw: unknown): SkillProposalStoreFile {
+  const parsed = (raw && typeof raw === 'object' ? raw : {}) as Partial<SkillProposalStoreFile>;
+  const proposals =
+    parsed.proposals && typeof parsed.proposals === 'object' ? parsed.proposals : {};
+  for (const proposal of Object.values(proposals) as SkillProposal[]) {
+    if (!proposal.manifest) {
+      proposal.manifest = defaultGeneratedSkillManifest(proposal);
+      proposal.manifestHistory = [{ manifest: proposal.manifest, changedAt: proposal.updatedAt ?? proposal.createdAt ?? new Date().toISOString() }];
     }
-    const order = Array.isArray(parsed.order)
-      ? parsed.order.filter((id) => typeof id === 'string' && proposals[id])
-      : Object.keys(proposals);
-    _store = { proposals, order };
-  } catch {
-    _store = emptyStore();
   }
-  return _store;
+  const order = Array.isArray(parsed.order)
+    ? parsed.order.filter((id) => typeof id === 'string' && proposals[id])
+    : Object.keys(proposals);
+  return { proposals, order };
+}
+
+/** Shared across processes: reads follow the file, writes are locked read-modify-write cycles. */
+const sharedStore = createSharedJsonStore<SkillProposalStoreFile>({
+  file: storeFilePath,
+  parse: parseStore,
+});
+
+function getStore(): SkillProposalStoreFile {
+  return sharedStore.read();
 }
 
 /**
@@ -172,13 +167,6 @@ function trimStore(store: SkillProposalStoreFile): void {
     const id = store.order.shift();
     if (id) delete store.proposals[id];
   }
-}
-
-function scheduleWrite(): Promise<void> {
-  _writeQueue = _writeQueue.then(async () => {
-    await atomicWriteJson(storeFilePath(), getStore());
-  });
-  return _writeQueue;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,18 +201,6 @@ export async function createSkillProposal(input: CreateSkillProposalInput): Prom
     );
   }
 
-  const store = getStore();
-
-  // Reject duplicate pending proposals with the same name
-  for (const id of store.order) {
-    const existing = store.proposals[id];
-    if (existing && existing.name === input.name && PENDING_STATUSES.has(existing.status)) {
-      throw new Error(
-        `A pending proposal for skill "${input.name}" already exists (id: ${id}, status: ${existing.status}). Resolve or reject it before creating a new one.`,
-      );
-    }
-  }
-
   const now = new Date().toISOString();
   const id = `proposal-${randomUUID()}`;
 
@@ -247,44 +223,53 @@ export async function createSkillProposal(input: CreateSkillProposalInput): Prom
     updatedAt: now,
   };
 
-  store.proposals[id] = proposal;
-  store.order.push(id);
-  trimStore(store);
-  await scheduleWrite();
-
-  return { ...proposal };
+  return sharedStore.update((store) => {
+    // Reject duplicate pending proposals with the same name (checked against the fresh on-disk state)
+    for (const existingId of store.order) {
+      const existing = store.proposals[existingId];
+      if (existing && existing.name === input.name && PENDING_STATUSES.has(existing.status)) {
+        throw new Error(
+          `A pending proposal for skill "${input.name}" already exists (id: ${existingId}, status: ${existing.status}). Resolve or reject it before creating a new one.`,
+        );
+      }
+    }
+    store.proposals[id] = proposal;
+    store.order.push(id);
+    trimStore(store);
+    return { ...proposal };
+  });
 }
 
 export async function updateSkillProposal(
   id: string,
   patch: Partial<Omit<SkillProposal, 'id' | 'createdAt' | 'manifest'>> & { manifest?: Partial<GeneratedSkillManifest> },
 ): Promise<SkillProposal | undefined> {
-  const store = getStore();
-  const existing = store.proposals[id];
-  if (!existing) return undefined;
+  return sharedStore.update((store) => {
+    const existing = store.proposals[id];
+    if (!existing) return undefined;
 
-  const now = new Date().toISOString();
-  const manifest = patch.manifest
-    ? normalizeGeneratedSkillManifest(patch.manifest, { name: patch.name ?? existing.name, riskLevel: patch.riskLevel ?? existing.riskLevel })
-    : existing.manifest ?? defaultGeneratedSkillManifest(existing);
-  validateGeneratedSkillManifest(manifest);
+    const now = new Date().toISOString();
+    const manifest = patch.manifest
+      ? normalizeGeneratedSkillManifest(patch.manifest, { name: patch.name ?? existing.name, riskLevel: patch.riskLevel ?? existing.riskLevel })
+      : existing.manifest ?? defaultGeneratedSkillManifest(existing);
+    validateGeneratedSkillManifest(manifest);
 
-  const manifestChanged = JSON.stringify(manifest) !== JSON.stringify(existing.manifest);
-  const updated: SkillProposal = {
-    ...existing,
-    ...patch,
-    manifest,
-    manifestHistory: manifestChanged
-      ? [...(existing.manifestHistory ?? []), { manifest, changedAt: now }]
-      : existing.manifestHistory,
-    id,
-    createdAt: existing.createdAt,
-    updatedAt: now,
-  };
+    const manifestChanged = JSON.stringify(manifest) !== JSON.stringify(existing.manifest);
+    const updated: SkillProposal = {
+      ...existing,
+      ...patch,
+      manifest,
+      manifestHistory: manifestChanged
+        ? [...(existing.manifestHistory ?? []), { manifest, changedAt: now }]
+        : existing.manifestHistory,
+      id,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+    };
 
-  store.proposals[id] = updated;
-  await scheduleWrite();
-  return { ...updated };
+    store.proposals[id] = updated;
+    return { ...updated };
+  });
 }
 
 export function getSkillProposal(id: string): SkillProposal | undefined {
@@ -341,6 +326,5 @@ export function querySkillProposals(
 
 /** Test helper: clear in-memory state so env-controlled file paths are re-read. */
 export function _resetSkillProposalsForTests(): void {
-  _store = null;
-  _writeQueue = Promise.resolve();
+  sharedStore.reset();
 }

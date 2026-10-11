@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
-import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
+import { createSharedJsonStore } from '../utils/sharedJsonStore';
 import { indexTaskRecord, _resetSearchIndexForTests } from '../search/index';
 
 export type TaskKind = 'conversation' | 'api' | 'wizard' | 'schedule' | 'agent' | string;
@@ -40,9 +40,6 @@ interface TaskLedgerFile {
 const MAX_TASKS = 1000;
 const ERROR_PREVIEW_LENGTH = 240;
 
-let _ledger: TaskLedgerFile | null = null;
-let _writeQueue: Promise<void> = Promise.resolve();
-
 function ledgerFilePath(): string {
   const explicit = process.env.TASK_LEDGER_FILE;
   if (explicit) return path.resolve(explicit);
@@ -53,25 +50,23 @@ function emptyLedger(): TaskLedgerFile {
   return { tasks: Object.create(null) as Record<string, TaskRecord>, order: [] };
 }
 
-function getLedger(): TaskLedgerFile {
-  if (_ledger) return _ledger;
-  const filePath = ledgerFilePath();
-  if (!fs.existsSync(filePath)) {
-    _ledger = emptyLedger();
-    return _ledger;
-  }
+function parseLedger(raw: unknown): TaskLedgerFile {
+  const parsed = (raw && typeof raw === 'object' ? raw : {}) as Partial<TaskLedgerFile>;
+  // Never inherit Object.prototype through externally supplied task IDs.
+  const tasks: Record<string, TaskRecord> = Object.assign(Object.create(null),
+    parsed.tasks && typeof parsed.tasks === 'object' ? parsed.tasks : {});
+  const order = Array.isArray(parsed.order) ? parsed.order.filter((id) => typeof id === 'string' && tasks[id]) : Object.keys(tasks);
+  return { tasks, order };
+}
 
-  try {
-    const parsed = readJsonFileSync<Partial<TaskLedgerFile>>(filePath, () => ({}));
-    // Never inherit Object.prototype through externally supplied task IDs.
-    const tasks: Record<string, TaskRecord> = Object.assign(Object.create(null),
-      parsed.tasks && typeof parsed.tasks === 'object' ? parsed.tasks : {});
-    const order = Array.isArray(parsed.order) ? parsed.order.filter((id) => typeof id === 'string' && tasks[id]) : Object.keys(tasks);
-    _ledger = { tasks, order };
-  } catch {
-    _ledger = emptyLedger();
-  }
-  return _ledger;
+/** Shared across processes: reads follow the file, writes are locked read-modify-write cycles. */
+const sharedLedger = createSharedJsonStore<TaskLedgerFile>({
+  file: ledgerFilePath,
+  parse: parseLedger,
+});
+
+function getLedger(): TaskLedgerFile {
+  return sharedLedger.read();
 }
 
 function trimLedger(ledger: TaskLedgerFile): void {
@@ -79,13 +74,6 @@ function trimLedger(ledger: TaskLedgerFile): void {
     const id = ledger.order.shift();
     if (id) delete ledger.tasks[id];
   }
-}
-
-function scheduleWrite(): Promise<void> {
-  _writeQueue = _writeQueue.then(async () => {
-    await atomicWriteJson(ledgerFilePath(), getLedger());
-  });
-  return _writeQueue;
 }
 
 function previewError(error: unknown): string | undefined {
@@ -103,32 +91,32 @@ export async function startTask(input: {
   title?: string;
   metadata?: Record<string, unknown>;
 }): Promise<TaskRecord> {
-  const ledger = getLedger();
-  const now = new Date().toISOString();
   const id = input.id?.trim() || `task_${randomUUID()}`;
-  const existing = ledger.tasks[id];
+  const result = await sharedLedger.update((ledger) => {
+    const now = new Date().toISOString();
+    const existing = ledger.tasks[id];
 
-  const task: TaskRecord = {
-    ...(existing ?? { id, createdAt: now, startedAt: now }),
-    id,
-    kind: input.kind,
-    status: 'running',
-    personId: input.personId,
-    channelKey: input.channelKey,
-    conversationKey: input.conversationKey,
-    title: input.title,
-    metadata: input.metadata,
-    updatedAt: now,
-    startedAt: now,
-    finishedAt: undefined,
-    errorPreview: undefined,
-  };
+    const task: TaskRecord = {
+      ...(existing ?? { id, createdAt: now, startedAt: now }),
+      id,
+      kind: input.kind,
+      status: 'running',
+      personId: input.personId,
+      channelKey: input.channelKey,
+      conversationKey: input.conversationKey,
+      title: input.title,
+      metadata: input.metadata,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: undefined,
+      errorPreview: undefined,
+    };
 
-  ledger.tasks[id] = task;
-  if (!ledger.order.includes(id)) ledger.order.push(id);
-  trimLedger(ledger);
-  await scheduleWrite();
-  const result = { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+    ledger.tasks[id] = task;
+    if (!ledger.order.includes(id)) ledger.order.push(id);
+    trimLedger(ledger);
+    return { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  });
   // Index failure must never affect startTask behaviour
   indexTaskRecord(result);
   return result;
@@ -139,17 +127,18 @@ export async function finishTask(
   status: Exclude<TaskStatus, 'running'>,
   error?: unknown,
 ): Promise<TaskRecord | undefined> {
-  const ledger = getLedger();
-  if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
-  const task = ledger.tasks[id];
-  if (!task) return undefined;
-  const now = new Date().toISOString();
-  task.status = status;
-  task.updatedAt = now;
-  task.finishedAt = now;
-  task.errorPreview = previewError(error);
-  await scheduleWrite();
-  const finished = { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  const finished = await sharedLedger.update((ledger) => {
+    if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
+    const task = ledger.tasks[id];
+    if (!task) return undefined;
+    const now = new Date().toISOString();
+    task.status = status;
+    task.updatedAt = now;
+    task.finishedAt = now;
+    task.errorPreview = previewError(error);
+    return { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  });
+  if (!finished) return undefined;
   // Index failure must never affect finishTask behaviour
   indexTaskRecord(finished);
   return finished;
@@ -166,15 +155,16 @@ export async function updateTaskMetadata(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<TaskRecord | undefined> {
-  const ledger = getLedger();
-  if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
-  const task = ledger.tasks[id];
-  if (!task) return undefined;
-  const now = new Date().toISOString();
-  task.metadata = { ...(task.metadata ?? {}), ...patch };
-  task.updatedAt = now;
-  await scheduleWrite();
-  const result = { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  const result = await sharedLedger.update((ledger) => {
+    if (!Object.prototype.hasOwnProperty.call(ledger.tasks, id)) return undefined;
+    const task = ledger.tasks[id];
+    if (!task) return undefined;
+    const now = new Date().toISOString();
+    task.metadata = { ...(task.metadata ?? {}), ...patch };
+    task.updatedAt = now;
+    return { ...task, metadata: task.metadata ? { ...task.metadata } : undefined };
+  });
+  if (!result) return undefined;
   // Index failure must never affect updateTaskMetadata behaviour
   indexTaskRecord(result);
   return result;
@@ -249,6 +239,5 @@ export function listTasks(limit = 50): TaskRecord[] {
 export function _resetTaskLedgerForTests(): void {
   // The ledger opens the search index indirectly; close it before tests remove DATA_DIR.
   if (typeof _resetSearchIndexForTests === 'function') _resetSearchIndexForTests();
-  _ledger = null;
-  _writeQueue = Promise.resolve();
+  sharedLedger.reset();
 }

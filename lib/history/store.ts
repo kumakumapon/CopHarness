@@ -5,9 +5,10 @@
  * CopHarness restarts.  Each history is keyed by an arbitrary string
  * (LINE userId, Discord channelId, etc.) and stored in a single JSON file.
  *
- * The file is loaded once into memory on first access.  All subsequent reads
- * come from the in-memory store, and writes are flushed to disk sequentially
- * to avoid concurrent write races.
+ * The file is shared by every CopHarness process (server, CLI, bots): reads are
+ * served from an in-memory copy that is refreshed when the file changes, and
+ * each write is a locked read-modify-write cycle so concurrent processes never
+ * overwrite each other's sessions.
  *
  * The file path can be overridden with the CONVERSATION_HISTORY_FILE
  * environment variable (default: ./conversation_history.json).
@@ -16,11 +17,10 @@
  * (default: 1000).  Entries least-recently-updated are evicted first.
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
 import type { LLMMessage } from '../adapter';
 import { dataPath } from '../utils/dataDir';
-import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
+import { createSharedJsonStore } from '../utils/sharedJsonStore';
 import { indexConversationMessages } from '../search/index';
 
 /** Maximum number of distinct sessions stored. */
@@ -42,62 +42,57 @@ interface HistoryEntry {
 
 type HistoryStore = Record<string, HistoryEntry>;
 
-// ── Singleton in-memory store ────────────────────────────────────────────────
+// ── Shared store ─────────────────────────────────────────────────────────────
 
-let _store: HistoryStore | null = null;
-
-/** Load the store from disk once; all subsequent reads use the in-memory copy. */
-function getStore(): HistoryStore {
-  if (_store !== null) return _store;
-  const filePath = historyFilePath();
-  if (fs.existsSync(filePath)) {
-    try {
-      const parsed = readJsonFileSync<unknown>(filePath, () => ({}));
-      // Support legacy format (plain Record<string, LLMMessage[]>) transparently
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const migrated: HistoryStore = {};
-        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-          if (Array.isArray(v)) {
-            // Legacy: bare message array
-            migrated[k] = { messages: v as LLMMessage[], updatedAt: 0 };
-          } else if (v && typeof v === 'object' && Array.isArray((v as HistoryEntry).messages)) {
-            migrated[k] = v as HistoryEntry;
-          }
-        }
-        _store = migrated;
-      } else {
-        _store = {};
+function parseHistory(parsed: unknown): HistoryStore {
+  const store: HistoryStore = {};
+  // Support legacy format (plain Record<string, LLMMessage[]>) transparently
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (Array.isArray(v)) {
+        // Legacy: bare message array
+        store[k] = { messages: v as LLMMessage[], updatedAt: 0 };
+      } else if (v && typeof v === 'object' && Array.isArray((v as HistoryEntry).messages)) {
+        store[k] = v as HistoryEntry;
       }
-    } catch {
-      _store = {};
     }
-  } else {
-    _store = {};
   }
-  return _store;
+  return store;
 }
 
-// ── Serialized disk writes ───────────────────────────────────────────────────
+/**
+ * Reads follow the file on disk (so several processes see each other's sessions); writes are locked
+ * read-modify-write cycles, serialised in-process and across processes.
+ */
+const sharedStore = createSharedJsonStore<HistoryStore>({
+  file: historyFilePath,
+  parse: parseHistory,
+});
 
-/** Chain of pending write operations – ensures writes are sequential. */
-let _writeQueue: Promise<void> = Promise.resolve();
+function getStore(): HistoryStore {
+  return sharedStore.read();
+}
 
-function scheduleWrite(): void {
-  _writeQueue = _writeQueue.then(async () => {
-    const store = getStore();
-    const keys = Object.keys(store);
-    if (keys.length > MAX_SESSIONS) {
-      // Evict least-recently-updated entries
-      const sorted = [...keys].sort((a, b) => (store[a]?.updatedAt ?? 0) - (store[b]?.updatedAt ?? 0));
-      const evict = sorted.slice(0, keys.length - MAX_SESSIONS);
-      for (const k of evict) delete store[k];
-    }
-    try {
-      await atomicWriteJson(historyFilePath(), store);
-    } catch (err) {
-      console.warn('[history/store] Failed to write conversation_history.json:', err);
-    }
-  });
+function evictOldest(store: HistoryStore): void {
+  const keys = Object.keys(store);
+  if (keys.length <= MAX_SESSIONS) return;
+  // Evict least-recently-updated entries
+  const sorted = [...keys].sort((a, b) => (store[a]?.updatedAt ?? 0) - (store[b]?.updatedAt ?? 0));
+  for (const k of sorted.slice(0, keys.length - MAX_SESSIONS)) delete store[k];
+}
+
+/** Locked read-modify-write; a failed write is logged, not thrown (history must never break a chat). */
+async function persistUpdate<R>(mutate: (store: HistoryStore) => R): Promise<R | undefined> {
+  try {
+    return await sharedStore.update((store) => {
+      const result = mutate(store);
+      evictOldest(store);
+      return result;
+    });
+  } catch (err) {
+    console.warn('[history/store] Failed to write conversation_history.json:', err);
+    return undefined;
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -117,22 +112,22 @@ export function loadHistory(key: string): LLMMessage[] {
  * promise ensures the data has been flushed to disk.
  */
 export async function saveHistory(key: string, history: LLMMessage[]): Promise<void> {
-  const previousCount = getStore()[key]?.messages.length ?? 0;
-  getStore()[key] = { messages: history, updatedAt: Date.now() };
-  scheduleWrite();
+  const previousCount = await persistUpdate((store) => {
+    const count = store[key]?.messages.length ?? 0;
+    store[key] = { messages: history, updatedAt: Date.now() };
+    return count;
+  });
   // Index only new non-system messages — failure must never affect save behaviour
-  indexConversationMessages(key, history, previousCount);
-  return _writeQueue;
+  if (previousCount !== undefined) indexConversationMessages(key, history, previousCount);
 }
 
 /**
  * Remove the stored conversation history for the given session key.
  */
 export async function clearHistory(key: string): Promise<void> {
-  const store = getStore();
-  delete store[key];
-  scheduleWrite();
-  return _writeQueue;
+  await persistUpdate((store) => {
+    delete store[key];
+  });
 }
 
 /**
