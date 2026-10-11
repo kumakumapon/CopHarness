@@ -114,6 +114,12 @@ describe('skill proposal sandbox', () => {
       expect(result.content).toBe('2,4,6');
     });
 
+    it('survives memory exhaustion without taking down the host', async () => {
+      const code = `module.exports = async () => { const a = []; for (;;) a.push(new Array(1e6).fill(1)); };`;
+      const result = await runProposalCode(code, {}, { timeoutMs: 5000 });
+      expect(result.isError).toBe(true);
+    });
+
     it('interrupts an async microtask loop via the timeout', async () => {
       const code = `module.exports = async () => { for (;;) await null; };`;
       const result = await runProposalCode(code, {}, { timeoutMs: 200 });
