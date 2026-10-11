@@ -10,11 +10,10 @@
  * stored under DATA_DIR (or cwd when DATA_DIR is unset) as identities.json.
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
-import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
+import { createSharedJsonStore } from '../utils/sharedJsonStore';
 
 export type IdentityChannel = 'line' | 'discord' | 'api' | string;
 
@@ -48,9 +47,6 @@ export interface IdentityResolution {
   person: PersonIdentity;
 }
 
-let _store: IdentityStoreFile | null = null;
-let _writeQueue: Promise<void> = Promise.resolve();
-
 function identityStoreFilePath(): string {
   const explicit = process.env.IDENTITY_STORE_FILE;
   if (explicit) return path.resolve(explicit);
@@ -69,34 +65,25 @@ function emptyStore(): IdentityStoreFile {
   return { people: {}, channelIdentities: {} };
 }
 
-function getStore(): IdentityStoreFile {
-  if (_store) return _store;
-  const filePath = identityStoreFilePath();
-  if (!fs.existsSync(filePath)) {
-    _store = emptyStore();
-    return _store;
-  }
-
-  try {
-    const parsed = readJsonFileSync<Partial<IdentityStoreFile>>(filePath, () => ({}));
-    _store = {
-      people: parsed.people && typeof parsed.people === 'object' ? parsed.people : {},
-      channelIdentities:
-        parsed.channelIdentities && typeof parsed.channelIdentities === 'object'
-          ? parsed.channelIdentities
-          : {},
-    };
-  } catch {
-    _store = emptyStore();
-  }
-  return _store;
+function parseStore(raw: unknown): IdentityStoreFile {
+  const parsed = (raw && typeof raw === 'object' ? raw : {}) as Partial<IdentityStoreFile>;
+  return {
+    people: parsed.people && typeof parsed.people === 'object' ? parsed.people : {},
+    channelIdentities:
+      parsed.channelIdentities && typeof parsed.channelIdentities === 'object'
+        ? parsed.channelIdentities
+        : {},
+  };
 }
 
-function scheduleWrite(): Promise<void> {
-  _writeQueue = _writeQueue.then(async () => {
-    await atomicWriteJson(identityStoreFilePath(), getStore());
-  });
-  return _writeQueue;
+/** Shared across processes: reads follow the file, writes are locked read-modify-write cycles. */
+const sharedStore = createSharedJsonStore<IdentityStoreFile>({
+  file: identityStoreFilePath,
+  parse: parseStore,
+});
+
+function getStore(): IdentityStoreFile {
+  return sharedStore.read();
 }
 
 function createPerson(now: string, displayName?: string): PersonIdentity {
@@ -118,7 +105,17 @@ export async function resolveIdentity(
   subject: string,
   options: { displayName?: string; personId?: string } = {},
 ): Promise<IdentityResolution> {
-  const store = getStore();
+  // Validate before taking the lock so bad input never touches the file.
+  makeChannelKey(channel, subject);
+  return sharedStore.update((store) => resolveInStore(store, channel, subject, options));
+}
+
+function resolveInStore(
+  store: IdentityStoreFile,
+  channel: IdentityChannel,
+  subject: string,
+  options: { displayName?: string; personId?: string },
+): IdentityResolution {
   const channelKey = makeChannelKey(channel, subject);
   const now = new Date().toISOString();
   const existing = store.channelIdentities[channelKey];
@@ -136,7 +133,6 @@ export async function resolveIdentity(
     store.people[person.personId] = person;
     existing.updatedAt = now;
     if (options.displayName) existing.displayName = options.displayName;
-    await scheduleWrite();
     return { personId: person.personId, channelKey, identity: existing, person };
   }
 
@@ -158,7 +154,6 @@ export async function resolveIdentity(
     displayName: options.displayName,
   };
   store.channelIdentities[channelKey] = identity;
-  await scheduleWrite();
   return { personId: person.personId, channelKey, identity, person };
 }
 
@@ -171,12 +166,14 @@ export async function linkIdentity(
   subject: string,
   displayName?: string,
 ): Promise<IdentityResolution> {
-  const store = getStore();
-  if (!store.people[personId]) {
-    const now = new Date().toISOString();
-    store.people[personId] = { personId, createdAt: now, updatedAt: now, displayName, channelKeys: [] };
-  }
-  return resolveIdentity(channel, subject, { personId, displayName });
+  makeChannelKey(channel, subject);
+  return sharedStore.update((store) => {
+    if (!store.people[personId]) {
+      const now = new Date().toISOString();
+      store.people[personId] = { personId, createdAt: now, updatedAt: now, displayName, channelKeys: [] };
+    }
+    return resolveInStore(store, channel, subject, { personId, displayName });
+  });
 }
 
 export function getPerson(personId: string): PersonIdentity | undefined {
@@ -216,6 +213,5 @@ export async function resolveConversationKey(
 
 /** Test helper: clear in-memory state so env-controlled file paths are re-read. */
 export function _resetIdentityStoreForTests(): void {
-  _store = null;
-  _writeQueue = Promise.resolve();
+  sharedStore.reset();
 }

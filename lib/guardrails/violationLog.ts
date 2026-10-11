@@ -1,13 +1,12 @@
 /**
  * Persistent log of skill output schema violations.
- * Mirrors the pattern used in lib/logs/store.ts:
- * - in-memory circular buffer for fast reads during the current process
- * - JSON file for persistence across restarts
+ * Backed by a JSON file shared across processes: reads follow the file, and each new violation is
+ * appended under the cross-process lock (a violation is a rare event, so the blocking write is fine
+ * and keeps `recordViolation` synchronous for its callers).
  */
 
-import * as fs from 'fs';
 import { dataPath } from '../utils/dataDir';
-import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
+import { createSharedJsonStore } from '../utils/sharedJsonStore';
 
 export interface SchemaViolation {
   id: string;
@@ -20,51 +19,21 @@ export interface SchemaViolation {
 
 const MAX_VIOLATIONS = 200;
 
-/** In-process ring buffer — populated at startup from file and updated on each violation. */
-const buffer: SchemaViolation[] = [];
-let bufferLoaded = false;
-
 function storePath(): string {
   return dataPath('schema_violations.json');
 }
 
-function loadFromFile(): SchemaViolation[] {
-  const p = storePath();
-  if (!fs.existsSync(p)) return [];
-  try {
-    const parsed = readJsonFileSync<unknown>(p, () => []);
-    return Array.isArray(parsed) ? (parsed as SchemaViolation[]) : [];
-  } catch {
-    return [];
-  }
-}
+const sharedLog = createSharedJsonStore<SchemaViolation[]>({
+  file: storePath,
+  parse: (raw) => (Array.isArray(raw) ? (raw as SchemaViolation[]).slice(-MAX_VIOLATIONS) : []),
+});
 
-function ensureBuffer(): void {
-  if (bufferLoaded) return;
-  const stored = loadFromFile();
-  buffer.push(...stored.slice(-MAX_VIOLATIONS));
-  bufferLoaded = true;
-}
-
-async function persist(): Promise<void> {
-  const toWrite = buffer.slice(-MAX_VIOLATIONS);
-  try {
-    await atomicWriteJson(storePath(), toWrite);
-  } catch {
-    // Non-critical — do not throw; violations are still in memory
-  }
-}
-
-/**
- * Record a new schema violation.
- * Fire-and-forget from the caller's perspective (the async write is non-blocking).
- */
+/** Record a new schema violation. Never throws: a log failure must not affect the skill call. */
 export function recordViolation(
   skillName: string,
   errors: string[],
   content: string,
 ): void {
-  ensureBuffer();
   const violation: SchemaViolation = {
     id: crypto.randomUUID(),
     skillName,
@@ -72,19 +41,22 @@ export function recordViolation(
     errors,
     contentPreview: content.slice(0, 200),
   };
-  buffer.push(violation);
-  if (buffer.length > MAX_VIOLATIONS) buffer.shift();
-  void persist();
+  try {
+    sharedLog.updateSync((log) => {
+      log.push(violation);
+      if (log.length > MAX_VIOLATIONS) log.splice(0, log.length - MAX_VIOLATIONS);
+    });
+  } catch (err) {
+    console.warn('[violationLog] Failed to persist schema violation:', err);
+  }
 }
 
 /** Return the most recent `limit` violations, newest first. */
 export function listViolations(limit = 50): SchemaViolation[] {
-  ensureBuffer();
-  return buffer.slice().reverse().slice(0, Math.min(limit, MAX_VIOLATIONS));
+  return sharedLog.read().slice().reverse().slice(0, Math.min(limit, MAX_VIOLATIONS));
 }
 
-/** Total violation count since the process started (or since last restart). */
+/** Number of violations currently stored (capped at MAX_VIOLATIONS). */
 export function violationCount(): number {
-  ensureBuffer();
-  return buffer.length;
+  return sharedLog.read().length;
 }
