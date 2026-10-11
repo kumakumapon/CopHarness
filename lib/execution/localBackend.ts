@@ -59,13 +59,16 @@ export class LocalBackend implements ExecutionBackend {
   async runCommand(req: CommandRequest): Promise<CommandResult> {
     enforceNetworkPolicy(req.command);
     const timeoutMs = req.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    // Run inside the sandbox directory (like the docker `-w` / ssh `cd` backends)
+    // so relative paths cannot reach the application's own files (.env.local, ...).
+    const cwd = await getSandboxDir();
     return new Promise((resolve) => {
       const isWin = process.platform === 'win32';
       const spawnCmd = isWin ? 'cmd' : req.command;
       const spawnArgs = isWin ? ['/c', req.command, ...req.args] : req.args;
 
       let timedOut = false;
-      const child = spawn(spawnCmd, spawnArgs, { shell: false });
+      const child = spawn(spawnCmd, spawnArgs, { shell: false, cwd });
       let stdout = '';
       let stderr = '';
 
