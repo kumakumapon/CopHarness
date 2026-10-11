@@ -20,8 +20,7 @@ export const copilotClient = new CopilotClient({
 });
 
 export async function startClient() {
-  const state = (copilotClient as any).getState?.();
-  if (state === 'connected') return;
+  // SDK 1.x: start() is idempotent (and there is no getState()).
   await copilotClient.start();
 }
 

@@ -39,14 +39,14 @@ export class CopilotAdapter implements LLMAdapter {
             Object.assign(new Error('Request aborted by client'), { name: 'AbortError' });
 
           if (abortSignal.aborted) {
-            session.destroy().catch(() => {});
+            session.disconnect().catch(() => {});
             reject(makeAbortError());
             return;
           }
           abortSignal.addEventListener(
             'abort',
             () => {
-              session.destroy().catch(() => {});
+              session.disconnect().catch(() => {});
               console.info('[CopilotAdapter] Request aborted by client');
               reject(makeAbortError());
             },
@@ -61,7 +61,7 @@ export class CopilotAdapter implements LLMAdapter {
       const content = (resp && (resp as any).data && (resp as any).data.content) || '';
       return { content, model, provider: 'copilot' };
     } finally {
-      await session.destroy().catch(() => {});
+      await session.disconnect().catch(() => {});
     }
   }
 
