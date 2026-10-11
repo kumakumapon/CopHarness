@@ -19,7 +19,7 @@ describe('runCommand skill policy integration', () => {
     const result = await runCommand.handler(
       isWin
         ? { command: 'type', args: ['C:\\Windows\\win.ini'] }
-        : { command: 'cat', args: ['/etc/hostname'] },
+        : { command: 'cat', args: ['/home/user/.env.local'] },
     );
     expect(result.isError).toBe(true);
     expect(result.content).toMatch(/outside the sandbox/);
