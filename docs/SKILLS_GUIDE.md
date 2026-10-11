@@ -499,8 +499,21 @@ New York の天気と湿度を確認して
 安全のため、実行できるコマンドはホワイトリストに限定されています。  
 シェル演算子（`|`, `;`, `&&` 等）は使用不可。
 
-**許可されているコマンド:**
-`ls`, `dir`, `pwd`, `echo`, `date`, `whoami`, `hostname`, `cat`, `head`, `tail`, `wc`, `grep`, `find`, `sort`, `uniq`, `which`, `env`, `printenv`, `df`, `du`, `uname`, `uptime`, `node`, `python3`, `python`, `ruby`, `go`
+**許可されているコマンド（プラットフォーム別）:**
+
+| OS | コマンド |
+|---|---|
+| Linux / macOS | `ls`, `pwd`, `echo`, `date`, `whoami`, `hostname`, `cat`, `head`, `tail`, `wc`, `grep`, `find`, `sort`, `uniq`, `which`, `df`, `du`, `uname`, `uptime` |
+| Windows | `dir`, `echo`, `whoami`, `hostname`, `type` |
+
+コマンド名だけでなく、**引数もコマンドごとに検証**されます（`lib/skills/commandPolicy.ts`）。
+
+- 許可されたフラグのみ受け付けます（読み取り専用のもの）。`find -delete` / `-exec` / `-fprint*`、`sort -o`、`date -s`、`tail -f`、`grep -f` などは拒否されます。
+- ファイル引数は**サンドボックスディレクトリ（`SKILL_FILE_SANDBOX_DIR`、デフォルト `./workspace`）からの相対パス**に限られます。絶対パス、`..` で外へ出るパス、`~`、ドライブ指定は拒否されます。
+- コマンドはサンドボックスディレクトリを作業ディレクトリとして実行されます（`.env.local` などアプリ本体のファイルは相対パスでも到達できません）。
+- 標準入力を待ち続ける形（`cat` や `grep PATTERN` のファイル省略など）は拒否されます。
+
+> シンボリックリンクの解決（`realpath`）は行っていません。サンドボックス内に外部を指すリンクを置かないでください。
 
 **チャットでの呼び出し例:**
 ```

@@ -1,20 +1,22 @@
 import { type SkillDefinition } from '../skill';
 import { getExecutionBackend } from '../execution';
 
+import { getAllowedCommandNames, validateCommandInvocation } from './commandPolicy';
+
 /**
- * Whitelist of allowed command names.
- * Only the base command name is checked — arguments can be anything that passes
- * the argument filter below.
+ * Command names runnable on this platform. Which flags and arguments each one
+ * accepts is defined in ./commandPolicy: a bare name allowlist is not safe
+ * (e.g. `find -delete`, `sort -o FILE`, `cat /abs/path`).
  */
-const ALLOWED_COMMANDS = new Set([
-  'ls', 'dir', 'pwd', 'echo', 'date', 'whoami', 'hostname',
-  'cat', 'head', 'tail', 'wc', 'grep', 'find', 'sort', 'uniq',
-  'which', 'df', 'du', 'uname', 'uptime',
-]);
+const ALLOWED_COMMANDS = new Set(getAllowedCommandNames());
+
+const DANGEROUS_ARG = /[;&|`$%><!\r\n\0]|\.\.\/|\/etc\/|\/proc\/|\/sys\//;
+/** `^` is cmd.exe's escape character (the local backend goes through `cmd /c` on Windows). */
+const DANGEROUS_ARG_WIN = /[;&|`$%><!^\r\n\0]|\.\.\/|\/etc\/|\/proc\/|\/sys\//;
 
 /** Additional check: reject arguments that look like shell injection attempts. */
 function hasDangerousArg(args: string[]): boolean {
-  const dangerous = /[;&|`$%><!]|\.\.\/|\/etc\/|\/proc\/|\/sys\//;
+  const dangerous = process.platform === 'win32' ? DANGEROUS_ARG_WIN : DANGEROUS_ARG;
   return args.some((a) => dangerous.test(a));
 }
 
@@ -25,6 +27,7 @@ export const runCommand: SkillDefinition = {
   description:
     'Runs a whitelisted shell command and returns its output via the configured execution backend. ' +
     `Allowed commands: ${[...ALLOWED_COMMANDS].join(', ')}. ` +
+    'Only read-only flags are accepted, and file arguments must be relative paths inside the sandbox directory. ' +
     'Shell operators (|, ;, &&, etc.) are not supported.',
   parameters: {
     type: 'object',
@@ -51,6 +54,8 @@ export const runCommand: SkillDefinition = {
     if (!command) throw new Error('command is required');
     if (!ALLOWED_COMMANDS.has(command)) throw new Error(`command \"${command}\" is not allowed`);
     if (hasDangerousArg(commandArgs)) throw new Error('one or more arguments contain disallowed characters');
+    const policyError = validateCommandInvocation(command, commandArgs);
+    if (policyError) throw new Error(policyError);
     const rendered = [command, ...commandArgs].join(' ');
     return {
       summary: `Run whitelisted command: ${rendered}`,
@@ -78,6 +83,8 @@ export const runCommand: SkillDefinition = {
         isError: true,
       };
     }
+    const policyError = validateCommandInvocation(command, commandArgs);
+    if (policyError) return { content: `Error: ${policyError}`, isError: true };
 
     const backend = getExecutionBackend();
     const result = await backend.runCommand({ command, args: commandArgs });

@@ -317,7 +317,7 @@ npm run schedule run
 
 | スキル名 | 説明 | リスク | 備考 |
 |---------|------|-------|-----|
-| `runCommand` | ホワイトリスト制限付きコマンドを実行 | 高 | 許可コマンド: `ls`, `echo`, `date`, `cat`, `grep` 等 |
+| `runCommand` | ホワイトリスト制限付きコマンドを実行（読み取り専用フラグのみ・ファイル引数はサンドボックス内の相対パスに限定） | 高 | 許可コマンド: `ls`, `echo`, `date`, `cat`, `grep` 等（Windows は `dir`, `echo`, `whoami`, `hostname`, `type`） |
 | `getSystemInfo` | OS・CPU・メモリ・Node.js バージョン等を返す | 低 | — |
 | `getEnvVariable` | 許可リスト内の環境変数を返す（`EXPOSED_ENV_VARS` で制御） | 低 | — |
 
