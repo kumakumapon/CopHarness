@@ -114,7 +114,9 @@ function toRecord(row: Record<string, unknown>): MemoryRecord {
 
 function getFallbackMemoryFile(filename: string): string {
   if (process.env.MEMORY_DB_FILE) return `${filename}.json`;
-  return filename.endsWith('.sqlite') ? dataPath('memory.json') : filename;
+  if (!filename.endsWith('.sqlite')) return filename;
+  // A SQLite path from the legacy SKILL_MEMORY_FILE must keep its own JSON fallback, not share the default one.
+  return process.env.SKILL_MEMORY_FILE?.trim() ? `${filename}.json` : dataPath('memory.json');
 }
 
 export class MemoryStore {
