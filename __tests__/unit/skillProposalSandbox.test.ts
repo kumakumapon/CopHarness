@@ -86,6 +86,47 @@ describe('skill proposal sandbox', () => {
     });
   });
 
+  describe('host realm isolation (sandbox escape regressions)', () => {
+    const escapeVectors: Record<string, string> = {
+      'Object.constructor': `module.exports = async () => String(Object.constructor('return process')().pid);`,
+      'Array.constructor.constructor': `module.exports = async () => String([].constructor.constructor('return process')().pid);`,
+      'globalThis.constructor': `module.exports = async () => String(this.constructor.constructor('return process')().pid);`,
+      'args.constructor': `module.exports = async (a) => String(a.constructor.constructor('return process')().pid);`,
+      'nested args': `module.exports = async (a) => String(a.x.constructor.constructor('return process')().pid);`,
+      'console.log.constructor': `module.exports = async () => String(console.log.constructor('return process')().pid);`,
+      'thenable hijack': `module.exports = () => ({ then(res) { return res.constructor.constructor('return process')().pid; } });`,
+      'Promise.prototype.then hijack': `Promise.prototype.then = function (f) { return f.constructor('return process')().pid; };
+        module.exports = async () => 'x';`,
+      'error prototype': `module.exports = async () => { try { null.x; } catch (e) { return String(e.constructor.constructor('return process')().pid); } };`,
+    };
+
+    for (const [name, code] of Object.entries(escapeVectors)) {
+      it(`cannot reach host process via ${name}`, async () => {
+        const result = await runProposalCode(code, { x: { y: 1 } });
+        expect(result.content).not.toContain(String(process.pid));
+        expect(result.isError).toBe(true);
+      });
+    }
+
+    it('still passes nested arguments to the handler', async () => {
+      const code = `module.exports = async (a) => a.list.map((n) => n * 2).join(',');`;
+      const result = await runProposalCode(code, { list: [1, 2, 3] });
+      expect(result.content).toBe('2,4,6');
+    });
+
+    it('survives memory exhaustion without taking down the host', async () => {
+      const code = `module.exports = async () => { const a = []; for (;;) a.push(new Array(1e6).fill(1)); };`;
+      const result = await runProposalCode(code, {}, { timeoutMs: 5000 });
+      expect(result.isError).toBe(true);
+    });
+
+    it('interrupts an async microtask loop via the timeout', async () => {
+      const code = `module.exports = async () => { for (;;) await null; };`;
+      const result = await runProposalCode(code, {}, { timeoutMs: 200 });
+      expect(result.isError).toBe(true);
+    });
+  });
+
   describe('runProposalTests', () => {
     const echoCode = `module.exports = async (args) => ({ content: 'echo:' + args.text });`;
 
