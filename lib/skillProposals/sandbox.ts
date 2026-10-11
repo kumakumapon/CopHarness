@@ -1,13 +1,15 @@
 /**
  * Sandboxed execution for proposed / generated skill code.
  *
- * Proposal code runs inside a `node:vm` context with a minimal set of
- * globals: no require/import, no process, no network, no timers, and code
- * generation from strings (eval / new Function) disabled.
+ * Proposal code runs inside a `node:vm` context that contains only the
+ * context's own intrinsics: no require/import, no process, no network, no
+ * timers, and code generation from strings (eval / new Function) disabled.
+ * No host-realm object or function is shared with the guest (see
+ * createSandboxContext), which closes the `constructor.constructor` escape.
  *
- * NOTE: `node:vm` is NOT a hard security boundary. This sandbox protects
- * against accidental misuse (filesystem/network/env access, runaway sync
- * loops), not against a determined attacker. Generated skills therefore
+ * NOTE: `node:vm` is still NOT a hard security boundary (e.g. memory
+ * exhaustion, engine-level bugs). For untrusted code prefer
+ * GENERATED_SKILL_EXECUTION=backend (docker / ssh). Generated skills therefore
  * always carry riskLevel >= 'medium', stay inactive unless listed in
  * ENABLED_SKILLS, and execute behind the Human-in-the-Loop / tool policy
  * gate like any other skill.
@@ -42,51 +44,26 @@ export interface SandboxRunOptions {
 const CONTRACT_HINT =
   'proposal code must assign `module.exports` an async function `(args) => SkillResult | string`';
 
+/**
+ * Create an empty context. NOTHING from the host realm is injected: every
+ * object or function the guest can reach would expose the host `Function`
+ * constructor via `x.constructor.constructor("return process")()`, which is a
+ * full sandbox escape. The context's own intrinsics (JSON, Math, Date, Map,
+ * Promise, ...) are used instead. As a consequence host-only globals such as
+ * URL, TextEncoder and structuredClone are not available to proposal code.
+ */
 function createSandboxContext(): vm.Context {
-  const moduleObj: { exports: unknown } = { exports: undefined };
-  const sandbox: Record<string, unknown> = {
-    module: moduleObj,
-    exports: moduleObj.exports,
-    console: {
-      log: () => undefined,
-      info: () => undefined,
-      warn: () => undefined,
-      error: () => undefined,
-      debug: () => undefined,
-    },
-    JSON,
-    Math,
-    Date,
-    String,
-    Number,
-    Boolean,
-    Array,
-    Object,
-    RegExp,
-    Error,
-    TypeError,
-    RangeError,
-    Map,
-    Set,
-    Promise,
-    Symbol,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    encodeURIComponent,
-    decodeURIComponent,
-    encodeURI,
-    decodeURI,
-    structuredClone,
-    URL,
-    URLSearchParams,
-    TextEncoder,
-    TextDecoder,
-  };
-  return vm.createContext(sandbox, {
+  const context = vm.createContext(Object.create(null), {
     codeGeneration: { strings: false, wasm: false },
+    // Drain the guest's microtask queue inside runInContext so the vm timeout
+    // also bounds async code (e.g. `for (;;) await null`).
+    microtaskMode: 'afterEvaluate',
   });
+  new vm.Script(
+    'var module = { exports: undefined }; var exports = module.exports;' +
+      'var console = { log() {}, info() {}, warn() {}, error() {}, debug() {} };',
+  ).runInContext(context);
+  return context;
 }
 
 function normalizeResult(value: unknown): SkillResult {
@@ -119,10 +96,9 @@ function errorResult(error: unknown): SkillResult {
  * sandbox context. Each invocation gets its own context, so proposal code
  * cannot accumulate state across calls.
  *
- * Sync runaway loops are interrupted via the vm timeout; async work is
- * bounded by a Promise race (a misbehaving async loop cannot be force-killed
- * inside the same process — this is one reason generated skills stay behind
- * the approval gate).
+ * Both sync loops and microtask loops are interrupted via the vm timeout
+ * (`microtaskMode: 'afterEvaluate'`). Guest code has no timers, so a promise
+ * still pending after evaluation can never settle and is reported as timed out.
  */
 export async function runProposalCode(
   code: string,
@@ -132,55 +108,63 @@ export async function runProposalCode(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const context = createSandboxContext();
 
+  // Arguments cross the boundary as a JSON *string* and are parsed by the
+  // guest's own JSON, so no host object is ever reachable from guest code.
+  let argsLiteral: string;
   try {
-    const script = new vm.Script(code, { filename: 'generated-skill.js' });
-    script.runInContext(context, { timeout: timeoutMs });
+    argsLiteral = JSON.stringify(JSON.stringify(args ?? {}));
   } catch (error) {
     return errorResult(error);
   }
 
-  const exported = (context as Record<string, unknown>).module as { exports: unknown };
-  if (typeof exported?.exports !== 'function') {
+  try {
+    new vm.Script(code, { filename: 'generated-skill.js' }).runInContext(context, { timeout: timeoutMs });
+  } catch (error) {
+    return errorResult(error);
+  }
+
+  // The invoker runs entirely in the guest realm and reports back through a
+  // single string global, so no host callback (and no host Promise adoption
+  // of a guest thenable) is involved.
+  const invoker = `
+    var __result;
+    (function () {
+      function fail(e) {
+        __result = JSON.stringify({ error: String(e && e.message !== undefined ? e.message : e) });
+      }
+      if (typeof module.exports !== 'function') {
+        __result = JSON.stringify({ noHandler: true });
+        return;
+      }
+      try {
+        var args = JSON.parse(${argsLiteral});
+        Promise.resolve(module.exports(args)).then(function (v) {
+          try { __result = JSON.stringify({ value: v === undefined ? null : v }); } catch (e) { fail(e); }
+        }, fail);
+      } catch (e) { fail(e); }
+    })();
+  `;
+  try {
+    new vm.Script(invoker, { filename: 'generated-skill-invoke.js' }).runInContext(context, { timeout: timeoutMs });
+  } catch (error) {
+    return errorResult(error);
+  }
+
+  const raw: unknown = new vm.Script("typeof __result === 'string' ? __result : undefined").runInContext(context);
+  if (typeof raw !== 'string') {
+    return errorResult(new Error(`timed out after ${timeoutMs}ms (handler did not settle)`));
+  }
+  let parsed: { error?: string; noHandler?: boolean; value?: unknown };
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return errorResult(error);
+  }
+  if (parsed.noHandler) {
     return { content: `Generated skill did not export a handler; ${CONTRACT_HINT}`, isError: true };
   }
-
-  // Invoke through a script (not a direct call from host) so the synchronous
-  // portion of the handler is still covered by the vm timeout.
-  (context as Record<string, unknown>).__args = args;
-  let invoked: unknown;
-  try {
-    invoked = new vm.Script('module.exports(__args)', { filename: 'generated-skill-invoke.js' })
-      .runInContext(context, { timeout: timeoutMs });
-  } catch (error) {
-    return errorResult(error);
-  }
-
-  // Cross-realm safe thenable check: VM-realm promises fail host `instanceof`.
-  const isThenable =
-    invoked !== null &&
-    (typeof invoked === 'object' || typeof invoked === 'function') &&
-    typeof (invoked as PromiseLike<unknown>).then === 'function';
-  if (!isThenable) {
-    return normalizeResult(invoked);
-  }
-
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    const settled = await Promise.race([
-      Promise.resolve(invoked as PromiseLike<unknown>),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`timed out after ${timeoutMs}ms`)),
-          timeoutMs,
-        );
-      }),
-    ]);
-    return normalizeResult(settled);
-  } catch (error) {
-    return errorResult(error);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  if (parsed.error !== undefined) return errorResult(new Error(parsed.error));
+  return normalizeResult(parsed.value);
 }
 
 function truncateDetail(text: string): string {
