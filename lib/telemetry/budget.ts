@@ -1,10 +1,9 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import type { TokenUsage } from '../adapter';
 import { dataPath } from '../utils/dataDir';
 import { createApprovalRequest, listApprovalRequests } from '../humanInLoop/store';
 import { isHilEnabled } from '../humanInLoop/gate';
 import { getPricing } from './costEstimator';
+import { atomicWriteJsonSync, readJsonFileSync } from '../utils/jsonFile';
 
 export class BudgetExceededError extends Error {
   constructor(message: string) {
@@ -45,7 +44,7 @@ function ensureLoaded(): void {
   usage.clear();
   loadedDay = today;
   try {
-    const parsed = JSON.parse(fs.readFileSync(usageFile(), 'utf8')) as { day?: string; usage?: Record<string, Usage> };
+    const parsed = readJsonFileSync<{ day?: string; usage?: Record<string, Usage> }>(usageFile(), () => ({}));
     if (parsed.day !== today || !parsed.usage) return;
     for (const [key, value] of Object.entries(parsed.usage)) {
       if (Number.isFinite(value.tokens) && Number.isFinite(value.costUsd)) usage.set(key, value);
@@ -57,8 +56,7 @@ function ensureLoaded(): void {
 
 function persist(): void {
   ensureLoaded();
-  fs.mkdirSync(path.dirname(usageFile()), { recursive: true });
-  fs.writeFileSync(usageFile(), JSON.stringify({ day: loadedDay, usage: Object.fromEntries(usage) }, null, 2), 'utf8');
+  atomicWriteJsonSync(usageFile(), { day: loadedDay, usage: Object.fromEntries(usage) });
 }
 
 function getUsage(key: string): Usage {

@@ -12,9 +12,9 @@
  * DATA_DIR is honoured via the shared dataPath() utility.
  */
 
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJsonSync, readJsonFileSync } from '../utils/jsonFile';
 import { type StatementLike, type DatabaseLike, type SqliteModuleLike, loadSqlite, escapeFtsQuery } from '../utils/sqlite';
 import type { LLMMessage } from '../adapter';
 import type { TaskRecord } from '../tasks/ledger';
@@ -322,8 +322,7 @@ export class SearchIndex {
   private loadFallback(): SearchDocument[] {
     if (!this.fallbackFile) return [];
     try {
-      const raw = fs.readFileSync(this.fallbackFile, 'utf8');
-      const parsed = JSON.parse(raw) as unknown;
+      const parsed = readJsonFileSync<unknown>(this.fallbackFile, () => []);
       if (Array.isArray(parsed)) return parsed as SearchDocument[];
     } catch {
       // File missing or corrupt
@@ -333,8 +332,7 @@ export class SearchIndex {
 
   private saveFallback(docs: SearchDocument[]): void {
     if (!this.fallbackFile) return;
-    fs.mkdirSync(path.dirname(this.fallbackFile), { recursive: true });
-    fs.writeFileSync(this.fallbackFile, JSON.stringify(docs, null, 2), 'utf8');
+    atomicWriteJsonSync(this.fallbackFile, docs);
   }
 }
 

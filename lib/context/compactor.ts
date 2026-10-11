@@ -12,6 +12,7 @@
 
 import type { LLMAdapter, LLMMessage } from '../adapter';
 import { estimateTokens, estimateMessageTokens } from '../history/trimmer';
+import { atomicWriteFile, atomicWriteJson } from '../utils/jsonFile';
 
 /** Token budget below which compaction is skipped. Adjust via COMPACTOR_TOKEN_THRESHOLD. */
 const DEFAULT_TOKEN_THRESHOLD = 3_000;
@@ -114,10 +115,10 @@ export async function writeProgressArtifact(goal: string, summary: string, taskI
       ``,
       `_Updated: ${updatedAt}_`,
     ].join('\n');
-    await fsp.writeFile(path.join(dir, 'progress.md'), content, 'utf-8');
+    await atomicWriteFile(path.join(dir, 'progress.md'), content);
     const jsonPayload: Record<string, unknown> = { goal, summary, updatedAt };
     if (taskId !== undefined) jsonPayload.taskId = taskId;
-    await fsp.writeFile(path.join(dir, 'progress.json'), JSON.stringify(jsonPayload, null, 2) + '\n', 'utf-8');
+    await atomicWriteJson(path.join(dir, 'progress.json'), jsonPayload);
   } catch {
     // Non-critical
   }
