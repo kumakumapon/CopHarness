@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { MemoryStore } from '../../lib/memory/store';
-import { memoryForget, memoryGet, memoryList, memorySearch, memorySet, memoryUpsert } from '../../lib/skills/memory';
+import { memoryExplain, memoryForget, memorySearch, memoryUpsert } from '../../lib/skills/memory';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
 
 describe('MemoryStore SQLite + FTS5', () => {
@@ -46,15 +46,18 @@ describe('MemoryStore SQLite + FTS5', () => {
     }
   });
 
-  it('honors SKILL_MEMORY_FILE for legacy test isolation', async () => {
-    const firstFile = path.join(tmpDir, 'first-memory.json');
-    const secondFile = path.join(tmpDir, 'second-memory.json');
+  it('honors SKILL_MEMORY_FILE as the legacy name of MEMORY_DB_FILE', async () => {
+    const firstFile = path.join(tmpDir, 'first-memory.sqlite');
+    const secondFile = path.join(tmpDir, 'second-memory.sqlite');
 
     process.env.SKILL_MEMORY_FILE = firstFile;
-    await memorySet.handler({ key: 'name', value: 'Alice' });
+    await memoryUpsert.handler({ key: 'name', content: 'Alice' });
 
     process.env.SKILL_MEMORY_FILE = secondFile;
-    await expect(memoryList.handler({})).resolves.toMatchObject({ content: '(memory is empty)' });
+    await expect(memorySearch.handler({})).resolves.toMatchObject({ content: '(no matching memories)' });
+
+    process.env.SKILL_MEMORY_FILE = firstFile;
+    expect((await memorySearch.handler({})).content).toContain('Alice');
   });
 
   it('falls back to a JSON backend when node:sqlite is unavailable', () => {
@@ -70,19 +73,22 @@ describe('MemoryStore SQLite + FTS5', () => {
     }
   });
 
-  it('keeps legacy memory skill names as wrappers over the SQLite store', async () => {
-    const set = await memorySet.handler({ key: 'favorite', value: 'SQLite FTS' });
-    expect(set.isError).toBeFalsy();
-    await expect(memoryGet.handler({ key: 'favorite' })).resolves.toMatchObject({ content: 'SQLite FTS' });
+  it('upserts, searches, explains and forgets through the registered skills', async () => {
+    const saved = await memoryUpsert.handler({ key: 'favorite', content: 'SQLite FTS' });
+    expect(saved.isError).toBeFalsy();
+    expect((await memorySearch.handler({ query: 'FTS' })).content).toContain('favorite');
+    expect((await memoryExplain.handler({ idOrKey: 'favorite' })).content).toContain('SQLite FTS');
 
-    const search = await memorySearch.handler({ query: 'FTS' });
-    expect(search.content).toContain('favorite');
+    // Same key updates in place instead of creating a second record.
+    await memoryUpsert.handler({ key: 'favorite', content: 'SQLite FTS5' });
+    const results = (await memorySearch.handler({ query: 'FTS5' })).content as string;
+    expect(results.split('\n')).toHaveLength(1);
 
     const upsert = await memoryUpsert.handler({ key: 'preference:editor', kind: 'preference', subject: 'user', content: 'Prefers concise dashboards' });
     expect(upsert.isError).toBeFalsy();
 
     const deleted = await memoryForget.handler({ idOrKey: 'favorite' });
     expect(deleted.content).toContain('Forgot memory favorite');
-    await expect(memoryGet.handler({ key: 'favorite' })).resolves.toMatchObject({ content: '(no value stored for key "favorite")' });
+    expect((await memoryForget.handler({ idOrKey: 'favorite' })).content).toContain('no memory found');
   });
 });
