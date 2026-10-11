@@ -2,8 +2,7 @@
  * Long-term memory skills backed by SQLite + FTS5.
  *
  * MEMORY_DB_FILE can point at a custom SQLite database. Otherwise the store uses
- * DATA_DIR/memory.sqlite. The legacy memorySet/memoryGet/memoryList skill names
- * are kept as compatibility wrappers over MemoryStore key records.
+ * DATA_DIR/memory.sqlite. (SKILL_MEMORY_FILE is the legacy name of MEMORY_DB_FILE.)
  */
 
 import { type SkillDefinition } from '../skill';
@@ -147,77 +146,6 @@ export const memoryExplain: SkillDefinition = {
     if (!idOrKey) return { content: 'Error: idOrKey is required', isError: true };
     try {
       return { content: withStore((store) => store.explain(idOrKey)) };
-    } catch (err) {
-      return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
-    }
-  },
-};
-
-export const memorySet: SkillDefinition = {
-  name: 'memorySet',
-  description: 'Compatibility wrapper that saves a key-value pair into the SQLite long-term memory store.',
-  parameters: {
-    type: 'object',
-    properties: {
-      key: { type: 'string', description: 'The key to store the value under.' },
-      value: { type: 'string', description: 'The value to store.' },
-    },
-    required: ['key', 'value'],
-  },
-  category: 'memory',
-  riskLevel: 'medium',
-  handler: async (args) => {
-    const key = String(args.key ?? '').trim();
-    const value = String(args.value ?? '');
-    if (!key) return { content: 'Error: key is required', isError: true };
-    try {
-      withStore((store) => store.upsert({ key, kind: 'fact', content: value }));
-      return { content: `Saved: "${key}" = "${value}"` };
-    } catch (err) {
-      return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
-    }
-  },
-};
-
-export const memoryGet: SkillDefinition = {
-  name: 'memoryGet',
-  description: 'Retrieves the value stored under a key from SQLite long-term memory.',
-  parameters: {
-    type: 'object',
-    properties: {
-      key: { type: 'string', description: 'The key to look up.' },
-    },
-    required: ['key'],
-  },
-  category: 'memory',
-  riskLevel: 'low',
-  handler: async (args) => {
-    const key = String(args.key ?? '').trim();
-    if (!key) return { content: 'Error: key is required', isError: true };
-    try {
-      const record = withStore((store) => store.findByKey(key));
-      if (!record) return { content: `(no value stored for key "${key}")` };
-      return { content: record.content };
-    } catch (err) {
-      return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
-    }
-  },
-};
-
-export const memoryList: SkillDefinition = {
-  name: 'memoryList',
-  description: 'Lists recent important records in SQLite long-term memory.',
-  parameters: {
-    type: 'object',
-    properties: {},
-  },
-  category: 'memory',
-  riskLevel: 'low',
-  handler: async () => {
-    try {
-      const records = withStore((store) => store.search({ limit: 100 }));
-      if (records.length === 0) return { content: '(memory is empty)' };
-      return { content: records.map((record) => record.key ? `"${record.key}": "${record.content}"` : formatRecord(record)).join('\n') };
     } catch (err) {
       return { content: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
     }

@@ -440,7 +440,7 @@ describe('runCommand skill', () => {
 // Phase 5: Memory skills
 // ---------------------------------------------------------------------------
 
-import { memorySet, memoryGet, memoryList } from '../../lib/skills/memory';
+import { memoryUpsert, memorySearch, memoryForget } from '../../lib/skills/memory';
 
 describe('memory skills', () => {
   let tmpMemoryFile: string;
@@ -448,7 +448,7 @@ describe('memory skills', () => {
 
   beforeEach(async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copharness-mem-'));
-    tmpMemoryFile = path.join(tmpDir, 'memory.json');
+    tmpMemoryFile = path.join(tmpDir, 'memory.sqlite');
     process.env.SKILL_MEMORY_FILE = tmpMemoryFile;
   });
 
@@ -458,36 +458,39 @@ describe('memory skills', () => {
     await fs.rm(path.dirname(tmpMemoryFile), { recursive: true, force: true });
   });
 
-  it('set and get a value', async () => {
-    await memorySet.handler({ key: 'name', value: 'Alice' });
-    const result = await memoryGet.handler({ key: 'name' });
-    expect(result.content).toBe('Alice');
+  it('upsert then search finds the value', async () => {
+    await memoryUpsert.handler({ key: 'name', content: 'Alice' });
+    const result = await memorySearch.handler({ query: 'Alice' });
+    expect(result.content).toContain('name');
+    expect(result.content).toContain('Alice');
   });
 
-  it('list returns all stored keys', async () => {
-    await memorySet.handler({ key: 'k1', value: 'v1' });
-    await memorySet.handler({ key: 'k2', value: 'v2' });
-    const result = await memoryList.handler({});
-    expect(result.content).toContain('"k1"');
-    expect(result.content).toContain('"k2"');
+  it('search without a query lists all stored records', async () => {
+    await memoryUpsert.handler({ key: 'k1', content: 'v1' });
+    await memoryUpsert.handler({ key: 'k2', content: 'v2' });
+    const result = await memorySearch.handler({});
+    expect(result.content).toContain('k1');
+    expect(result.content).toContain('k2');
   });
 
-  it('get returns "(no value stored ...)" for missing key', async () => {
-    const result = await memoryGet.handler({ key: 'missing' });
+  it('search returns "(no matching memories)" when nothing is stored', async () => {
+    const result = await memorySearch.handler({});
     expect(result.isError).toBeFalsy();
-    expect(result.content).toMatch(/no value stored/i);
+    expect(result.content).toBe('(no matching memories)');
   });
 
-  it('list returns "(memory is empty)" when empty', async () => {
-    const result = await memoryList.handler({});
-    expect(result.content).toBe('(memory is empty)');
+  it('upserting the same key updates the value', async () => {
+    await memoryUpsert.handler({ key: 'x', content: 'old' });
+    await memoryUpsert.handler({ key: 'x', content: 'new' });
+    const result = await memorySearch.handler({});
+    expect(result.content).toContain('new');
+    expect(result.content).not.toContain('old');
   });
 
-  it('overwriting a key updates the value', async () => {
-    await memorySet.handler({ key: 'x', value: 'old' });
-    await memorySet.handler({ key: 'x', value: 'new' });
-    const result = await memoryGet.handler({ key: 'x' });
-    expect(result.content).toBe('new');
+  it('forget removes the record', async () => {
+    await memoryUpsert.handler({ key: 'gone', content: 'bye' });
+    await memoryForget.handler({ idOrKey: 'gone' });
+    expect((await memorySearch.handler({})).content).toBe('(no matching memories)');
   });
 });
 

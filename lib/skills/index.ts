@@ -37,7 +37,7 @@ import { getSystemInfo } from './getSystemInfo';
 import { getEnvVariable } from './getEnvVariable';
 
 // Phase 5: memory
-import { memorySet, memoryGet, memoryList, memoryUpsert, memorySearch, memoryForget, memoryExplain } from './memory';
+import { memoryUpsert, memorySearch, memoryForget, memoryExplain } from './memory';
 
 // Phase 6: external API
 import { githubSearch } from './githubSearch';
@@ -173,9 +173,6 @@ export {
   runCommand,
   getSystemInfo,
   getEnvVariable,
-  memorySet,
-  memoryGet,
-  memoryList,
   memoryUpsert,
   memorySearch,
   memoryForget,

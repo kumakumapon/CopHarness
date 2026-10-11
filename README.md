@@ -323,13 +323,14 @@ npm run schedule run
 
 #### メモリ系
 
-メモリは `SKILL_MEMORY_FILE`（デフォルト: `./memory.json`）に JSON で永続化されます。
+メモリは SQLite（FTS5 全文検索）に永続化されます。保存先は `MEMORY_DB_FILE`（デフォルト: `DATA_DIR/memory.sqlite`）で、旧名の `SKILL_MEMORY_FILE` も未設定時のフォールバックとして使われます（JSON ではなく SQLite ファイルのパスを指定してください）。
 
 | スキル名 | 説明 | リスク |
 |---------|------|-------|
-| `memorySet` | キーバリュー形式でメモを保存 | 中 |
-| `memoryGet` | 保存済みメモを取得 | 低 |
-| `memoryList` | 保存済みメモ一覧を表示 | 低 |
+| `memoryUpsert` | 種別・重要度・確信度付きのメモを作成/更新（`key` 指定で同じキーを更新） | 中 |
+| `memorySearch` | メモを全文検索（種別・対象・stale で絞り込み） | 低 |
+| `memoryExplain` | メモの種別・確信度・出典・鮮度を説明 | 低 |
+| `memoryForget` | id またはキーでメモを削除 | 中 |
 
 #### 外部 API 連携系
 
@@ -345,7 +346,7 @@ npm run schedule run
 
 ```env
 # 例: 特定スキルのみ有効にする
-ENABLED_SKILLS=currentDateTime,calculator,getWeather,memorySet,memoryGet,memoryList,hashText,regexMatch
+ENABLED_SKILLS=currentDateTime,calculator,getWeather,memoryUpsert,memorySearch,memoryExplain,hashText,regexMatch
 ```
 
 

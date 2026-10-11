@@ -80,9 +80,10 @@ Assistant: sqrt(144) + 10 = 22 です。
 | **システム** | `runCommand` | コマンド実行（ホワイトリスト制限） | — |
 | | `getSystemInfo` | システム情報取得 | — |
 | | `getEnvVariable` | 環境変数取得（許可リスト制限） | — |
-| **メモリ** | `memorySet` | メモ保存 | — |
-| | `memoryGet` | メモ取得 | — |
-| | `memoryList` | メモ一覧 | — |
+| **メモリ** | `memoryUpsert` | メモ作成/更新 | — |
+| | `memorySearch` | メモ全文検索 | — |
+| | `memoryExplain` | メモの詳細説明 | — |
+| | `memoryForget` | メモ削除 | — |
 | **外部 API** | `githubSearch` | GitHub 検索 | `GITHUB_TOKEN`（任意） |
 | | `translateText` | LLM 翻訳 | — |
 | | `sendNotification` | Slack/Discord 通知 | `SLACK_WEBHOOK_URL`, `DISCORD_WEBHOOK_URL` |
@@ -564,45 +565,64 @@ NODE_ENV の値を教えて
 ### 3.5 メモリ系
 
 会話をまたいで情報を記憶・参照できます。  
-データは `SKILL_MEMORY_FILE`（デフォルト: `./memory.json`）に JSON として保存されます。
+データは SQLite（FTS5 全文検索）に保存されます。保存先は `MEMORY_DB_FILE`（デフォルト: `DATA_DIR/memory.sqlite`）です。旧名の `SKILL_MEMORY_FILE` も `MEMORY_DB_FILE` 未設定時のフォールバックとして使われますが、JSON ではなく SQLite ファイルのパスを指定してください。
 
 ---
 
-#### `memorySet` — メモ保存
+#### `memoryUpsert` — メモ作成/更新（リスク: 中）
 
 **チャットでの呼び出し例:**
 ```
-「ユーザー名」に「Alice」を覚えておいて
+ユーザー名は Alice だと覚えておいて
 プロジェクト名を "CopHarness" として記憶して
 次回のタスクとして「ドキュメントを更新する」を保存して
 ```
 
+**パラメータ:**
+| 名前 | 型 | 説明 |
+|------|----|------|
+| `content` | string | 保存する内容（必須） |
+| `key` | string | 安定したキー。同じキーで保存すると更新される |
+| `id` | string | 更新する既存メモの id |
+| `kind` | string | `fact` / `preference` / `project` / `task` / `episodic`（省略時 `fact`） |
+| `subject` | string | 人物・プロジェクト・話題 |
+| `importance` / `confidence` | number | 0〜1 |
+| `sourceSessionId` | string | 出典の会話/タスク id |
+| `lastVerifiedAt` | string | 最後に確認した日時（ISO） |
+| `stale` | boolean | 古い可能性があるか |
+
 ---
 
-#### `memoryGet` — メモ取得
+#### `memorySearch` — メモ全文検索（リスク: 低）
 
 **チャットでの呼び出し例:**
 ```
-「ユーザー名」として覚えていた値は？
-プロジェクト名を思い出して
-```
-
----
-
-#### `memoryList` — メモ一覧
-
-**チャットでの呼び出し例:**
-```
+ユーザー名として覚えていた値は？
 記憶していることを全部教えて
-保存されているメモを一覧表示して
 ```
+
+**パラメータ（すべて任意）:** `query`（全文検索クエリ。省略時は重要度の高い最近のメモ）、`kind`、`subject`、`stale`、`limit`（1〜100）
 
 **返答例:**
 ```
-"ユーザー名": "Alice"
-"プロジェクト名": "CopHarness"
-"次回のタスク": "ドキュメントを更新する"
+- ユーザー名 (3f2a...) [fact, importance=0.5, confidence=0.8, stale=false, updated=2026-10-11T...]: Alice
 ```
+
+---
+
+#### `memoryExplain` — メモの詳細説明（リスク: 低）
+
+id またはキー（`idOrKey`）を指定すると、種別・確信度・重要度・出典・鮮度・内容を返します。
+
+---
+
+#### `memoryForget` — メモ削除（リスク: 中）
+
+id またはキー（`idOrKey`）を指定して削除します。
+
+---
+
+> 以前の `memorySet` / `memoryGet` / `memoryList` は廃止されました。キーバリュー形式で使う場合は `memoryUpsert` の `key` と `content` を使い、取得には `memorySearch` / `memoryExplain` を使います。
 
 ---
 
@@ -805,7 +825,7 @@ https://www.youtube.com/watch?v=dQw4w9WgXcQ の動画を教えて
 
 **できること:** タイムスタンプ付きの構造化ノートを保存・検索・一覧・削除します。  
 データは `SKILL_NOTES_FILE`（デフォルト: `./notes.json`）に保存されます。  
-`memorySet`/`memoryGet` よりリッチな構造（タイトル・タグ・本文・日時）を持ちます。
+メモリ系スキルと違い、タイトル・タグ・本文・日時を持つ構造化ノートです。
 
 **`noteCreate` パラメータ:**
 | 名前 | 型 | 説明 |
@@ -937,7 +957,7 @@ hsl(9, 100%, 64%) の RGB 値は？
 # .env.local に追記
 
 # 安全な読み取り系のみ有効にする例
-ENABLED_SKILLS=currentDateTime,calculator,randomNumber,uuidGenerate,getWeather,memorySet,memoryGet,memoryList
+ENABLED_SKILLS=currentDateTime,calculator,randomNumber,uuidGenerate,getWeather,memorySearch,memoryExplain
 
 # 翻訳・検索に特化した例
 ENABLED_SKILLS=webSearch,translateText,githubSearch,fetchUrl,getWeather
@@ -1089,7 +1109,7 @@ curl -X POST http://localhost:3000/api/copilot \
 
 ### メモリ・ノートスキルのエラー
 
-- `SKILL_MEMORY_FILE` で指定したファイルのディレクトリに書き込み権限があるか確認してください。
+- `MEMORY_DB_FILE`（未設定時は `DATA_DIR`）で指定した SQLite ファイルのディレクトリに書き込み権限があるか確認してください。
 - `SKILL_NOTES_FILE` で指定したファイルのディレクトリに書き込み権限があるか確認してください。
 
 ---
