@@ -6,8 +6,8 @@
  */
 
 import * as fs from 'fs';
-import * as fsp from 'fs/promises';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
 
 export interface SchemaViolation {
   id: string;
@@ -32,7 +32,8 @@ function loadFromFile(): SchemaViolation[] {
   const p = storePath();
   if (!fs.existsSync(p)) return [];
   try {
-    return JSON.parse(fs.readFileSync(p, 'utf-8')) as SchemaViolation[];
+    const parsed = readJsonFileSync<unknown>(p, () => []);
+    return Array.isArray(parsed) ? (parsed as SchemaViolation[]) : [];
   } catch {
     return [];
   }
@@ -48,7 +49,7 @@ function ensureBuffer(): void {
 async function persist(): Promise<void> {
   const toWrite = buffer.slice(-MAX_VIOLATIONS);
   try {
-    await fsp.writeFile(storePath(), JSON.stringify(toWrite, null, 2) + '\n', 'utf-8');
+    await atomicWriteJson(storePath(), toWrite);
   } catch {
     // Non-critical — do not throw; violations are still in memory
   }

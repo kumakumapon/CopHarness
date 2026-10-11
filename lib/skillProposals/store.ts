@@ -6,10 +6,10 @@
  */
 
 import * as fs from 'fs';
-import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
 import { getSkill } from '../skill';
 import {
   defaultGeneratedSkillManifest,
@@ -125,7 +125,7 @@ function getStore(): SkillProposalStoreFile {
   }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<SkillProposalStoreFile>;
+    const parsed = readJsonFileSync<Partial<SkillProposalStoreFile>>(filePath, () => ({}));
     const proposals =
       parsed.proposals && typeof parsed.proposals === 'object' ? parsed.proposals : {};
     for (const proposal of Object.values(proposals) as SkillProposal[]) {
@@ -176,9 +176,7 @@ function trimStore(store: SkillProposalStoreFile): void {
 
 function scheduleWrite(): Promise<void> {
   _writeQueue = _writeQueue.then(async () => {
-    const filePath = storeFilePath();
-    await fsp.mkdir(path.dirname(filePath), { recursive: true });
-    await fsp.writeFile(filePath, JSON.stringify(getStore(), null, 2) + '\n', 'utf-8');
+    await atomicWriteJson(storeFilePath(), getStore());
   });
   return _writeQueue;
 }

@@ -11,10 +11,10 @@
  */
 
 import * as fs from 'fs';
-import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
 
 export type IdentityChannel = 'line' | 'discord' | 'api' | string;
 
@@ -78,7 +78,7 @@ function getStore(): IdentityStoreFile {
   }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<IdentityStoreFile>;
+    const parsed = readJsonFileSync<Partial<IdentityStoreFile>>(filePath, () => ({}));
     _store = {
       people: parsed.people && typeof parsed.people === 'object' ? parsed.people : {},
       channelIdentities:
@@ -94,9 +94,7 @@ function getStore(): IdentityStoreFile {
 
 function scheduleWrite(): Promise<void> {
   _writeQueue = _writeQueue.then(async () => {
-    const filePath = identityStoreFilePath();
-    await fsp.mkdir(path.dirname(filePath), { recursive: true });
-    await fsp.writeFile(filePath, JSON.stringify(getStore(), null, 2) + '\n', 'utf-8');
+    await atomicWriteJson(identityStoreFilePath(), getStore());
   });
   return _writeQueue;
 }

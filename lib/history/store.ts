@@ -17,10 +17,10 @@
  */
 
 import * as fs from 'fs';
-import * as fsp from 'fs/promises';
 import * as path from 'path';
 import type { LLMMessage } from '../adapter';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
 import { indexConversationMessages } from '../search/index';
 
 /** Maximum number of distinct sessions stored. */
@@ -52,7 +52,7 @@ function getStore(): HistoryStore {
   const filePath = historyFilePath();
   if (fs.existsSync(filePath)) {
     try {
-      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown;
+      const parsed = readJsonFileSync<unknown>(filePath, () => ({}));
       // Support legacy format (plain Record<string, LLMMessage[]>) transparently
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const migrated: HistoryStore = {};
@@ -93,7 +93,7 @@ function scheduleWrite(): void {
       for (const k of evict) delete store[k];
     }
     try {
-      await fsp.writeFile(historyFilePath(), JSON.stringify(store, null, 2) + '\n', 'utf-8');
+      await atomicWriteJson(historyFilePath(), store);
     } catch (err) {
       console.warn('[history/store] Failed to write conversation_history.json:', err);
     }

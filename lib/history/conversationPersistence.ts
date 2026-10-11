@@ -11,6 +11,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { LLMMessage } from '../adapter';
 import { dataPath, getDataDir } from '../utils/dataDir';
+import { atomicWriteJsonSync, readJsonFileSync } from '../utils/jsonFile';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ export function saveConversation(
   // Preserve createdAt when updating an existing record.
   if (id && fs.existsSync(filePath)) {
     try {
-      const existing = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<SavedConversation>;
+      const existing = readJsonFileSync<Partial<SavedConversation>>(filePath, () => ({}));
       createdAt = existing.createdAt ?? new Date().toISOString();
     } catch {
       createdAt = new Date().toISOString();
@@ -106,7 +107,7 @@ export function saveConversation(
     messageCount: messages.length,
   };
 
-  fs.writeFileSync(filePath, JSON.stringify(record, null, 2) + '\n', 'utf-8');
+  atomicWriteJsonSync(filePath, record);
   return resolvedId;
 }
 

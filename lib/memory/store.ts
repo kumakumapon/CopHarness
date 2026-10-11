@@ -1,6 +1,6 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJsonSync, readJsonFileSync } from '../utils/jsonFile';
 import { type StatementLike, type DatabaseLike, type SqliteModuleLike, loadSqlite, escapeFtsQuery } from '../utils/sqlite';
 
 export type MemoryKind = 'fact' | 'preference' | 'project' | 'task' | 'episodic';
@@ -323,8 +323,7 @@ export class MemoryStore {
   private loadFallback(): MemoryRecord[] {
     if (!this.fallbackFile) return [];
     try {
-      const raw = fs.readFileSync(this.fallbackFile, 'utf8');
-      const parsed = JSON.parse(raw) as unknown;
+      const parsed = readJsonFileSync<unknown>(this.fallbackFile, () => []);
       if (Array.isArray(parsed)) return parsed.map((item) => item as MemoryRecord);
       if (parsed && typeof parsed === 'object') {
         return Object.entries(parsed as Record<string, string>).map(([key, content]) => ({
@@ -347,8 +346,7 @@ export class MemoryStore {
 
   private saveFallback(records: MemoryRecord[]): void {
     if (!this.fallbackFile) return;
-    fs.mkdirSync(path.dirname(this.fallbackFile), { recursive: true });
-    fs.writeFileSync(this.fallbackFile, JSON.stringify(records, null, 2), 'utf8');
+    atomicWriteJsonSync(this.fallbackFile, records);
   }
 
   private migrate(): void {

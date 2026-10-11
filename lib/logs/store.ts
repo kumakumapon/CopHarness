@@ -1,9 +1,8 @@
-import * as fs from 'fs';
-import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ExecutionLog, LogStatus, LogStore } from './types';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJson, readJsonFileSync, withFileLock } from '../utils/jsonFile';
 
 function storePath(): string {
   return process.env.LOGS_FILE
@@ -18,13 +17,8 @@ const MAX_LOGS = 200;
 let writeQueue = Promise.resolve();
 
 function loadStore(): LogStore {
-  const p = storePath();
-  if (!fs.existsSync(p)) return { logs: [] };
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf-8')) as LogStore;
-  } catch {
-    return { logs: [] };
-  }
+  const store = readJsonFileSync<Partial<LogStore> | null>(storePath(), () => ({ logs: [] }));
+  return { ...store, logs: Array.isArray(store?.logs) ? store.logs : [] };
 }
 
 async function saveStore(store: LogStore): Promise<void> {
@@ -32,13 +26,13 @@ async function saveStore(store: LogStore): Promise<void> {
   if (store.logs.length > MAX_LOGS) {
     store.logs = store.logs.slice(-MAX_LOGS);
   }
-  await fsp.writeFile(storePath(), JSON.stringify(store, null, 2) + '\n', 'utf-8');
+  await atomicWriteJson(storePath(), store);
 }
 
 /** Start a new in-progress log entry and return its id. */
 export async function startLog(entry: Pick<ExecutionLog, 'scheduleId' | 'scheduleName' | 'prompt' | 'reason'>): Promise<string> {
   const id = crypto.randomUUID();
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.then(() => withFileLock(storePath(), async () => {
     const store = loadStore();
     store.logs.push({
       id,
@@ -49,7 +43,7 @@ export async function startLog(entry: Pick<ExecutionLog, 'scheduleId' | 'schedul
       startedAt: new Date().toISOString(),
     });
     await saveStore(store);
-  });
+  }));
   await writeQueue;
   return id;
 }
@@ -60,7 +54,7 @@ export async function finishLog(
   status: LogStatus,
   resultOrError?: string,
 ): Promise<void> {
-  writeQueue = writeQueue.then(async () => {
+  writeQueue = writeQueue.then(() => withFileLock(storePath(), async () => {
     const store = loadStore();
     const entry = store.logs.find((l) => l.id === id);
     if (!entry) return;
@@ -72,7 +66,7 @@ export async function finishLog(
       entry.error = resultOrError;
     }
     await saveStore(store);
-  });
+  }));
   await writeQueue;
 }
 

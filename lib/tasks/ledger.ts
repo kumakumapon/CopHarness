@@ -7,10 +7,10 @@
  */
 
 import * as fs from 'fs';
-import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJson, readJsonFileSync } from '../utils/jsonFile';
 import { indexTaskRecord, _resetSearchIndexForTests } from '../search/index';
 
 export type TaskKind = 'conversation' | 'api' | 'wizard' | 'schedule' | 'agent' | string;
@@ -62,7 +62,7 @@ function getLedger(): TaskLedgerFile {
   }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Partial<TaskLedgerFile>;
+    const parsed = readJsonFileSync<Partial<TaskLedgerFile>>(filePath, () => ({}));
     // Never inherit Object.prototype through externally supplied task IDs.
     const tasks: Record<string, TaskRecord> = Object.assign(Object.create(null),
       parsed.tasks && typeof parsed.tasks === 'object' ? parsed.tasks : {});
@@ -83,9 +83,7 @@ function trimLedger(ledger: TaskLedgerFile): void {
 
 function scheduleWrite(): Promise<void> {
   _writeQueue = _writeQueue.then(async () => {
-    const filePath = ledgerFilePath();
-    await fsp.mkdir(path.dirname(filePath), { recursive: true });
-    await fsp.writeFile(filePath, JSON.stringify(getLedger(), null, 2) + '\n', 'utf-8');
+    await atomicWriteJson(ledgerFilePath(), getLedger());
   });
   return _writeQueue;
 }

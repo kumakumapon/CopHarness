@@ -11,6 +11,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { dataPath } from '../utils/dataDir';
+import { atomicWriteJsonSync, readJsonFileSync } from '../utils/jsonFile';
 import { MemoryStore, type MemoryKind } from './store';
 
 // ---------------------------------------------------------------------------
@@ -154,7 +155,7 @@ function loadNudgeStore(): NudgeStoreFile {
     return _nudgeStore;
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as unknown;
+    const parsed = readJsonFileSync<unknown>(filePath, () => ({}));
     _nudgeStore = (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
       ? (parsed as NudgeStoreFile)
       : {};
@@ -165,9 +166,7 @@ function loadNudgeStore(): NudgeStoreFile {
 }
 
 function saveNudgeStore(store: NudgeStoreFile): void {
-  const filePath = nudgeFilePath();
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(store, null, 2), 'utf8');
+  atomicWriteJsonSync(nudgeFilePath(), store);
   _nudgeStore = store;
 }
 
