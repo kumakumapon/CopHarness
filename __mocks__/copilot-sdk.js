@@ -4,7 +4,7 @@ class CopilotClient {
   async stop() {}
   async createSession() {
     return {
-      destroy: async () => {},
+      disconnect: async () => {},
       sendAndWait: async () => ({ data: { content: '' } }),
     };
   }
