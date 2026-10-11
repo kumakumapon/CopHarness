@@ -1,21 +1,31 @@
+import type { CopilotClient as SdkCopilotClient, CopilotSession, ProviderConfig } from '@github/copilot-sdk';
 
-let CopilotClient: any, approveAll: any;
+// The SDK types are the contract: everything below (and lib/adapters/copilotAdapter.ts) is type-checked
+// against them, so an SDK API change fails `tsc` instead of surfacing only against the real service.
+type SdkModule = typeof import('@github/copilot-sdk');
+
+let CopilotClient: SdkModule['CopilotClient'];
+let approveAll: SdkModule['approveAll'];
 try {
-  const sdk = require('@github/copilot-sdk');
-  CopilotClient = sdk.CopilotClient || (sdk.default && sdk.default.CopilotClient);
-  approveAll = sdk.approveAll || (sdk.default && sdk.default.approveAll);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const sdk = require('@github/copilot-sdk') as SdkModule & { default?: SdkModule };
+  CopilotClient = sdk.CopilotClient || sdk.default?.CopilotClient!;
+  approveAll = sdk.approveAll || sdk.default?.approveAll!;
 } catch {
-  CopilotClient = class {};
-  approveAll = () => {};
+  // SDK not installed (e.g. optional platform package missing): fail on first use, not at import time.
+  CopilotClient = class {
+    constructor() {
+      throw new Error('@github/copilot-sdk could not be loaded');
+    }
+  } as unknown as SdkModule['CopilotClient'];
+  approveAll = (() => ({ kind: 'approve-once' })) as unknown as SdkModule['approveAll'];
 }
 
-const GITHUB_TOKEN = process.env.COPILOT_GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
 const BYOK_API_KEY = process.env.COPILOT_PROVIDER_API_KEY || process.env.COPILOT_API_KEY;
 const BYOK_BASE = process.env.COPILOT_PROVIDER_BASE_URL || process.env.COPILOT_API_BASE_URL;
 const MODEL = process.env.COPILOT_MODEL ?? 'gpt-5-mini';
 
-export const copilotClient = new CopilotClient({
-  autoStart: false,
+export const copilotClient: SdkCopilotClient = new CopilotClient({
   env: process.env,
 });
 
@@ -30,9 +40,9 @@ export async function stopClient() {
   } catch (e) {}
 }
 
-export async function createSession(opts?: { model?: string; streaming?: boolean }) {
+export async function createSession(opts?: { model?: string; streaming?: boolean }): Promise<CopilotSession> {
   const model = opts?.model ?? MODEL;
-  const provider: any = BYOK_API_KEY && BYOK_BASE ? {
+  const provider: ProviderConfig | undefined = BYOK_API_KEY && BYOK_BASE ? {
     type: 'openai',
     apiKey: BYOK_API_KEY,
     baseUrl: BYOK_BASE,
@@ -46,8 +56,8 @@ export async function createSession(opts?: { model?: string; streaming?: boolean
       provider,
     });
     return session;
-  } catch (err: any) {
-    const msg = err?.message?.toString?.() ?? String(err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     if (/auth|unauthori|401|forbidden|not authenticated/i.test(msg)) {
       throw new Error(
         'Authentication failed when creating Copilot session. Ensure one of: (1) You are logged in with `copilot login` on this machine, (2) Set COPILOT_GITHUB_TOKEN/GH_TOKEN/GITHUB_TOKEN, or (3) Configure BYOK with COPILOT_PROVIDER_API_KEY and COPILOT_PROVIDER_BASE_URL.'
