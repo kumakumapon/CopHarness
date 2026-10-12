@@ -5,7 +5,7 @@ import { createAdapterWithFallback } from '../../lib/adapterFactory';
 import { startScheduler } from '../../lib/scheduler/engine';
 import { addSchedule, setRunNow } from '../../lib/scheduler/store';
 import { listTasks, _resetTaskLedgerForTests } from '../../lib/tasks/ledger';
-import { getTaskDetail } from '../../lib/tasks/detail';
+import { getTaskDetail } from '../../lib/dashboard/taskDetail';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
 import { listLogs } from '../../lib/logs/store';
 

@@ -19,7 +19,7 @@ import {
 import {
   runWithRalphLoop,
   runPromptWithRalphLoop,
-} from '../../lib/context/ralphLoop';
+} from '../../lib/agents/ralphLoop';
 import type { LLMAdapter, LLMMessage, LLMRequest, LLMResponse } from '../../lib/adapter';
 
 // ---------------------------------------------------------------------------

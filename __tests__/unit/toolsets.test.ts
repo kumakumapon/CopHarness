@@ -12,7 +12,7 @@ import {
   resolveToolsetSkillNames,
   matchesGlob,
   _resetToolsetsForTests,
-} from '../../lib/skills/toolsets';
+} from '../../lib/toolPolicy/toolsets';
 
 describe('matchesGlob', () => {
   it('matches exact names (no wildcard)', () => {

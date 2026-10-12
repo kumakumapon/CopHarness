@@ -1,7 +1,7 @@
 import type { SkillDefinition, SkillParameterSchema } from '../skill';
 import type { McpTool, McpServerConfig } from './types';
 import { McpClient } from './client';
-import { matchesGlob } from '../skills/toolsets';
+import { matchesGlob } from '../toolPolicy/toolsets';
 import { recordMcpServer } from './registry';
 
 export function mcpToolToSkill(

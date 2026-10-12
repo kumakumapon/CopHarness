@@ -5,7 +5,7 @@
 
 import '../../lib/skills/index';
 import { resolveSkills, listActiveSkills } from '../../lib/skill';
-import { resolveToolsetSkillNames, _resetToolsetsForTests } from '../../lib/skills/toolsets';
+import { resolveToolsetSkillNames, _resetToolsetsForTests } from '../../lib/toolPolicy/toolsets';
 
 // ---------------------------------------------------------------------------
 // We test the logic that runPrompt applies when toolsets are present:

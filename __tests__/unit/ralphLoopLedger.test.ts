@@ -20,7 +20,7 @@ import {
   getTask,
   updateTaskMetadata,
 } from '../../lib/tasks/ledger';
-import { runWithRalphLoop } from '../../lib/context/ralphLoop';
+import { runWithRalphLoop } from '../../lib/agents/ralphLoop';
 import { withSkillExecutionContext } from '../../lib/utils/executionContext';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
 

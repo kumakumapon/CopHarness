@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { NextRequest } from 'next/server';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { _resetToolsetsForTests } from '../../lib/skills/toolsets';
+import { _resetToolsetsForTests } from '../../lib/toolPolicy/toolsets';
 import { _resetMcpRegistryForTests } from '../../lib/mcp/registry';
 
 // Ensure skills are registered before the route handler runs

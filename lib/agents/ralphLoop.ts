@@ -14,7 +14,7 @@
  */
 
 import type { LLMAdapter, LLMMessage, LLMRequest, LLMResponse } from '../adapter';
-import { compactMessages, needsCompaction, writeProgressArtifact } from './compactor';
+import { compactMessages, needsCompaction, writeProgressArtifact } from '../context/compactor';
 import { getSkillExecutionContext } from '../utils/executionContext';
 import { updateTaskMetadata } from '../tasks/ledger';
 
