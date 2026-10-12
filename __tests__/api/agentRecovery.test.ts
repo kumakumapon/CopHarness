@@ -3,20 +3,20 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { POST } from '../../app/api/copilot/agent/route';
-import { createAdapterWithFallback } from '../../lib/adapterFactory';
-import { getTask, _resetTaskLedgerForTests } from '../../lib/tasks/ledger';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import type { LLMRequest } from '../../lib/adapter';
+import { createAdapterWithFallback } from '../../lib/core/adapterFactory';
+import { getTask, _resetTaskLedgerForTests } from '../../lib/extensions/tasks/ledger';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import type { LLMRequest } from '../../lib/core/adapter';
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   resolveRuntimeConfig: () => ({ provider: 'mock', model: 'mock', configured: true }),
   createAdapterWithFallback: jest.fn(),
 }));
-jest.mock('../../lib/skills/index', () => ({}));
-jest.mock('../../lib/skill', () => ({ listActiveSkills: () => [], resolveSkills: () => [] }));
-jest.mock('../../lib/rateLimit', () => ({ defaultRateLimiter: { consume: () => ({ allowed: true }) }, resolveRateLimitKey: () => 'test' }));
-jest.mock('../../lib/identity/store', () => ({ resolveConversationKey: async () => ({ personId: 'test', channelKey: 'api:test', conversationKey: 'test' }) }));
-jest.mock('../../lib/search/index', () => ({ indexTaskRecord: jest.fn() }));
+jest.mock('../../lib/core/skills/index', () => ({}));
+jest.mock('../../lib/core/skill', () => ({ listActiveSkills: () => [], resolveSkills: () => [] }));
+jest.mock('../../lib/core/rateLimit', () => ({ defaultRateLimiter: { consume: () => ({ allowed: true }) }, resolveRateLimitKey: () => 'test' }));
+jest.mock('../../lib/extensions/channels/identity/store', () => ({ resolveConversationKey: async () => ({ personId: 'test', channelKey: 'api:test', conversationKey: 'test' }) }));
+jest.mock('../../lib/extensions/memory/search/index', () => ({ indexTaskRecord: jest.fn() }));
 let dir: string;
 const original = { data: process.env.DATA_DIR, key: process.env.COPHARNESS_API_KEY, ledger: process.env.TASK_LEDGER_FILE };
 beforeEach(() => {

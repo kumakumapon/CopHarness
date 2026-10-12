@@ -1,4 +1,4 @@
-import { isValidCronInput, matchesCron, nextRunDate } from '../../lib/scheduler/cron';
+import { isValidCronInput, matchesCron, nextRunDate } from '../../lib/extensions/automation/scheduler/cron';
 
 describe('isValidCronInput', () => {
   it.each([

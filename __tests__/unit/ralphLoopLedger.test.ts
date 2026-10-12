@@ -13,16 +13,16 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   _resetTaskLedgerForTests,
   startTask,
   getTask,
   updateTaskMetadata,
-} from '../../lib/tasks/ledger';
-import { runWithRalphLoop } from '../../lib/agents/ralphLoop';
-import { withSkillExecutionContext } from '../../lib/utils/executionContext';
-import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
+} from '../../lib/extensions/tasks/ledger';
+import { runWithRalphLoop } from '../../lib/extensions/agents/ralphLoop';
+import { withSkillExecutionContext } from '../../lib/core/utils/executionContext';
+import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/core/adapter';
 
 // ---------------------------------------------------------------------------
 // Helpers

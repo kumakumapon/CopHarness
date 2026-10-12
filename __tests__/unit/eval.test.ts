@@ -1,6 +1,6 @@
-import { runTestCase, summariseResults, type EvalResult } from '../../lib/eval/evaluator';
-import { checkCiGate, resolveCiThreshold } from '../../lib/eval/ciGate';
-import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
+import { runTestCase, summariseResults, type EvalResult } from '../../lib/extensions/eval/evaluator';
+import { checkCiGate, resolveCiThreshold } from '../../lib/extensions/eval/ciGate';
+import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/core/adapter';
 
 // ---------------------------------------------------------------------------
 // Mock adapter — returns a fixed response

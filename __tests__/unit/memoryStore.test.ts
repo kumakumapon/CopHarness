@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { MemoryStore } from '../../lib/memory/store';
-import { memoryExplain, memoryForget, memorySearch, memoryUpsert } from '../../lib/skills/memory';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { MemoryStore } from '../../lib/extensions/memory/store';
+import { memoryExplain, memoryForget, memorySearch, memoryUpsert } from '../../lib/extensions/memory/skills/memory';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 describe('MemoryStore SQLite + FTS5', () => {
   let tmpDir: string;

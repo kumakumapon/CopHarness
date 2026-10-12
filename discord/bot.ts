@@ -77,10 +77,10 @@ import {
   Partials,
   TextChannel,
 } from 'discord.js';
-import { createAdapterWithFallback, resolveProvider, resolveModel } from '../lib/adapterFactory';
-import { type LLMAdapter, type LLMAttachment, type LLMMessage } from '../lib/adapter';
-import '../lib/skills/index';
-import { listActiveSkills } from '../lib/skill';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../lib/core/adapterFactory';
+import { type LLMAdapter, type LLMAttachment, type LLMMessage } from '../lib/core/adapter';
+import '../lib/core/skills/index';
+import { listActiveSkills } from '../lib/core/skill';
 import {
   listSchedules,
   addSchedule,
@@ -88,15 +88,15 @@ import {
   setEnabled,
   setRunNow,
   setStopRequested,
-} from '../lib/scheduler/store';
-import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
-import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
-import { loadHistory, saveHistory } from '../lib/history/store';
-import { resolveConversationKey } from '../lib/identity/store';
-import { withSkillExecutionContext } from '../lib/utils/executionContext';
-import { finishTask, startTask } from '../lib/tasks/ledger';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../lib/tasks/cancellation';
-import { trimHistoryToTokenBudget } from '../lib/history/trimmer';
+} from '../lib/extensions/automation/scheduler/store';
+import { normalizeCron, nextRunDate } from '../lib/extensions/automation/scheduler/cron';
+import { startScheduler, resolveCronExpression } from '../lib/extensions/automation/scheduler/engine';
+import { loadHistory, saveHistory } from '../lib/extensions/conversations/store';
+import { resolveConversationKey } from '../lib/extensions/channels/identity/store';
+import { withSkillExecutionContext } from '../lib/core/utils/executionContext';
+import { finishTask, startTask } from '../lib/extensions/tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../lib/extensions/tasks/cancellation';
+import { trimHistoryToTokenBudget } from '../lib/core/context/trimmer';
 import {
   getSession as getWizardSession,
   clearSession as clearWizardSession,
@@ -104,10 +104,10 @@ import {
   selectTemplate as wizSelectTemplate,
   continueWizard as wizContinue,
   promptTemplates,
-} from '../lib/promptWizardSession';
-import { consumePendingNudge, maybeCreateNudge } from '../lib/memory/nudge';
-import { runWithRalphLoop } from '../lib/agents/ralphLoop';
-import { parseAgentCommand, executeAgentCommand } from '../lib/channels/agentCommands';
+} from '../lib/extensions/prompt-wizard/promptWizardSession';
+import { consumePendingNudge, maybeCreateNudge } from '../lib/extensions/memory/nudge';
+import { runWithRalphLoop } from '../lib/extensions/agents/ralphLoop';
+import { parseAgentCommand, executeAgentCommand } from '../lib/extensions/channels/agentCommands';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const DISCORD_PREFIX = process.env.DISCORD_PREFIX ?? '!';

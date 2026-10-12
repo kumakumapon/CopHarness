@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { getSearchIndex, isSearchIndexEnabled, type SearchDocType } from '../../../../lib/search/index';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { getSearchIndex, isSearchIndexEnabled, type SearchDocType } from '../../../../lib/extensions/memory/search/index';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

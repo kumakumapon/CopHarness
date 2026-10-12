@@ -1,5 +1,5 @@
-import { FallbackAdapter } from '../../lib/adapters/fallbackAdapter';
-import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
+import { FallbackAdapter } from '../../lib/core/adapters/fallbackAdapter';
+import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/core/adapter';
 
 function mockAdapter(
   provider: string,

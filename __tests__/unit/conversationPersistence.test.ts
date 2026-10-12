@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/history/conversationPersistence
+ * Unit tests for lib/extensions/conversations/conversationPersistence
  */
 
 import * as fs from 'fs';
@@ -37,7 +37,7 @@ beforeEach(() => {
 
 async function getPersistence() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../../lib/history/conversationPersistence') as typeof import('../../lib/history/conversationPersistence');
+  return require('../../lib/extensions/conversations/conversationPersistence') as typeof import('../../lib/extensions/conversations/conversationPersistence');
 }
 
 // ── autoTitle ─────────────────────────────────────────────────────────────────

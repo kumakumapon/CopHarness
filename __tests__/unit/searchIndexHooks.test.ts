@@ -7,8 +7,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { LLMMessage } from '../../lib/adapter';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import type { LLMMessage } from '../../lib/core/adapter';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 const TMP_HISTORY_FILE = path.join(os.tmpdir(), `test-hook-history-${process.pid}.json`);
 
@@ -42,10 +42,10 @@ afterEach(() => {
 
 async function getModules() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const history = require('../../lib/history/store') as typeof import('../../lib/history/store');
+  const history = require('../../lib/extensions/conversations/store') as typeof import('../../lib/extensions/conversations/store');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const searchMod = require('../../lib/search/index') as typeof import('../../lib/search/index');
-  const ledger = require('../../lib/tasks/ledger') as typeof import('../../lib/tasks/ledger');
+  const searchMod = require('../../lib/extensions/memory/search/index') as typeof import('../../lib/extensions/memory/search/index');
+  const ledger = require('../../lib/extensions/tasks/ledger') as typeof import('../../lib/extensions/tasks/ledger');
   // Reset singletons for isolation
   searchMod._resetSearchIndexForTests();
   ledger._resetTaskLedgerForTests();

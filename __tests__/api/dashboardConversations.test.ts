@@ -45,7 +45,7 @@ async function getKeyRoute() {
 
 async function getStore() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../../lib/history/store') as typeof import('../../lib/history/store');
+  return require('../../lib/extensions/conversations/store') as typeof import('../../lib/extensions/conversations/store');
 }
 
 function makeGetRequest(url: string) {

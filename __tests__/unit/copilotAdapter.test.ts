@@ -1,5 +1,5 @@
 import type { AssistantMessageEvent } from '@github/copilot-sdk';
-import { CopilotAdapter } from '../../lib/adapters/copilotAdapter';
+import { CopilotAdapter } from '../../lib/core/adapters/copilotAdapter';
 // '@github/copilot-sdk' is mapped to __mocks__/copilot-sdk.ts (see jest.config.js); the mock's types are
 // checked against the real SDK by `tsc`, so API drift fails the typecheck rather than slipping past these tests.
 import { mockCopilotSdk } from '../../__mocks__/copilot-sdk';

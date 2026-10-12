@@ -2,7 +2,7 @@ import {
   getAllowedCommandNames,
   isSafeRelativePath,
   validateCommandInvocation as v,
-} from '../../lib/skills/commandPolicy';
+} from '../../lib/core/skills/commandPolicy';
 
 const posix = (command: string, args: string[] = []) => v(command, args, 'linux');
 const win = (command: string, args: string[] = []) => v(command, args, 'win32');

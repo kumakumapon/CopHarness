@@ -1,9 +1,9 @@
 /**
- * Unit tests for lib/history/trimmer
+ * Unit tests for lib/core/context/trimmer
  */
 
-import { estimateTokens, estimateMessageTokens, trimHistoryToTokenBudget } from '../../lib/history/trimmer';
-import type { LLMMessage } from '../../lib/adapter';
+import { estimateTokens, estimateMessageTokens, trimHistoryToTokenBudget } from '../../lib/core/context/trimmer';
+import type { LLMMessage } from '../../lib/core/adapter';
 
 // ── estimateTokens ────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ describe('trimHistoryToTokenBudget', () => {
     expect(history[0].content).toContain('…[省略]');
     // Verify the truncated content itself is within the token limit
     const truncatedText = history[0].content.replace('…[省略]', '');
-    const { estimateTokens: et } = require('../../lib/history/trimmer');
+    const { estimateTokens: et } = require('../../lib/core/context/trimmer');
     expect(et(truncatedText)).toBeLessThanOrEqual(10);
   });
 
@@ -124,7 +124,7 @@ describe('trimHistoryToTokenBudget', () => {
 
     expect(history[0].content).toContain('…[省略]');
     const truncatedText = history[0].content.replace('…[省略]', '');
-    const { estimateTokens: et } = require('../../lib/history/trimmer');
+    const { estimateTokens: et } = require('../../lib/core/context/trimmer');
     expect(et(truncatedText)).toBeLessThanOrEqual(10);
   });
 

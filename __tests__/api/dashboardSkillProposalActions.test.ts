@@ -9,12 +9,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { NextRequest } from 'next/server';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   _resetSkillProposalsForTests,
   createSkillProposal,
   updateSkillProposal,
-} from '../../lib/skillProposals/store';
+} from '../../lib/extensions/skill-proposals/store';
 
 // Dynamic imports to pick up the correct route handlers after env is set
 import { POST as testPost } from '../../app/api/dashboard/skill-proposals/[id]/test/route';

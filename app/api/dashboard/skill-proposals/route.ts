@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { querySkillProposals, type SkillProposalStatus } from '../../../../lib/skillProposals/store';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { querySkillProposals, type SkillProposalStatus } from '../../../../lib/extensions/skill-proposals/store';
 
 const VALID_STATUSES = new Set<SkillProposalStatus>([
   'draft',

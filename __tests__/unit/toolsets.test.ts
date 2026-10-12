@@ -1,18 +1,18 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 // Must import skills before toolsets so the skill registry is populated
-import '../../lib/skills/index';
-import { listSkills } from '../../lib/skill';
+import '../../lib/core/skills/index';
+import { listSkills } from '../../lib/core/skill';
 import {
   listToolsets,
   getToolset,
   resolveToolsetSkillNames,
   matchesGlob,
   _resetToolsetsForTests,
-} from '../../lib/toolPolicy/toolsets';
+} from '../../lib/core/toolPolicy/toolsets';
 
 describe('matchesGlob', () => {
   it('matches exact names (no wildcard)', () => {
@@ -199,7 +199,7 @@ describe('resolveToolsetSkillNames', () => {
   it('only returns skills that are registered', () => {
     const names = resolveToolsetSkillNames(['research']);
     // All returned names should be in the skill registry
-    const { listSkills } = require('../../lib/skill') as typeof import('../../lib/skill');
+    const { listSkills } = require('../../lib/core/skill') as typeof import('../../lib/core/skill');
     const registered = new Set(listSkills().map((s) => s.name));
     for (const name of names) {
       expect(registered.has(name)).toBe(true);

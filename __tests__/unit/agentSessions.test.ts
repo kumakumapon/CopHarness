@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { acquireAgentSession, loadAgentSession, newAgentSessionId, runAgentSession } from '../../lib/agents/sessions';
-import type { LLMAdapter, LLMRequest } from '../../lib/adapter';
-import type { SkillDefinition } from '../../lib/skill';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { acquireAgentSession, loadAgentSession, newAgentSessionId, runAgentSession } from '../../lib/extensions/agents/sessions';
+import type { LLMAdapter, LLMRequest } from '../../lib/core/adapter';
+import type { SkillDefinition } from '../../lib/core/skill';
 
 let dir: string;
 const originalDir = process.env.DATA_DIR;

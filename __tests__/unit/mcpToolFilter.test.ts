@@ -1,6 +1,6 @@
-import { loadMcpSkills } from '../../lib/mcp/skillBridge';
-import { listMcpServers, _resetMcpRegistryForTests } from '../../lib/mcp/registry';
-import type { McpToolsListResult } from '../../lib/mcp/types';
+import { loadMcpSkills } from '../../lib/extensions/mcp/skillBridge';
+import { listMcpServers, _resetMcpRegistryForTests } from '../../lib/extensions/mcp/registry';
+import type { McpToolsListResult } from '../../lib/extensions/mcp/types';
 
 // ---------------------------------------------------------------------------
 // Mock McpClient
@@ -9,7 +9,7 @@ import type { McpToolsListResult } from '../../lib/mcp/types';
 const mockListTools = jest.fn<Promise<McpToolsListResult>, []>();
 const mockInitialize = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
 
-jest.mock('../../lib/mcp/client', () => ({
+jest.mock('../../lib/extensions/mcp/client', () => ({
   McpClient: jest.fn().mockImplementation(() => ({
     initialize: mockInitialize,
     listTools: mockListTools,

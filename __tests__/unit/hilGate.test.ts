@@ -1,23 +1,23 @@
-import type { SkillDefinition } from '../../lib/skill';
-import { isHilEnabled, wrapWithGate, applyGatesToRegistry } from '../../lib/humanInLoop/gate';
+import type { SkillDefinition } from '../../lib/core/skill';
+import { isHilEnabled, wrapWithGate, applyGatesToRegistry } from '../../lib/core/humanInLoop/gate';
 
-jest.mock('../../lib/humanInLoop/store', () => ({
+jest.mock('../../lib/core/humanInLoop/store', () => ({
   createApprovalRequest: jest.fn().mockReturnValue({ id: 'approval-1' }),
   waitForApproval: jest.fn().mockResolvedValue('approved'),
 }));
 
-jest.mock('../../lib/utils/executionContext', () => ({
+jest.mock('../../lib/core/utils/executionContext', () => ({
   getSkillExecutionContext: jest.fn().mockReturnValue({ personId: 'p1', channelKey: 'c1' }),
   updateSkillExecutionContext: jest.fn(),
 }));
 
-jest.mock('../../lib/toolPolicy/policy', () => ({
+jest.mock('../../lib/core/toolPolicy/policy', () => ({
   evaluateToolPolicy: jest.fn().mockReturnValue({ decision: 'allowed' }),
 }));
 
-import { createApprovalRequest, waitForApproval } from '../../lib/humanInLoop/store';
-import { getSkillExecutionContext, updateSkillExecutionContext } from '../../lib/utils/executionContext';
-import { evaluateToolPolicy } from '../../lib/toolPolicy/policy';
+import { createApprovalRequest, waitForApproval } from '../../lib/core/humanInLoop/store';
+import { getSkillExecutionContext, updateSkillExecutionContext } from '../../lib/core/utils/executionContext';
+import { evaluateToolPolicy } from '../../lib/core/toolPolicy/policy';
 
 const mockCreateApprovalRequest = createApprovalRequest as jest.MockedFunction<typeof createApprovalRequest>;
 const mockWaitForApproval = waitForApproval as jest.MockedFunction<typeof waitForApproval>;

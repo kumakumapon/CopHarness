@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { addWatcher, listWatchers } from '../../../../lib/watchers/store';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { addWatcher, listWatchers } from '../../../../lib/extensions/automation/watchers/store';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

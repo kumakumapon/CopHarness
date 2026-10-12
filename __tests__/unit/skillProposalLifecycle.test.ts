@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/skillProposals/lifecycle.ts
+ * Unit tests for lib/extensions/skill-proposals/lifecycle.ts
  *
  * NOTE: Each test uses a unique skill name suffix to avoid collisions in the
  * global skill registry which persists across tests in the same process.
@@ -8,21 +8,21 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   _resetSkillProposalsForTests,
   createSkillProposal,
   getSkillProposal,
-} from '../../lib/skillProposals/store';
+} from '../../lib/extensions/skill-proposals/store';
 import {
   runProposalTestPhase,
   approveProposal,
   rejectProposal,
   registerProposalSkill,
   registerApprovedGeneratedSkills,
-} from '../../lib/skillProposals/lifecycle';
-import { getSkill } from '../../lib/skill';
-import { getApprovalRequest } from '../../lib/humanInLoop/store';
+} from '../../lib/extensions/skill-proposals/lifecycle';
+import { getSkill } from '../../lib/core/skill';
+import { getApprovalRequest } from '../../lib/core/humanInLoop/store';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -150,7 +150,7 @@ describe('runProposalTestPhase', () => {
     // Fix the code via updateSkillProposal — simulate by creating a new proposal
     // (In real usage the user would call updateSkillProposal then re-test)
     // Instead, let's update the proposal store directly
-    const { updateSkillProposal } = await import('../../lib/skillProposals/store');
+    const { updateSkillProposal } = await import('../../lib/extensions/skill-proposals/store');
     await updateSkillProposal(proposal.id, { proposedCode: PASSING_CODE });
 
     // Re-test should succeed
@@ -457,7 +457,7 @@ describe('registerApprovedGeneratedSkills', () => {
     });
 
     // Manually set to approved (bypassing test phase for this test)
-    const { updateSkillProposal } = await import('../../lib/skillProposals/store');
+    const { updateSkillProposal } = await import('../../lib/extensions/skill-proposals/store');
     await updateSkillProposal(proposal.id, { status: 'approved' });
 
     const { registered, skipped } = registerApprovedGeneratedSkills();
@@ -485,7 +485,7 @@ describe('registerApprovedGeneratedSkills', () => {
       riskLevel: 'medium',
     });
 
-    const { updateSkillProposal: upd } = await import('../../lib/skillProposals/store');
+    const { updateSkillProposal: upd } = await import('../../lib/extensions/skill-proposals/store');
     await upd(proposal.id, { status: 'approved' });
 
     // First run — registers it; getSkill(name) is now non-null
@@ -516,7 +516,7 @@ describe('registerApprovedGeneratedSkills', () => {
       riskLevel: 'medium',
     });
 
-    const { updateSkillProposal: upd } = await import('../../lib/skillProposals/store');
+    const { updateSkillProposal: upd } = await import('../../lib/extensions/skill-proposals/store');
     await upd(proposal.id, { status: 'approved' });
 
     // First call registers the skill

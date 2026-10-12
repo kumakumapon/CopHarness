@@ -6,9 +6,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-import { createDocument } from '../../lib/skills/createDocument';
-import { createSlideshow } from '../../lib/skills/createSlideshow';
-import { createPresentation } from '../../lib/skills/createPresentation';
+import { createDocument } from '../../lib/extensions/skill-packs/office/createDocument';
+import { createSlideshow } from '../../lib/extensions/skill-packs/office/createSlideshow';
+import { createPresentation } from '../../lib/extensions/skill-packs/office/createPresentation';
 
 // ---------------------------------------------------------------------------
 // Shared sandbox setup

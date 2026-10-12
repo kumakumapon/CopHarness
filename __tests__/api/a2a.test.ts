@@ -6,13 +6,13 @@
 import { POST } from '../../app/api/a2a/route';
 import { NextRequest } from 'next/server';
 
-jest.mock('../../lib/agents/orchestrator', () => ({
+jest.mock('../../lib/extensions/agents/orchestrator', () => ({
   runAgentTask: jest.fn(),
-  // lib/skills/index (imported for its side effects by the route) pulls in
-  // lib/skills/spawnAgent, which reads this at module load time.
+  // lib/core/skills/index (imported for its side effects by the route) pulls in
+  // lib/extensions/agents/spawnAgent, which reads this at module load time.
   BUILT_IN_ROLE_PROMPTS: {},
 }));
-import * as orchestrator from '../../lib/agents/orchestrator';
+import * as orchestrator from '../../lib/extensions/agents/orchestrator';
 
 const mockRunAgentTask = orchestrator.runAgentTask as jest.Mock;
 

@@ -39,9 +39,9 @@ import {
   setEnabled,
   setRunNow,
   setStopRequested,
-} from '../lib/scheduler/store';
-import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
-import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
+} from '../lib/extensions/automation/scheduler/store';
+import { normalizeCron, nextRunDate } from '../lib/extensions/automation/scheduler/cron';
+import { startScheduler, resolveCronExpression } from '../lib/extensions/automation/scheduler/engine';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

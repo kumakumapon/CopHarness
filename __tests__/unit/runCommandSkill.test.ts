@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runCommand } from '../../lib/skills/runCommand';
-import { LocalBackend } from '../../lib/execution/localBackend';
+import { runCommand } from '../../lib/core/skills/runCommand';
+import { LocalBackend } from '../../lib/core/execution/localBackend';
 
 const isWin = process.platform === 'win32';
 

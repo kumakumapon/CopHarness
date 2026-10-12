@@ -11,7 +11,7 @@ import {
   makeChannelKey,
   resolveConversationKey,
   resolveIdentity,
-} from '../../lib/identity/store';
+} from '../../lib/extensions/channels/identity/store';
 
 describe('identity store', () => {
   let tmpDir: string;

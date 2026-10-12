@@ -1,5 +1,5 @@
 /**
- * Tests for lib/context/compactor.ts and lib/context/ralphLoop.ts
+ * Tests for lib/core/context/compactor.ts and lib/extensions/agents/ralphLoop.ts
  *
  * Covers:
  * - estimateConversationTokens: empty array, system-only, mixed messages
@@ -15,22 +15,22 @@ import {
   estimateConversationTokens,
   needsCompaction,
   compactMessages,
-} from '../../lib/context/compactor';
+} from '../../lib/core/context/compactor';
 import {
   runWithRalphLoop,
   runPromptWithRalphLoop,
-} from '../../lib/agents/ralphLoop';
-import type { LLMAdapter, LLMMessage, LLMRequest, LLMResponse } from '../../lib/adapter';
+} from '../../lib/extensions/agents/ralphLoop';
+import type { LLMAdapter, LLMMessage, LLMRequest, LLMResponse } from '../../lib/core/adapter';
 
 // ---------------------------------------------------------------------------
 // Module mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../../lib/tasks/ledger', () => ({
+jest.mock('../../lib/extensions/tasks/ledger', () => ({
   updateTaskMetadata: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../lib/utils/executionContext', () => ({
+jest.mock('../../lib/core/utils/executionContext', () => ({
   getSkillExecutionContext: jest.fn().mockReturnValue(undefined),
 }));
 

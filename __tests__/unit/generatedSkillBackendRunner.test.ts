@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/skillProposals/backendRunner.ts
+ * Unit tests for lib/extensions/skill-proposals/backendRunner.ts
  *
  * Uses the real LocalBackend (EXECUTION_BACKEND unset = local) with a
  * temporary SKILL_FILE_SANDBOX_DIR so generated scripts are isolated to a
@@ -11,9 +11,9 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runProposalCodeOnBackend } from '../../lib/skillProposals/backendRunner';
-import { getGeneratedSkillRunner } from '../../lib/skillProposals/lifecycle';
-import { _resetExecutionBackendForTests } from '../../lib/execution';
+import { runProposalCodeOnBackend } from '../../lib/extensions/skill-proposals/backendRunner';
+import { getGeneratedSkillRunner } from '../../lib/extensions/skill-proposals/lifecycle';
+import { _resetExecutionBackendForTests } from '../../lib/core/execution';
 
 // ---------------------------------------------------------------------------
 // Setup / teardown
@@ -98,14 +98,14 @@ describe('getGeneratedSkillRunner', () => {
     delete process.env.GENERATED_SKILL_EXECUTION;
     const runner = getGeneratedSkillRunner();
     // The vm runner is the same reference as the named export from sandbox.ts
-    const { runProposalCode } = require('../../lib/skillProposals/sandbox');
+    const { runProposalCode } = require('../../lib/extensions/skill-proposals/sandbox');
     expect(runner).toBe(runProposalCode);
   });
 
   it('returns runProposalCode (vm) when GENERATED_SKILL_EXECUTION=vm', () => {
     process.env.GENERATED_SKILL_EXECUTION = 'vm';
     const runner = getGeneratedSkillRunner();
-    const { runProposalCode } = require('../../lib/skillProposals/sandbox');
+    const { runProposalCode } = require('../../lib/extensions/skill-proposals/sandbox');
     expect(runner).toBe(runProposalCode);
   });
 
@@ -119,7 +119,7 @@ describe('getGeneratedSkillRunner', () => {
     process.env.GENERATED_SKILL_EXECUTION = 'unknown_mode';
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     const runner = getGeneratedSkillRunner();
-    const { runProposalCode } = require('../../lib/skillProposals/sandbox');
+    const { runProposalCode } = require('../../lib/extensions/skill-proposals/sandbox');
     expect(runner).toBe(runProposalCode);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown_mode'));
     warnSpy.mockRestore();

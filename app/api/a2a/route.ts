@@ -4,10 +4,10 @@
  * Follows the A2A JSON protocol introduced by Google in 2025.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { runAgentTask } from '../../../lib/agents/orchestrator';
-import { requireApiKey } from '../../../lib/apiAuth';
-import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../lib/rateLimit';
-import '../../../lib/skills/index';
+import { runAgentTask } from '../../../lib/extensions/agents/orchestrator';
+import { requireApiKey } from '../../../lib/core/apiAuth';
+import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../lib/core/rateLimit';
+import '../../../lib/core/skills/index';
 
 interface A2ARequest {
   task: {

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { listSkills } from '../../../../lib/skill';
-import { querySkillExecutions, type SkillExecutionStatus } from '../../../../lib/logs/skillExecutionLog';
-import '../../../../lib/skills/index';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { listSkills } from '../../../../lib/core/skill';
+import { querySkillExecutions, type SkillExecutionStatus } from '../../../../lib/core/logs/skillExecutionLog';
+import '../../../../lib/core/skills/index';
 
 const VALID_STATUSES = new Set<SkillExecutionStatus>(['success', 'error', 'exception']);
 const VALID_RISK_LEVELS = new Set(['low', 'medium', 'high']);

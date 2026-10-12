@@ -8,15 +8,15 @@ jest.mock('@github/copilot-sdk', () => ({}));
 import { POST } from '../../app/api/copilot/route';
 import { NextRequest } from 'next/server';
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   createAdapter: jest.fn(),
   createAdapterWithFallback: jest.fn(),
   resolveProvider: jest.fn(),
   resolveModel: jest.fn(),
   resolveRuntimeConfig: jest.fn(),
 }));
-import * as adapterFactory from '../../lib/adapterFactory';
-import * as adapterModule from '../../lib/adapter';
+import * as adapterFactory from '../../lib/core/adapterFactory';
+import * as adapterModule from '../../lib/core/adapter';
 
 const mockComplete = jest.fn();
 

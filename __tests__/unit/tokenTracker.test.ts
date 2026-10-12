@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/telemetry/tokenTracker.ts
+ * Unit tests for lib/extensions/telemetry/tokenTracker.ts
  *
  * Verifies that token usage accumulates correctly per provider/model pair,
  * multiple providers are tracked independently, the reset helper clears state,
@@ -10,8 +10,8 @@ import {
   recordTokenUsage,
   getTokenUsageSummary,
   _resetTokenUsageForTests,
-} from '../../lib/telemetry/tokenTracker';
-import type { TokenUsage } from '../../lib/adapter';
+} from '../../lib/extensions/telemetry/tokenTracker';
+import type { TokenUsage } from '../../lib/core/adapter';
 
 beforeEach(() => {
   _resetTokenUsageForTests();

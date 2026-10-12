@@ -11,8 +11,8 @@ import {
   resolveSkills,
   MAX_SKILL_ITERATIONS,
   type SkillDefinition,
-} from '../../lib/skill';
-import { currentDateTime } from '../../lib/skills/currentDateTime';
+} from '../../lib/core/skill';
+import { currentDateTime } from '../../lib/core/skills/currentDateTime';
 
 // -----------------------------------------------------------------------
 // Skill registry
@@ -84,7 +84,7 @@ describe('MAX_SKILL_ITERATIONS', () => {
 
 jest.mock('openai');
 import OpenAI from 'openai';
-import { OpenAIAdapter } from '../../lib/adapters/openaiAdapter';
+import { OpenAIAdapter } from '../../lib/core/adapters/openaiAdapter';
 
 describe('OpenAIAdapter skill tool-calling loop', () => {
   const echoSkill: SkillDefinition = {
@@ -207,7 +207,7 @@ describe('OpenAIAdapter skill tool-calling loop', () => {
 // AnthropicAdapter skill tool-calling loop
 // -----------------------------------------------------------------------
 
-import { AnthropicAdapter } from '../../lib/adapters/anthropicAdapter';
+import { AnthropicAdapter } from '../../lib/core/adapters/anthropicAdapter';
 
 describe('AnthropicAdapter skill tool-calling loop', () => {
   const echoSkill: SkillDefinition = {
@@ -310,7 +310,7 @@ describe('AnthropicAdapter skill tool-calling loop', () => {
 // LmStudioAdapter
 // -----------------------------------------------------------------------
 
-import { LmStudioAdapter, LMSTUDIO_DEFAULT_BASE_URL } from '../../lib/adapters/lmstudioAdapter';
+import { LmStudioAdapter, LMSTUDIO_DEFAULT_BASE_URL } from '../../lib/core/adapters/lmstudioAdapter';
 
 describe('LmStudioAdapter', () => {
   let mockCreate: jest.Mock;
@@ -357,7 +357,7 @@ describe('LmStudioAdapter', () => {
 // LemonadeAdapter
 // -----------------------------------------------------------------------
 
-import { LemonadeAdapter, LEMONADE_DEFAULT_BASE_URL } from '../../lib/adapters/lemonadeAdapter';
+import { LemonadeAdapter, LEMONADE_DEFAULT_BASE_URL } from '../../lib/core/adapters/lemonadeAdapter';
 
 describe('LemonadeAdapter', () => {
   let mockCreate: jest.Mock;
@@ -404,7 +404,7 @@ describe('LemonadeAdapter', () => {
 // resolveProvider — lmstudio / lemonade detection
 // -----------------------------------------------------------------------
 
-import { resolveProvider } from '../../lib/adapterFactory';
+import { resolveProvider } from '../../lib/core/adapterFactory';
 
 describe('resolveProvider local LLM detection', () => {
   const originalEnv = { ...process.env };

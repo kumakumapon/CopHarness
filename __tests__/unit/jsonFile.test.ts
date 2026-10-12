@@ -11,7 +11,7 @@ import {
   renameWithRetrySync,
   withFileLock,
   withFileLockSync,
-} from '../../lib/utils/jsonFile';
+} from '../../lib/core/utils/jsonFile';
 
 describe('jsonFile', () => {
   let dir: string;

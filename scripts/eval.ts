@@ -23,11 +23,11 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapter, resolveRuntimeConfig } from '../lib/adapterFactory';
-import { runEvalSuite, summariseResults, type EvalResult } from '../lib/eval/evaluator';
-import { checkCiGate } from '../lib/eval/ciGate';
-import { createEvalReport, formatJsonReport, formatJunitReport } from '../lib/eval/reporters';
-import { builtinTestCases, type EvalTestCase } from '../lib/eval/testCases';
+import { createAdapter, resolveRuntimeConfig } from '../lib/core/adapterFactory';
+import { runEvalSuite, summariseResults, type EvalResult } from '../lib/extensions/eval/evaluator';
+import { checkCiGate } from '../lib/extensions/eval/ciGate';
+import { createEvalReport, formatJsonReport, formatJunitReport } from '../lib/extensions/eval/reporters';
+import { builtinTestCases, type EvalTestCase } from '../lib/extensions/eval/testCases';
 
 type OutputFormat = 'human' | 'json' | 'junit';
 

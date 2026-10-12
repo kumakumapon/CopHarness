@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { addSchedule, listSchedules } from '../../lib/scheduler/store';
-import { addWatcher, listWatchers } from '../../lib/watchers/store';
-import { finishLog, listLogs, startLog } from '../../lib/logs/store';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { addSchedule, listSchedules } from '../../lib/extensions/automation/scheduler/store';
+import { addWatcher, listWatchers } from '../../lib/extensions/automation/watchers/store';
+import { finishLog, listLogs, startLog } from '../../lib/core/logs/store';
 
 describe('JSON stores survive a corrupt file without silently destroying it (#140)', () => {
   let dir: string;

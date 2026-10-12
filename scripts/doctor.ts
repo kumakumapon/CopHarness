@@ -1,8 +1,8 @@
 import { loadEnvConfig } from '@next/env';
 loadEnvConfig(process.cwd());
-import '../lib/skills/index';
-import { diagnoseRuntime } from '../lib/diagnostics';
-import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/adapterFactory';
+import '../lib/core/skills/index';
+import { diagnoseRuntime } from '../lib/core/diagnostics';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/core/adapterFactory';
 async function main() {
   const checks = diagnoseRuntime();
   if (process.argv.includes('--connect')) {

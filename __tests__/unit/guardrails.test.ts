@@ -1,5 +1,5 @@
-import { validateSkillOutput } from '../../lib/guardrails/outputValidator';
-import { recordViolation, listViolations, violationCount } from '../../lib/guardrails/violationLog';
+import { validateSkillOutput } from '../../lib/core/guardrails/outputValidator';
+import { recordViolation, listViolations, violationCount } from '../../lib/core/guardrails/violationLog';
 
 // ---------------------------------------------------------------------------
 // outputValidator

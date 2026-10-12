@@ -1,12 +1,12 @@
 /**
- * Unit tests for lib/adapterFactory.ts
+ * Unit tests for lib/core/adapterFactory.ts
  */
 
 // ---------------------------------------------------------------------------
 // Adapter mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../../lib/adapters/copilotAdapter', () => ({
+jest.mock('../../lib/core/adapters/copilotAdapter', () => ({
   CopilotAdapter: jest.fn().mockImplementation((model, timeoutMs) => ({
     provider: 'copilot',
     model,
@@ -15,7 +15,7 @@ jest.mock('../../lib/adapters/copilotAdapter', () => ({
   })),
 }));
 
-jest.mock('../../lib/adapters/openaiAdapter', () => ({
+jest.mock('../../lib/core/adapters/openaiAdapter', () => ({
   OpenAIAdapter: jest.fn().mockImplementation((model, apiKey, apiBaseUrl, timeoutMs) => ({
     provider: 'openai',
     model,
@@ -26,7 +26,7 @@ jest.mock('../../lib/adapters/openaiAdapter', () => ({
   })),
 }));
 
-jest.mock('../../lib/adapters/anthropicAdapter', () => ({
+jest.mock('../../lib/core/adapters/anthropicAdapter', () => ({
   AnthropicAdapter: jest.fn().mockImplementation((model, apiKey, apiBaseUrl, timeoutMs) => ({
     provider: 'anthropic',
     model,
@@ -37,7 +37,7 @@ jest.mock('../../lib/adapters/anthropicAdapter', () => ({
   })),
 }));
 
-jest.mock('../../lib/adapters/lmstudioAdapter', () => ({
+jest.mock('../../lib/core/adapters/lmstudioAdapter', () => ({
   LmStudioAdapter: jest.fn().mockImplementation((model, apiBaseUrl, timeoutMs) => ({
     provider: 'lmstudio',
     model,
@@ -47,7 +47,7 @@ jest.mock('../../lib/adapters/lmstudioAdapter', () => ({
   })),
 }));
 
-jest.mock('../../lib/adapters/lemonadeAdapter', () => ({
+jest.mock('../../lib/core/adapters/lemonadeAdapter', () => ({
   LemonadeAdapter: jest.fn().mockImplementation((model, apiBaseUrl, timeoutMs) => ({
     provider: 'lemonade',
     model,
@@ -57,7 +57,7 @@ jest.mock('../../lib/adapters/lemonadeAdapter', () => ({
   })),
 }));
 
-jest.mock('../../lib/adapters/antigravityAdapter', () => ({
+jest.mock('../../lib/core/adapters/antigravityAdapter', () => ({
   AntigravityAdapter: jest.fn().mockImplementation((model, apiKey, timeoutMs) => ({
     provider: 'antigravity',
     model,
@@ -67,15 +67,15 @@ jest.mock('../../lib/adapters/antigravityAdapter', () => ({
   })),
 }));
 
-jest.mock('../../lib/telemetry/instrumentedAdapter', () => ({
+jest.mock('../../lib/extensions/telemetry/instrumentedAdapter', () => ({
   InstrumentedAdapter: jest.fn().mockImplementation((inner) => inner),
 }));
 
-jest.mock('../../lib/cache/responseCache', () => ({
+jest.mock('../../lib/extensions/cache/responseCache', () => ({
   isCacheEnabled: jest.fn().mockReturnValue(false),
 }));
 
-jest.mock('../../lib/cache/cachedAdapter', () => ({
+jest.mock('../../lib/extensions/cache/cachedAdapter', () => ({
   CachedAdapter: jest.fn().mockImplementation((inner) => inner),
 }));
 
@@ -83,13 +83,13 @@ jest.mock('../../lib/cache/cachedAdapter', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { resolveProvider, resolveModel, createAdapter, createAdapterWithFallback, resolveApiKey, resolveRuntimeConfig } from '../../lib/adapterFactory';
-import { CopilotAdapter } from '../../lib/adapters/copilotAdapter';
-import { OpenAIAdapter } from '../../lib/adapters/openaiAdapter';
-import { AnthropicAdapter } from '../../lib/adapters/anthropicAdapter';
-import { LmStudioAdapter } from '../../lib/adapters/lmstudioAdapter';
-import { LemonadeAdapter } from '../../lib/adapters/lemonadeAdapter';
-import { AntigravityAdapter } from '../../lib/adapters/antigravityAdapter';
+import { resolveProvider, resolveModel, createAdapter, createAdapterWithFallback, resolveApiKey, resolveRuntimeConfig } from '../../lib/core/adapterFactory';
+import { CopilotAdapter } from '../../lib/core/adapters/copilotAdapter';
+import { OpenAIAdapter } from '../../lib/core/adapters/openaiAdapter';
+import { AnthropicAdapter } from '../../lib/core/adapters/anthropicAdapter';
+import { LmStudioAdapter } from '../../lib/core/adapters/lmstudioAdapter';
+import { LemonadeAdapter } from '../../lib/core/adapters/lemonadeAdapter';
+import { AntigravityAdapter } from '../../lib/core/adapters/antigravityAdapter';
 
 // ---------------------------------------------------------------------------
 // Env helpers

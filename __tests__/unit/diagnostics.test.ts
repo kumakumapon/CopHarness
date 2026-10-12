@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { diagnoseRuntime } from '../../lib/diagnostics';
-import { _resetExecutionBackendForTests } from '../../lib/execution';
-jest.mock('../../lib/skill', () => ({ listActiveSkills: () => [{ name: 'readFile', riskLevel: 'low' }] }));
+import { diagnoseRuntime } from '../../lib/core/diagnostics';
+import { _resetExecutionBackendForTests } from '../../lib/core/execution';
+jest.mock('../../lib/core/skill', () => ({ listActiveSkills: () => [{ name: 'readFile', riskLevel: 'low' }] }));
 const original = process.env;
 let dir: string;
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-')); process.env = { ...original, DATA_DIR: dir, COPILOT_PROVIDER: 'openai', OPENAI_API_KEY: 'secret-test-sentinel', EXECUTION_BACKEND: 'local' }; _resetExecutionBackendForTests(); });

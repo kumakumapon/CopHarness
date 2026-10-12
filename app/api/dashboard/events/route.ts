@@ -1,7 +1,7 @@
-import { eventBus } from '@/lib/events/bus';
-import type { BusEvent, EventType } from '@/lib/events/bus';
-import { requireApiKey } from '@/lib/apiAuth';
-import { redactBusEvent } from '@/lib/events/redact';
+import { eventBus } from '@/lib/core/events/bus';
+import type { BusEvent, EventType } from '@/lib/core/events/bus';
+import { requireApiKey } from '@/lib/core/apiAuth';
+import { redactBusEvent } from '@/lib/core/events/redact';
 
 export const dynamic = 'force-dynamic';
 

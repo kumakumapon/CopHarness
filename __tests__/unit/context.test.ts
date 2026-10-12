@@ -2,9 +2,9 @@ import {
   estimateConversationTokens,
   needsCompaction,
   compactMessages,
-} from '../../lib/context/compactor';
-import { runWithRalphLoop } from '../../lib/agents/ralphLoop';
-import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
+} from '../../lib/core/context/compactor';
+import { runWithRalphLoop } from '../../lib/extensions/agents/ralphLoop';
+import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/core/adapter';
 
 // ---------------------------------------------------------------------------
 // estimateConversationTokens

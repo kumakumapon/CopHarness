@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listApprovalRequests } from '../../../../lib/humanInLoop/store';
-import type { ApprovalStatus } from '../../../../lib/humanInLoop/types';
-import { requireApiKey } from '../../../../lib/apiAuth';
+import { listApprovalRequests } from '../../../../lib/core/humanInLoop/store';
+import type { ApprovalStatus } from '../../../../lib/core/humanInLoop/types';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

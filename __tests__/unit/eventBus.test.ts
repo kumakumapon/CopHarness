@@ -1,5 +1,5 @@
-import { EventBus } from '../../lib/events/bus';
-import type { BusEvent, AdapterResponsePayload, SkillStartPayload } from '../../lib/events/bus';
+import { EventBus } from '../../lib/core/events/bus';
+import type { BusEvent, AdapterResponsePayload, SkillStartPayload } from '../../lib/core/events/bus';
 
 describe('EventBus', () => {
   let bus: EventBus;

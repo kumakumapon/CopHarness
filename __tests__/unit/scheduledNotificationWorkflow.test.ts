@@ -1,15 +1,15 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { createAdapterWithFallback } from '../../lib/adapterFactory';
-import { startScheduler } from '../../lib/scheduler/engine';
-import { addSchedule, setRunNow } from '../../lib/scheduler/store';
-import { listTasks, _resetTaskLedgerForTests } from '../../lib/tasks/ledger';
-import { getTaskDetail } from '../../lib/dashboard/taskDetail';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { listLogs } from '../../lib/logs/store';
+import { createAdapterWithFallback } from '../../lib/core/adapterFactory';
+import { startScheduler } from '../../lib/extensions/automation/scheduler/engine';
+import { addSchedule, setRunNow } from '../../lib/extensions/automation/scheduler/store';
+import { listTasks, _resetTaskLedgerForTests } from '../../lib/extensions/tasks/ledger';
+import { getTaskDetail } from '../../lib/extensions/dashboard/taskDetail';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { listLogs } from '../../lib/core/logs/store';
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   createAdapterWithFallback: jest.fn(), resolveProvider: () => 'mock', resolveModel: () => 'fixture', resolveApiKey: () => undefined,
 }));
 

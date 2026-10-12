@@ -2,12 +2,12 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { createSharedJsonStore } from '../../lib/utils/sharedJsonStore';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { getPerson, listChannelIdentities, resolveIdentity, _resetIdentityStoreForTests } from '../../lib/identity/store';
-import { getTask, startTask, _resetTaskLedgerForTests } from '../../lib/tasks/ledger';
-import { createSkillProposal, listSkillProposals, _resetSkillProposalsForTests } from '../../lib/skillProposals/store';
-import { listViolations, recordViolation } from '../../lib/guardrails/violationLog';
+import { createSharedJsonStore } from '../../lib/core/utils/sharedJsonStore';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { getPerson, listChannelIdentities, resolveIdentity, _resetIdentityStoreForTests } from '../../lib/extensions/channels/identity/store';
+import { getTask, startTask, _resetTaskLedgerForTests } from '../../lib/extensions/tasks/ledger';
+import { createSkillProposal, listSkillProposals, _resetSkillProposalsForTests } from '../../lib/extensions/skill-proposals/store';
+import { listViolations, recordViolation } from '../../lib/core/guardrails/violationLog';
 
 describe('sharedJsonStore', () => {
   let dir: string;

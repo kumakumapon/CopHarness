@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/search/index.ts
+ * Unit tests for lib/extensions/memory/search/index.ts
  *
  * Two describe blocks:
  *   1. JSON fallback (forced via env) — always runs
@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ describe('SearchIndex — JSON fallback', () => {
   });
 
   async function getIndex() {
-    const mod = await import('../../lib/search/index');
+    const mod = await import('../../lib/extensions/memory/search/index');
     mod._resetSearchIndexForTests();
     return mod;
   }
@@ -180,7 +180,7 @@ describe('SearchIndex — JSON fallback', () => {
   it('isSearchIndexEnabled returns false when SEARCH_INDEX_ENABLED=false', async () => {
     process.env.SEARCH_INDEX_ENABLED = 'false';
     jest.resetModules();
-    const { isSearchIndexEnabled } = await import('../../lib/search/index');
+    const { isSearchIndexEnabled } = await import('../../lib/extensions/memory/search/index');
     expect(isSearchIndexEnabled()).toBe(false);
   });
 
@@ -226,7 +226,7 @@ describeSqlite('SearchIndex — SQLite FTS5', () => {
   });
 
   async function getIndex() {
-    const mod = await import('../../lib/search/index');
+    const mod = await import('../../lib/extensions/memory/search/index');
     mod._resetSearchIndexForTests();
     return mod;
   }

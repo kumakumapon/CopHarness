@@ -2,8 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { NextRequest } from 'next/server';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { addSchedule } from '../../lib/scheduler/store';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { addSchedule } from '../../lib/extensions/automation/scheduler/store';
 import { PATCH } from '../../app/api/dashboard/schedules/[id]/route';
 
 describe('dashboard schedule PATCH API - toolsets', () => {
@@ -51,7 +51,7 @@ describe('dashboard schedule PATCH API - toolsets', () => {
     expect(data.ok).toBe(true);
 
     // ストアを再読み込みして toolsets が保存されていることを確認
-    const { listSchedules } = await import('../../lib/scheduler/store');
+    const { listSchedules } = await import('../../lib/extensions/automation/scheduler/store');
     const updated = listSchedules().find((s) => s.id === schedule.id);
     expect(updated?.toolsets).toEqual(['research', 'coding']);
   });
@@ -96,7 +96,7 @@ describe('dashboard schedule PATCH API - toolsets', () => {
     const data = await res.json() as { ok: boolean };
     expect(data.ok).toBe(true);
 
-    const { listSchedules } = await import('../../lib/scheduler/store');
+    const { listSchedules } = await import('../../lib/extensions/automation/scheduler/store');
     const updated = listSchedules().find((s) => s.id === schedule.id);
     expect(updated?.toolsets).toEqual([]);
   });
@@ -108,7 +108,7 @@ describe('dashboard schedule PATCH API - toolsets', () => {
       { params: Promise.resolve({ id: schedule.id }) },
     );
     expect(res.status).toBe(400);
-    const { listSchedules } = await import('../../lib/scheduler/store');
+    const { listSchedules } = await import('../../lib/extensions/automation/scheduler/store');
     expect(listSchedules().find((s) => s.id === schedule.id)?.cron).toBe('0 * * * *');
   });
 
@@ -119,7 +119,7 @@ describe('dashboard schedule PATCH API - toolsets', () => {
       { params: Promise.resolve({ id: schedule.id }) },
     );
     expect(res.status).toBe(200);
-    const { listSchedules } = await import('../../lib/scheduler/store');
+    const { listSchedules } = await import('../../lib/extensions/automation/scheduler/store');
     expect(listSchedules().find((s) => s.id === schedule.id)?.cron).toBe('30 9 * * *');
   });
 

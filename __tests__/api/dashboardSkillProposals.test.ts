@@ -7,8 +7,8 @@ import {
   _resetSkillProposalsForTests,
   createSkillProposal,
   updateSkillProposal,
-} from '../../lib/skillProposals/store';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+} from '../../lib/extensions/skill-proposals/store';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 describe('GET /api/dashboard/skill-proposals', () => {
   let tmpDir: string;

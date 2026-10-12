@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
 import { POST } from '../../app/api/dashboard/tasks/[id]/agent-dag/retry/route';
-import { retryAgentDagNode } from '../../lib/agents/dagRunner';
+import { retryAgentDagNode } from '../../lib/extensions/agents/dagRunner';
 
-jest.mock('../../lib/agents/dagRunner', () => ({
+jest.mock('../../lib/extensions/agents/dagRunner', () => ({
   retryAgentDagNode: jest.fn(),
 }));
 

@@ -1,20 +1,20 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   _resetTaskLedgerForTests,
   startTask,
   finishTask,
-} from '../../lib/tasks/ledger';
-import { _resetTaskCancellationForTests } from '../../lib/tasks/cancellation';
+} from '../../lib/extensions/tasks/ledger';
+import { _resetTaskCancellationForTests } from '../../lib/extensions/tasks/cancellation';
 import {
   parseAgentCommand,
   executeAgentCommand,
   getApproverAllowlist,
   isAuthorizedApprover,
-} from '../../lib/channels/agentCommands';
-import { createApprovalRequest } from '../../lib/humanInLoop/store';
+} from '../../lib/extensions/channels/agentCommands';
+import { createApprovalRequest } from '../../lib/core/humanInLoop/store';
 
 // The HIL store is an in-memory singleton with no reset — we isolate via
 // unique skillName / requestedBy values per test.
@@ -225,7 +225,7 @@ describe('executeAgentCommand — task operations', () => {
     expect(reply).toContain('停止を要求しました');
 
     // Verify task was cancelled in ledger
-    const { getTask } = await import('../../lib/tasks/ledger');
+    const { getTask } = await import('../../lib/extensions/tasks/ledger');
     const updated = getTask(task.id);
     expect(updated?.status).toBe('cancelled');
   });

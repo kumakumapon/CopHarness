@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { listToolsets } from '../../../../lib/toolPolicy/toolsets';
-import { listMcpServers } from '../../../../lib/mcp/registry';
-import { listSkills, listActiveSkills } from '../../../../lib/skill';
-import { matchesGlob } from '../../../../lib/toolPolicy/toolsets';
-import '../../../../lib/skills/index';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { listToolsets } from '../../../../lib/core/toolPolicy/toolsets';
+import { listMcpServers } from '../../../../lib/extensions/mcp/registry';
+import { listSkills, listActiveSkills } from '../../../../lib/core/skill';
+import { matchesGlob } from '../../../../lib/core/toolPolicy/toolsets';
+import '../../../../lib/core/skills/index';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

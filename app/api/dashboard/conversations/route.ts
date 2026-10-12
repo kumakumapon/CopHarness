@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { listHistoryKeys } from '../../../../lib/history/store';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { listHistoryKeys } from '../../../../lib/extensions/conversations/store';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

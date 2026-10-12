@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { NextRequest } from 'next/server';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 let tmpDir: string;
 
@@ -33,7 +33,7 @@ afterEach(() => {
 async function getRoute() {
   // Reset search index singleton before loading route
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const searchMod = require('../../lib/search/index') as typeof import('../../lib/search/index');
+  const searchMod = require('../../lib/extensions/memory/search/index') as typeof import('../../lib/extensions/memory/search/index');
   searchMod._resetSearchIndexForTests();
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const route = require('../../app/api/dashboard/search/route') as typeof import('../../app/api/dashboard/search/route');
@@ -126,7 +126,7 @@ describe('GET /api/dashboard/search', () => {
     process.env.SEARCH_INDEX_ENABLED = 'false';
     jest.resetModules();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const searchMod = require('../../lib/search/index') as typeof import('../../lib/search/index');
+    const searchMod = require('../../lib/extensions/memory/search/index') as typeof import('../../lib/extensions/memory/search/index');
     searchMod._resetSearchIndexForTests();
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const route = require('../../app/api/dashboard/search/route') as typeof import('../../app/api/dashboard/search/route');

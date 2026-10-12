@@ -2,9 +2,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { NextRequest } from 'next/server';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import { POST } from '../../app/api/dashboard/schedules/route';
-import { listSchedules } from '../../lib/scheduler/store';
+import { listSchedules } from '../../lib/extensions/automation/scheduler/store';
 
 describe('dashboard schedules POST API - cron validation', () => {
   let tmpDir: string;

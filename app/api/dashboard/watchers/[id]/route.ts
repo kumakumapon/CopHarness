@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../../lib/apiAuth';
-import { removeWatcher, updateWatcher } from '../../../../../lib/watchers/store';
+import { requireApiKey } from '../../../../../lib/core/apiAuth';
+import { removeWatcher, updateWatcher } from '../../../../../lib/extensions/automation/watchers/store';
 
 export async function PATCH(
   req: NextRequest,

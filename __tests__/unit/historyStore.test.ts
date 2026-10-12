@@ -1,12 +1,12 @@
 /**
- * Unit tests for lib/history/store
+ * Unit tests for lib/extensions/conversations/store
  */
 
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import type { LLMMessage } from '../../lib/adapter';
+import type { LLMMessage } from '../../lib/core/adapter';
 
 // Use an isolated tmp file so tests do not pollute the working directory.
 const TMP_HISTORY_FILE = path.join(os.tmpdir(), `test-conversation-history-${process.pid}.json`);
@@ -45,7 +45,7 @@ beforeEach(() => {
 // Helper: import a fresh instance of the store after resetModules()
 async function getStore() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../../lib/history/store') as typeof import('../../lib/history/store');
+  return require('../../lib/extensions/conversations/store') as typeof import('../../lib/extensions/conversations/store');
 }
 
 describe('loadHistory', () => {

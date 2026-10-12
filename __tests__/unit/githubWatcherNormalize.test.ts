@@ -1,4 +1,4 @@
-import { normalizeGitHubWebhookEvent } from '../../lib/watchers/github';
+import { normalizeGitHubWebhookEvent } from '../../lib/extensions/automation/watchers/github';
 
 describe('GitHub watcher event normalization', () => {
   it('normalizes issue webhook payloads for matching and TaskLedger metadata', () => {

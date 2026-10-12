@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server';
 import { GET, POST } from '../../app/api/dashboard/watchers/route';
 import { PATCH } from '../../app/api/dashboard/watchers/[id]/route';
 import { POST as POST_WATCHER_EVENT } from '../../app/api/watchers/events/route';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 describe('dashboard watchers API', () => {
   let tmpDir: string;
