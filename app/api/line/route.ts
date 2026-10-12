@@ -39,7 +39,7 @@ import {
   continueWizard as wizContinue,
 } from '../../../lib/promptWizardSession';
 import { consumePendingNudge, maybeCreateNudge } from '../../../lib/memory/nudge';
-import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
+import { runWithRalphLoop } from '../../../lib/agents/ralphLoop';
 import { parseAgentCommand, executeAgentCommand } from '../../../lib/channels/agentCommands';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.LINE_MAX_HISTORY) || 20);

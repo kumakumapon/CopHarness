@@ -2,7 +2,7 @@
 
 import { useState, Fragment } from 'react';
 import useSWR from 'swr';
-import type { TaskDetail } from '../../../lib/tasks/detail';
+import type { TaskDetail } from '../../../lib/dashboard/taskDetail';
 import {
   RefreshCw,
   Clock,

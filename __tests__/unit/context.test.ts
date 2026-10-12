@@ -3,7 +3,7 @@ import {
   needsCompaction,
   compactMessages,
 } from '../../lib/context/compactor';
-import { runWithRalphLoop } from '../../lib/context/ralphLoop';
+import { runWithRalphLoop } from '../../lib/agents/ralphLoop';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import { resolveConversationKey } from '../../../lib/identity/store';
 import { withSkillExecutionContext } from '../../../lib/utils/executionContext';
 import { finishTask, startTask } from '../../../lib/tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/tasks/cancellation';
-import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
+import { runWithRalphLoop } from '../../../lib/agents/ralphLoop';
 import { auditRequest, auditResponse, auditError } from '../../../lib/logs/auditLogger';
 import '../../../lib/skills/index';
 

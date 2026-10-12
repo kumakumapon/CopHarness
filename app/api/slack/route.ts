@@ -8,7 +8,7 @@ import { loadHistory, saveHistory } from '../../../lib/history/store';
 import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
 import { withSkillExecutionContext } from '../../../lib/utils/executionContext';
 import { startTask, finishTask } from '../../../lib/tasks/ledger';
-import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
+import { runWithRalphLoop } from '../../../lib/agents/ralphLoop';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.SLACK_MAX_HISTORY) || 20);
 const MAX_MESSAGE_LENGTH = 3900;

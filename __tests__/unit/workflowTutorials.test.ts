@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { runAgentSession, loadAgentSession } from '../../lib/agents/sessions';
 import { startTask, finishTask, _resetTaskLedgerForTests } from '../../lib/tasks/ledger';
-import { getTaskDetail } from '../../lib/tasks/detail';
+import { getTaskDetail } from '../../lib/dashboard/taskDetail';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
 import { _resetExecutionBackendForTests } from '../../lib/execution';
 import { _resetSkillExecutionLogForTests } from '../../lib/logs/skillExecutionLog';

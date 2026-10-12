@@ -3,7 +3,7 @@ import { matchesCron, normalizeCron, isValidCronInput } from './cron';
 import { createAdapterWithFallback, resolveProvider, resolveModel, resolveApiKey } from '../adapterFactory';
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
-import { runWithRalphLoop } from '../context/ralphLoop';
+import { runWithRalphLoop } from '../agents/ralphLoop';
 import { withSkillExecutionContext } from '../utils/executionContext';
 import { finishTask, startTask, updateTaskMetadata } from '../tasks/ledger';
 import { redactPreviewText } from '../utils/redaction';
@@ -15,7 +15,7 @@ import {
 import type { ScheduledPrompt } from './types';
 import '../skills/index';
 import { listActiveSkills, resolveSkills } from '../skill';
-import { resolveToolsetSkillNames } from '../skills/toolsets';
+import { resolveToolsetSkillNames } from '../toolPolicy/toolsets';
 
 /**
  * Optional callback invoked after a schedule successfully completes.

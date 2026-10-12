@@ -106,7 +106,7 @@ import {
   promptTemplates,
 } from '../lib/promptWizardSession';
 import { consumePendingNudge, maybeCreateNudge } from '../lib/memory/nudge';
-import { runWithRalphLoop } from '../lib/context/ralphLoop';
+import { runWithRalphLoop } from '../lib/agents/ralphLoop';
 import { parseAgentCommand, executeAgentCommand } from '../lib/channels/agentCommands';
 
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
