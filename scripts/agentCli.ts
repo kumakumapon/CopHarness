@@ -44,7 +44,7 @@ import {
   listConversations,
   deleteConversation,
 } from '../lib/extensions/conversations/conversationPersistence';
-import '../lib/core/skills/index';
+import '../lib/bootstrap';
 import { listActiveSkills } from '../lib/core/skill';
 import { type AgentLoopCallbacks, type AgentLoopResult } from '../lib/core/agents/agentLoop';
 import { compactMessages, estimateConversationTokens } from '../lib/core/context/compactor';

@@ -3,7 +3,7 @@
  * Verifies that when a schedule has `toolsets`, runPrompt narrows the skill set.
  */
 
-import '../../lib/core/skills/index';
+import '../../lib/bootstrap';
 import { resolveSkills, listActiveSkills } from '../../lib/core/skill';
 import { resolveToolsetSkillNames, _resetToolsetsForTests } from '../../lib/core/toolPolicy/toolsets';
 

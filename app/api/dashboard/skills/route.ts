@@ -3,7 +3,7 @@ import { listSkills, listActiveSkills } from '../../../../lib/core/skill';
 import { listSkillExecutionSummaries } from '../../../../lib/core/logs/skillExecutionLog';
 import { requireApiKey } from '../../../../lib/core/apiAuth';
 import { describeSkillPolicy } from '../../../../lib/core/toolPolicy/policy';
-import '../../../../lib/core/skills/index';
+import '../../../../lib/bootstrap';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

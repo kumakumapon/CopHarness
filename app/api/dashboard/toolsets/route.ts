@@ -4,7 +4,7 @@ import { listToolsets } from '../../../../lib/core/toolPolicy/toolsets';
 import { listMcpServers } from '../../../../lib/extensions/mcp/registry';
 import { listSkills, listActiveSkills } from '../../../../lib/core/skill';
 import { matchesGlob } from '../../../../lib/core/toolPolicy/toolsets';
-import '../../../../lib/core/skills/index';
+import '../../../../lib/bootstrap';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

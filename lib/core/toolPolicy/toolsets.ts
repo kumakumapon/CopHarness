@@ -33,7 +33,7 @@ export function matchesGlob(pattern: string, name: string): boolean {
 
 // ---------------------------------------------------------------------------
 // Built-in toolsets
-// NOTE: skill names verified against lib/core/skills/index.ts registrations.
+// NOTE: skill names verified against the registered skills (lib/core/skills/index.ts and each extension's builtinSkills.ts, wired in lib/bootstrap.ts).
 // ---------------------------------------------------------------------------
 
 const BUILTIN_TOOLSETS: ToolsetDefinition[] = [

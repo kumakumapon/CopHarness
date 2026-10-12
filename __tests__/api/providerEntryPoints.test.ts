@@ -9,7 +9,7 @@ import { createAdapterWithFallback } from '../../lib/core/adapterFactory';
 import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import type { LLMRequest } from '../../lib/core/adapter';
 jest.mock('../../lib/core/adapterFactory', () => ({ ...jest.requireActual('../../lib/core/adapterFactory'), createAdapterWithFallback: jest.fn() }));
-jest.mock('../../lib/core/skills/index', () => ({}));
+jest.mock('../../lib/bootstrap', () => ({}));
 jest.mock('../../lib/extensions/channels/identity/store', () => ({ resolveConversationKey: async () => ({ personId: 'test', channelKey: 'test', conversationKey: 'test' }) }));
 jest.mock('../../lib/extensions/tasks/ledger', () => ({ startTask: async (value: { id?: string }) => ({ id: value.id ?? 'test' }), finishTask: jest.fn(), updateTaskMetadata: jest.fn() }));
 jest.mock('../../lib/core/logs/auditLogger', () => ({ auditRequest: jest.fn(), auditResponse: jest.fn(), auditError: jest.fn() }));

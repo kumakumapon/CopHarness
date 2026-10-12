@@ -7,7 +7,7 @@ import { _resetToolsetsForTests } from '../../lib/core/toolPolicy/toolsets';
 import { _resetMcpRegistryForTests } from '../../lib/extensions/mcp/registry';
 
 // Ensure skills are registered before the route handler runs
-import '../../lib/core/skills/index';
+import '../../lib/bootstrap';
 
 // Must import after skills/index so registry is populated
 import { GET } from '../../app/api/dashboard/toolsets/route';

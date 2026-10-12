@@ -79,7 +79,7 @@ import {
 } from 'discord.js';
 import { createAdapterWithFallback, resolveProvider, resolveModel } from '../lib/core/adapterFactory';
 import { type LLMAdapter, type LLMAttachment, type LLMMessage } from '../lib/core/adapter';
-import '../lib/core/skills/index';
+import '../lib/bootstrap';
 import { listActiveSkills } from '../lib/core/skill';
 import {
   listSchedules,

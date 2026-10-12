@@ -32,7 +32,7 @@ if (fs.existsSync(envPath)) {
 
 import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/core/adapterFactory';
 import { type LLMMessage } from '../lib/core/adapter';
-import '../lib/core/skills/index';
+import '../lib/bootstrap';
 import { listActiveSkills } from '../lib/core/skill';
 
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';
