@@ -29,7 +29,7 @@ jest.mock('../../lib/cache/responseCache', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { checkAdapterHealth, checkAllProviders } from '../../lib/adapters/healthCheck';
+import { checkAdapterHealth, checkAllProviders } from '../../lib/healthCheck';
 import { type LLMAdapter } from '../../lib/adapter';
 import { createAdapter, resolveModel } from '../../lib/adapterFactory';
 

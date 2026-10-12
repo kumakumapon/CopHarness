@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { getSkillExecutionContext } from '../skills/executionContext';
+import { getSkillExecutionContext } from '../utils/executionContext';
 import { finishTask, getTask, startTask, updateTaskMetadata } from '../tasks/ledger';
 import { dataPath } from '../utils/dataDir';
 import { runAgentTask } from './orchestrator';

@@ -21,7 +21,7 @@ import {
   updateTaskMetadata,
 } from '../../lib/tasks/ledger';
 import { runWithRalphLoop } from '../../lib/context/ralphLoop';
-import { withSkillExecutionContext } from '../../lib/skills/executionContext';
+import { withSkillExecutionContext } from '../../lib/utils/executionContext';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
 
 // ---------------------------------------------------------------------------

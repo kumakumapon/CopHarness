@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRecentSpans } from '../../../../lib/telemetry/tracer';
+import { getRecentSpans } from '../../../../lib/events/tracer';
 import { requireApiKey } from '../../../../lib/apiAuth';
 
 export async function GET(req: NextRequest) {

@@ -6,8 +6,8 @@ import { startTask, finishTask, _resetTaskLedgerForTests } from '../../lib/tasks
 import { getTaskDetail } from '../../lib/tasks/detail';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
 import { _resetExecutionBackendForTests } from '../../lib/execution';
-import { _resetSkillExecutionLogForTests } from '../../lib/skills/executionLog';
-import { withSkillExecutionContext } from '../../lib/skills/executionContext';
+import { _resetSkillExecutionLogForTests } from '../../lib/logs/skillExecutionLog';
+import { withSkillExecutionContext } from '../../lib/utils/executionContext';
 import { registerSkill, getSkill, type SkillDefinition } from '../../lib/skill';
 import { wrapWithGate } from '../../lib/humanInLoop/gate';
 import { listApprovalRequests, resolveApprovalRequest } from '../../lib/humanInLoop/store';

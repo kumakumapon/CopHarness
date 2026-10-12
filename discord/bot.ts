@@ -93,7 +93,7 @@ import { normalizeCron, nextRunDate } from '../lib/scheduler/cron';
 import { startScheduler, resolveCronExpression } from '../lib/scheduler/engine';
 import { loadHistory, saveHistory } from '../lib/history/store';
 import { resolveConversationKey } from '../lib/identity/store';
-import { withSkillExecutionContext } from '../lib/skills/executionContext';
+import { withSkillExecutionContext } from '../lib/utils/executionContext';
 import { finishTask, startTask } from '../lib/tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../lib/tasks/cancellation';
 import { trimHistoryToTokenBudget } from '../lib/history/trimmer';

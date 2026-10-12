@@ -19,7 +19,7 @@
 import { type SkillDefinition } from '../skill';
 import { createSkillProposal } from '../skillProposals/store';
 import { runProposalTestPhase } from '../skillProposals/lifecycle';
-import { getSkillExecutionContext } from './executionContext';
+import { getSkillExecutionContext } from '../utils/executionContext';
 
 export const proposeSkill: SkillDefinition = {
   name: 'proposeSkill',

@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import type { ApprovalRequest, ApprovalStatus } from './types';
-import { getSkillExecutionContext } from '../skills/executionContext';
+import { getSkillExecutionContext } from '../utils/executionContext';
 
 const store = new Map<string, ApprovalRequest>();
 

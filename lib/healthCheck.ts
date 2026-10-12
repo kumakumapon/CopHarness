@@ -3,12 +3,12 @@
  * Pings each configured LLM adapter with a minimal request to verify it responds.
  */
 
-import { type LLMAdapter, type ProviderType } from '../adapter';
+import { type LLMAdapter, type ProviderType } from './adapter';
 import {
   createAdapter,
   resolveApiKey,
   resolveModel,
-} from '../adapterFactory';
+} from './adapterFactory';
 
 export interface HealthCheckResult {
   provider: string;

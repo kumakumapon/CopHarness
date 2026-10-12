@@ -30,7 +30,7 @@ jest.mock('../../lib/tasks/ledger', () => ({
   updateTaskMetadata: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../lib/skills/executionContext', () => ({
+jest.mock('../../lib/utils/executionContext', () => ({
   getSkillExecutionContext: jest.fn().mockReturnValue(undefined),
 }));
 

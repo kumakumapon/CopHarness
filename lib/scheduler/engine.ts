@@ -4,9 +4,9 @@ import { createAdapterWithFallback, resolveProvider, resolveModel, resolveApiKey
 import type { LLMMessage } from '../adapter';
 import { startLog, finishLog } from '../logs/store';
 import { runWithRalphLoop } from '../context/ralphLoop';
-import { withSkillExecutionContext } from '../skills/executionContext';
+import { withSkillExecutionContext } from '../utils/executionContext';
 import { finishTask, startTask, updateTaskMetadata } from '../tasks/ledger';
-import { redactPreviewText } from '../toolPolicy/redaction';
+import { redactPreviewText } from '../utils/redaction';
 import {
   isAbortError,
   registerTaskAbortController,

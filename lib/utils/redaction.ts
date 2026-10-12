@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { dataPath } from '../utils/dataDir';
+import { dataPath } from './dataDir';
 
 const REDACTED = '[REDACTED]';
 const MAX_REDACTION_DEPTH = 8;

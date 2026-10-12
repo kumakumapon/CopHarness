@@ -6,7 +6,7 @@ jest.mock('../../lib/humanInLoop/store', () => ({
   waitForApproval: jest.fn().mockResolvedValue('approved'),
 }));
 
-jest.mock('../../lib/skills/executionContext', () => ({
+jest.mock('../../lib/utils/executionContext', () => ({
   getSkillExecutionContext: jest.fn().mockReturnValue({ personId: 'p1', channelKey: 'c1' }),
   updateSkillExecutionContext: jest.fn(),
 }));
@@ -16,7 +16,7 @@ jest.mock('../../lib/toolPolicy/policy', () => ({
 }));
 
 import { createApprovalRequest, waitForApproval } from '../../lib/humanInLoop/store';
-import { getSkillExecutionContext, updateSkillExecutionContext } from '../../lib/skills/executionContext';
+import { getSkillExecutionContext, updateSkillExecutionContext } from '../../lib/utils/executionContext';
 import { evaluateToolPolicy } from '../../lib/toolPolicy/policy';
 
 const mockCreateApprovalRequest = createApprovalRequest as jest.MockedFunction<typeof createApprovalRequest>;

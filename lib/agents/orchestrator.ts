@@ -1,7 +1,7 @@
 import { createAdapter, resolveProvider, resolveModel, resolveApiKey } from '../adapterFactory';
 import { resolveSkills } from '../skill';
 import { resolveToolsetSkillNames } from '../skills/toolsets';
-import { getSkillExecutionContext, withSkillExecutionContext } from '../skills/executionContext';
+import { getSkillExecutionContext, withSkillExecutionContext } from '../utils/executionContext';
 import { finishTask, startTask } from '../tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../tasks/cancellation';
 import { runAgentLoop } from './agentLoop';

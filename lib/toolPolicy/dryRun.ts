@@ -1,5 +1,5 @@
 import type { SkillDefinition, SkillDryRunPreview } from '../skill';
-import { redactPreviewText, redactPreviewValue } from './redaction';
+import { redactPreviewText, redactPreviewValue } from '../utils/redaction';
 
 export type ApprovalPreview = SkillDryRunPreview & {
   generatedAt: number;

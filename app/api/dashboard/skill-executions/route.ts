@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiKey } from '../../../../lib/apiAuth';
 import { listSkills } from '../../../../lib/skill';
-import { querySkillExecutions, type SkillExecutionStatus } from '../../../../lib/skills/executionLog';
+import { querySkillExecutions, type SkillExecutionStatus } from '../../../../lib/logs/skillExecutionLog';
 import '../../../../lib/skills/index';
 
 const VALID_STATUSES = new Set<SkillExecutionStatus>(['success', 'error', 'exception']);

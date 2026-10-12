@@ -7,7 +7,7 @@
  */
 
 import type { BusEvent, SkillStartPayload } from './bus';
-import { redactPreviewValue } from '../toolPolicy/redaction';
+import { redactPreviewValue } from '../utils/redaction';
 
 type SkillArgsMode = 'redacted' | 'omit' | 'raw';
 

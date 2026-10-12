@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as crypto from 'crypto';
 import { dataPath } from '../utils/dataDir';
-import { redactPreviewText, redactPreviewValue } from '../toolPolicy/redaction';
+import { redactPreviewText, redactPreviewValue } from '../utils/redaction';
 
 export type SkillExecutionStatus = 'success' | 'error' | 'exception';
 

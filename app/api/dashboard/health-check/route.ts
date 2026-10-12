@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiKey } from '../../../../lib/apiAuth';
-import { checkAllProviders } from '../../../../lib/adapters/healthCheck';
+import { checkAllProviders } from '../../../../lib/healthCheck';
 import { type ProviderType } from '../../../../lib/adapter';
 
 const VALID_PROVIDERS: ProviderType[] = [

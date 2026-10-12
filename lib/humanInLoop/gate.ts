@@ -1,6 +1,6 @@
 import type { SkillDefinition } from '../skill';
 import { createApprovalRequest, waitForApproval } from './store';
-import { getSkillExecutionContext, updateSkillExecutionContext } from '../skills/executionContext';
+import { getSkillExecutionContext, updateSkillExecutionContext } from '../utils/executionContext';
 import { evaluateToolPolicy } from '../toolPolicy/policy';
 import { grantSessionPermission } from '../toolPolicy/sessionPermissions';
 import { buildDryRunPreview, formatDryRunPreview } from '../toolPolicy/dryRun';
