@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setRunNow } from '../../../../../../lib/scheduler/store';
-import { requireApiKey } from '../../../../../../lib/apiAuth';
+import { setRunNow } from '../../../../../../lib/extensions/automation/scheduler/store';
+import { requireApiKey } from '../../../../../../lib/core/apiAuth';
 
 export async function POST(
   req: NextRequest,

@@ -1,18 +1,18 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   _resetTaskLedgerForTests,
   startTask,
   getTask,
-} from '../../lib/tasks/ledger';
+} from '../../lib/extensions/tasks/ledger';
 import {
   registerTaskAbortController,
   unregisterTaskAbortController,
   requestTaskCancellation,
   _resetTaskCancellationForTests,
-} from '../../lib/tasks/cancellation';
+} from '../../lib/extensions/tasks/cancellation';
 
 describe('taskCancellation', () => {
   let tmpDir: string;
@@ -41,7 +41,7 @@ describe('taskCancellation', () => {
   it('returns not_running for a finished task', async () => {
     const task = await startTask({ kind: 'agent' });
     // Simulate it having been finished externally — we'll do it via finishTask
-    const { finishTask } = await import('../../lib/tasks/ledger');
+    const { finishTask } = await import('../../lib/extensions/tasks/ledger');
     await finishTask(task.id, 'succeeded');
 
     const result = await requestTaskCancellation(task.id);

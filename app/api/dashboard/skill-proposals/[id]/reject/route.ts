@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../../../lib/apiAuth';
-import { getSkillProposal } from '../../../../../../lib/skillProposals/store';
-import { rejectProposal } from '../../../../../../lib/skillProposals/lifecycle';
+import { requireApiKey } from '../../../../../../lib/core/apiAuth';
+import { getSkillProposal } from '../../../../../../lib/extensions/skill-proposals/store';
+import { rejectProposal } from '../../../../../../lib/extensions/skill-proposals/lifecycle';
 
 export async function POST(
   req: NextRequest,

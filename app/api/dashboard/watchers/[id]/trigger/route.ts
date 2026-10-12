@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../../../lib/apiAuth';
-import { triggerWatcher } from '../../../../../../lib/watchers/engine';
-import type { WatcherEvent } from '../../../../../../lib/watchers/types';
+import { requireApiKey } from '../../../../../../lib/core/apiAuth';
+import { triggerWatcher } from '../../../../../../lib/extensions/automation/watchers/engine';
+import type { WatcherEvent } from '../../../../../../lib/extensions/automation/watchers/types';
 
 export async function POST(
   req: NextRequest,

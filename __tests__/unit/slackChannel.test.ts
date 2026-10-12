@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { normalizeSlackEvent, validateSlackSignature } from '../../lib/channels/slack';
+import { normalizeSlackEvent, validateSlackSignature } from '../../lib/extensions/channels/slack';
 
 describe('normalizeSlackEvent', () => {
   it('handles Slack URL verification challenges', () => {

@@ -36,23 +36,23 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/adapterFactory';
-import { type LLMAdapter, type LLMMessage, type ProviderType } from '../lib/adapter';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/core/adapterFactory';
+import { type LLMAdapter, type LLMMessage, type ProviderType } from '../lib/core/adapter';
 import {
   saveConversation,
   loadConversation,
   listConversations,
   deleteConversation,
-} from '../lib/history/conversationPersistence';
-import '../lib/skills/index';
-import { listActiveSkills } from '../lib/skill';
-import { type AgentLoopCallbacks, type AgentLoopResult } from '../lib/agents/agentLoop';
-import { compactMessages, estimateConversationTokens } from '../lib/context/compactor';
+} from '../lib/extensions/conversations/conversationPersistence';
+import '../lib/core/skills/index';
+import { listActiveSkills } from '../lib/core/skill';
+import { type AgentLoopCallbacks, type AgentLoopResult } from '../lib/core/agents/agentLoop';
+import { compactMessages, estimateConversationTokens } from '../lib/core/context/compactor';
 
-import { acquireAgentSession, loadAgentSession, listAgentSessions, newAgentSessionId, runAgentSession, validateResume } from '../lib/agents/sessions';
-import { startTask, finishTask, updateTaskMetadata } from '../lib/tasks/ledger';
-import { withSkillExecutionContext } from '../lib/utils/executionContext';
-import { getExecutionBackend } from '../lib/execution';
+import { acquireAgentSession, loadAgentSession, listAgentSessions, newAgentSessionId, runAgentSession, validateResume } from '../lib/extensions/agents/sessions';
+import { startTask, finishTask, updateTaskMetadata } from '../lib/extensions/tasks/ledger';
+import { withSkillExecutionContext } from '../lib/core/utils/executionContext';
+import { getExecutionBackend } from '../lib/core/execution';
 
 function buildAdapter(provider: ProviderType, model: string, apiKey: string | undefined): LLMAdapter {
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;

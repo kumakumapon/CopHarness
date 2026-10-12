@@ -2,12 +2,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { NextRequest } from 'next/server';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { _resetToolsetsForTests } from '../../lib/toolPolicy/toolsets';
-import { _resetMcpRegistryForTests } from '../../lib/mcp/registry';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { _resetToolsetsForTests } from '../../lib/core/toolPolicy/toolsets';
+import { _resetMcpRegistryForTests } from '../../lib/extensions/mcp/registry';
 
 // Ensure skills are registered before the route handler runs
-import '../../lib/skills/index';
+import '../../lib/core/skills/index';
 
 // Must import after skills/index so registry is populated
 import { GET } from '../../app/api/dashboard/toolsets/route';

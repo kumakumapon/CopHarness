@@ -1,15 +1,15 @@
 import { NextRequest } from 'next/server';
-import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../../lib/adapterFactory';
-import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/rateLimit';
-import { resolveConversationKey } from '../../../../lib/identity/store';
-import { withSkillExecutionContext } from '../../../../lib/utils/executionContext';
-import { finishTask, startTask, updateTaskMetadata } from '../../../../lib/tasks/ledger';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/tasks/cancellation';
-import { acquireAgentSession, loadAgentSession, newAgentSessionId, runAgentSession, SessionError, validateResume } from '../../../../lib/agents/sessions';
-import { getExecutionBackend } from '../../../../lib/execution';
-import '../../../../lib/skills/index';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../../lib/core/adapterFactory';
+import { resolveSkills, listActiveSkills } from '../../../../lib/core/skill';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/core/rateLimit';
+import { resolveConversationKey } from '../../../../lib/extensions/channels/identity/store';
+import { withSkillExecutionContext } from '../../../../lib/core/utils/executionContext';
+import { finishTask, startTask, updateTaskMetadata } from '../../../../lib/extensions/tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/extensions/tasks/cancellation';
+import { acquireAgentSession, loadAgentSession, newAgentSessionId, runAgentSession, SessionError, validateResume } from '../../../../lib/extensions/agents/sessions';
+import { getExecutionBackend } from '../../../../lib/core/execution';
+import '../../../../lib/core/skills/index';
 
 export async function POST(req: NextRequest) {
   const unauthorized = requireApiKey(req);

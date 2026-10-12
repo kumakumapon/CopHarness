@@ -1,6 +1,6 @@
-import { listLogs } from '../../../../lib/logs/store';
+import { listLogs } from '../../../../lib/core/logs/store';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

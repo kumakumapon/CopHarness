@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   _resetTaskLedgerForTests,
   finishTask,
@@ -10,7 +10,7 @@ import {
   queryTasks,
   startTask,
   updateTaskMetadata,
-} from '../../lib/tasks/ledger';
+} from '../../lib/extensions/tasks/ledger';
 
 describe('task ledger', () => {
   let tmpDir: string;

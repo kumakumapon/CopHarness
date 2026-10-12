@@ -1,5 +1,5 @@
-import { RetryAdapter } from '../../lib/adapters/retryAdapter';
-import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
+import { RetryAdapter } from '../../lib/core/adapters/retryAdapter';
+import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/core/adapter';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -367,7 +367,7 @@ GENERATED_SKILL_ALLOWED_NETWORK=
 ### スキルのカスタム定義
 
 ```typescript
-import { type SkillDefinition } from './lib/skill';
+import { type SkillDefinition } from './lib/core/skill';
 
 const mySkill: SkillDefinition = {
   name: 'mySkill',
@@ -392,8 +392,8 @@ const mySkill: SkillDefinition = {
 ### スキルの登録と利用
 
 ```typescript
-import { registerSkill, resolveSkills } from './lib/skill';
-import { createAdapter } from './lib/adapterFactory';
+import { registerSkill, resolveSkills } from './lib/core/skill';
+import { createAdapter } from './lib/core/adapterFactory';
 
 registerSkill(mySkill);
 
@@ -621,7 +621,7 @@ MCP_SERVERS=[{"url":"http://localhost:3100","name":"my-tools"},{"url":"http://lo
 ### TypeScript API
 
 ```typescript
-import { runAgentTask, runAgentPipeline } from './lib/agents/orchestrator';
+import { runAgentTask, runAgentPipeline } from './lib/extensions/agents/orchestrator';
 
 // 単一タスク
 const result = await runAgentTask({

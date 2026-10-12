@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { listChannelIdentities, listPeople, type ChannelIdentity } from '../../../../lib/identity/store';
-import { listTasks, type TaskRecord } from '../../../../lib/tasks/ledger';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { listChannelIdentities, listPeople, type ChannelIdentity } from '../../../../lib/extensions/channels/identity/store';
+import { listTasks, type TaskRecord } from '../../../../lib/extensions/tasks/ledger';
 
 function compareIsoDesc(a?: string, b?: string): number {
   return new Date(b ?? 0).getTime() - new Date(a ?? 0).getTime();

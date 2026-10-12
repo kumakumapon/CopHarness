@@ -5,13 +5,13 @@
  *   modes "identity" | "task" | "proposal" | "history" | "violation": the cached JSON stores (DATA_DIR)
  */
 import * as fs from 'fs';
-import { addSchedule } from '../../lib/scheduler/store';
-import { resolveIdentity } from '../../lib/identity/store';
-import { startTask } from '../../lib/tasks/ledger';
-import { createSkillProposal } from '../../lib/skillProposals/store';
-import { saveHistory } from '../../lib/history/store';
-import { recordViolation } from '../../lib/guardrails/violationLog';
-import { atomicWriteJsonSync, readJsonFileSync, withFileLockSync } from '../../lib/utils/jsonFile';
+import { addSchedule } from '../../lib/extensions/automation/scheduler/store';
+import { resolveIdentity } from '../../lib/extensions/channels/identity/store';
+import { startTask } from '../../lib/extensions/tasks/ledger';
+import { createSkillProposal } from '../../lib/extensions/skill-proposals/store';
+import { saveHistory } from '../../lib/extensions/conversations/store';
+import { recordViolation } from '../../lib/core/guardrails/violationLog';
+import { atomicWriteJsonSync, readJsonFileSync, withFileLockSync } from '../../lib/core/utils/jsonFile';
 
 const [mode, target, countArg, tag] = process.argv.slice(2);
 const count = Number(countArg);

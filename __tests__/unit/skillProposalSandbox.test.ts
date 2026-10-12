@@ -1,4 +1,4 @@
-import { runProposalCode, runProposalTests } from '../../lib/skillProposals/sandbox';
+import { runProposalCode, runProposalTests } from '../../lib/extensions/skill-proposals/sandbox';
 
 describe('skill proposal sandbox', () => {
   describe('runProposalCode', () => {

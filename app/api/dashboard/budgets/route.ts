@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { getBudgetSummary } from '../../../../lib/telemetry/budget';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { getBudgetSummary } from '../../../../lib/extensions/telemetry/budget';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

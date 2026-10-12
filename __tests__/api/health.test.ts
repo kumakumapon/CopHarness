@@ -2,7 +2,7 @@
  * Unit tests for GET /api/health
  */
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   resolveProvider: jest.fn().mockReturnValue('copilot'),
   resolveModel: jest.fn().mockReturnValue('gpt-4o'),
   createAdapter: jest.fn(),

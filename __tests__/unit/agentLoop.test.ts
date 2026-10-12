@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/agents/agentLoop.ts
+ * Unit tests for lib/core/agents/agentLoop.ts
  *
  * Covers:
  * - Immediate completion when markComplete is called on the first iteration
@@ -12,16 +12,16 @@
  * - requestUserInput delegates to the onRequestInput callback
  */
 
-import { runAgentLoop } from '../../lib/agents/agentLoop';
-import type { AgentLoopCallbacks, AgentLoopOptions } from '../../lib/agents/agentLoop';
-import type { LLMAdapter, LLMRequest } from '../../lib/adapter';
-import type { SkillDefinition } from '../../lib/skill';
+import { runAgentLoop } from '../../lib/core/agents/agentLoop';
+import type { AgentLoopCallbacks, AgentLoopOptions } from '../../lib/core/agents/agentLoop';
+import type { LLMAdapter, LLMRequest } from '../../lib/core/adapter';
+import type { SkillDefinition } from '../../lib/core/skill';
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../../lib/context/compactor', () => ({
+jest.mock('../../lib/core/context/compactor', () => ({
   needsCompaction: jest.fn(() => false),
   compactMessages: jest.fn(async (msgs: unknown[]) => msgs),
 }));

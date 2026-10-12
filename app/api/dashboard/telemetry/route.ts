@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRecentSpans } from '../../../../lib/events/tracer';
-import { requireApiKey } from '../../../../lib/apiAuth';
+import { getRecentSpans } from '../../../../lib/core/events/tracer';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

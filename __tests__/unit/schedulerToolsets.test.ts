@@ -3,9 +3,9 @@
  * Verifies that when a schedule has `toolsets`, runPrompt narrows the skill set.
  */
 
-import '../../lib/skills/index';
-import { resolveSkills, listActiveSkills } from '../../lib/skill';
-import { resolveToolsetSkillNames, _resetToolsetsForTests } from '../../lib/toolPolicy/toolsets';
+import '../../lib/core/skills/index';
+import { resolveSkills, listActiveSkills } from '../../lib/core/skill';
+import { resolveToolsetSkillNames, _resetToolsetsForTests } from '../../lib/core/toolPolicy/toolsets';
 
 // ---------------------------------------------------------------------------
 // We test the logic that runPrompt applies when toolsets are present:
@@ -30,7 +30,7 @@ describe('scheduler toolset skill resolution', () => {
     const allActive = listActiveSkills().map((s) => s.name);
     expect(toolsetSkillNames).toContain('webSearch');
     // Should be a strict subset of (or equal to) all registered skills
-    const { listSkills } = require('../../lib/skill') as typeof import('../../lib/skill');
+    const { listSkills } = require('../../lib/core/skill') as typeof import('../../lib/core/skill');
     const allRegistered = new Set(listSkills().map((s) => s.name));
     for (const name of toolsetSkillNames) {
       expect(allRegistered.has(name)).toBe(true);

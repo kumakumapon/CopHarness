@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../../../../lib/apiAuth';
-import { retryAgentDagNode } from '../../../../../../../lib/agents/dagRunner';
+import { requireApiKey } from '../../../../../../../lib/core/apiAuth';
+import { retryAgentDagNode } from '../../../../../../../lib/extensions/agents/dagRunner';
 
 interface RouteContext {
   params: Promise<{ id: string }>;

@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { SkillDefinition } from '../../lib/skill';
-import { evaluateToolPolicy, _resetToolPolicyCacheForTests } from '../../lib/toolPolicy/policy';
-import { wrapWithGate } from '../../lib/humanInLoop/gate';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import type { SkillDefinition } from '../../lib/core/skill';
+import { evaluateToolPolicy, _resetToolPolicyCacheForTests } from '../../lib/core/toolPolicy/policy';
+import { wrapWithGate } from '../../lib/core/humanInLoop/gate';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 const highRiskSkill: SkillDefinition = {
   name: 'runCommand',

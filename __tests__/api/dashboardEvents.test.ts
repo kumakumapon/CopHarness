@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { GET, POST } from '../../app/api/dashboard/events/route';
-import { eventBus } from '../../lib/events/bus';
+import { eventBus } from '../../lib/core/events/bus';
 
 describe('/api/dashboard/events', () => {
   const originalEnv = process.env;

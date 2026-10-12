@@ -1,8 +1,8 @@
-import { searchInFiles } from '../../lib/skills/searchInFiles';
-import { getExecutionBackend } from '../../lib/execution';
-import { type ExecutionBackend, type ListDirResult, type ReadFileResult } from '../../lib/execution/types';
+import { searchInFiles } from '../../lib/core/skills/searchInFiles';
+import { getExecutionBackend } from '../../lib/core/execution';
+import { type ExecutionBackend, type ListDirResult, type ReadFileResult } from '../../lib/core/execution/types';
 
-jest.mock('../../lib/execution', () => ({
+jest.mock('../../lib/core/execution', () => ({
   getExecutionBackend: jest.fn(),
 }));
 

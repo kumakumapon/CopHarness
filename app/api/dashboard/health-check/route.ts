@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { checkAllProviders } from '../../../../lib/healthCheck';
-import { type ProviderType } from '../../../../lib/adapter';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { checkAllProviders } from '../../../../lib/core/healthCheck';
+import { type ProviderType } from '../../../../lib/core/adapter';
 
 const VALID_PROVIDERS: ProviderType[] = [
   'openai',

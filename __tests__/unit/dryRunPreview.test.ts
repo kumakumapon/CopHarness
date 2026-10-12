@@ -1,8 +1,8 @@
-import { buildDryRunPreview, formatDryRunPreview } from '../../lib/toolPolicy/dryRun';
-import { writeFile } from '../../lib/skills/writeFile';
-import { runCommand } from '../../lib/skills/runCommand';
-import { sendNotification } from '../../lib/skills/sendNotification';
-import { _resetExecutionBackendForTests } from '../../lib/execution';
+import { buildDryRunPreview, formatDryRunPreview } from '../../lib/core/toolPolicy/dryRun';
+import { writeFile } from '../../lib/core/skills/writeFile';
+import { runCommand } from '../../lib/core/skills/runCommand';
+import { sendNotification } from '../../lib/extensions/skill-packs/personal/sendNotification';
+import { _resetExecutionBackendForTests } from '../../lib/core/execution';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';

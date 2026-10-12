@@ -507,7 +507,7 @@ New York の天気と湿度を確認して
 | Linux / macOS | `ls`, `pwd`, `echo`, `date`, `whoami`, `hostname`, `cat`, `head`, `tail`, `wc`, `grep`, `find`, `sort`, `uniq`, `which`, `df`, `du`, `uname`, `uptime` |
 | Windows | `dir`, `echo`, `whoami`, `hostname`, `type` |
 
-コマンド名だけでなく、**引数もコマンドごとに検証**されます（`lib/skills/commandPolicy.ts`）。
+コマンド名だけでなく、**引数もコマンドごとに検証**されます（`lib/core/skills/commandPolicy.ts`）。
 
 - 許可されたフラグのみ受け付けます（読み取り専用のもの）。`find -delete` / `-exec` / `-fprint*`、`sort -o`、`date -s`、`tail -f`、`grep -f` などは拒否されます。
 - ファイル引数は**サンドボックスディレクトリ（`SKILL_FILE_SANDBOX_DIR`、デフォルト `./workspace`）からの相対パス**に限られます。絶対パス、`..` で外へ出るパス、`~`、ドライブ指定は拒否されます。
@@ -984,7 +984,7 @@ ENABLED_SKILLS=
 ### 手順 1: スキルファイルを作成
 
 ```typescript
-// lib/skills/myCustomSkill.ts
+// lib/core/skills/myCustomSkill.ts
 import { type SkillDefinition } from '../skill';
 
 export const myCustomSkill: SkillDefinition = {
@@ -1021,10 +1021,10 @@ export const myCustomSkill: SkillDefinition = {
 };
 ```
 
-### 手順 2: `lib/skills/index.ts` に登録
+### 手順 2: `lib/core/skills/index.ts` に登録
 
 ```typescript
-// lib/skills/index.ts に追記
+// lib/core/skills/index.ts に追記
 
 import { myCustomSkill } from './myCustomSkill';
 

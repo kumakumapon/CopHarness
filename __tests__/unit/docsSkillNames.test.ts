@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import '../../lib/skills/index';
-import { listSkills } from '../../lib/skill';
+import '../../lib/core/skills/index';
+import { listSkills } from '../../lib/core/skill';
 
 /**
  * README / SKILLS_GUIDE must only advertise skills that are actually registered

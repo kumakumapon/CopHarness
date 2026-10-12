@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../../lib/apiAuth';
-import { getTaskDetail } from '../../../../../lib/dashboard/taskDetail';
+import { requireApiKey } from '../../../../../lib/core/apiAuth';
+import { getTaskDetail } from '../../../../../lib/extensions/dashboard/taskDetail';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const unauthorized = requireApiKey(req);

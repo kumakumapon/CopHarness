@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/telemetry/costEstimator.ts
+ * Unit tests for lib/extensions/telemetry/costEstimator.ts
  */
 
 import {
@@ -7,12 +7,12 @@ import {
   estimateCost,
   estimateTotalCosts,
   getTotalSpend,
-} from '../../lib/telemetry/costEstimator';
+} from '../../lib/extensions/telemetry/costEstimator';
 import {
   recordTokenUsage,
   _resetTokenUsageForTests,
-} from '../../lib/telemetry/tokenTracker';
-import type { TokenUsageSummaryEntry } from '../../lib/telemetry/tokenTracker';
+} from '../../lib/extensions/telemetry/tokenTracker';
+import type { TokenUsageSummaryEntry } from '../../lib/extensions/telemetry/tokenTracker';
 
 beforeEach(() => {
   _resetTokenUsageForTests();

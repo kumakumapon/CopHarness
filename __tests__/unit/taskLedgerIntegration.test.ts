@@ -1,21 +1,21 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { getSkillExecutionContext, withSkillExecutionContext } from '../../lib/utils/executionContext';
-import { _resetTaskLedgerForTests, listTasks } from '../../lib/tasks/ledger';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { getSkillExecutionContext, withSkillExecutionContext } from '../../lib/core/utils/executionContext';
+import { _resetTaskLedgerForTests, listTasks } from '../../lib/extensions/tasks/ledger';
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   createAdapter: jest.fn(),
   createAdapterWithFallback: jest.fn(),
   resolveProvider: jest.fn(),
   resolveModel: jest.fn(),
 }));
 
-import * as adapterFactory from '../../lib/adapterFactory';
-import type { LLMAdapter, LLMRequest } from '../../lib/adapter';
-import { runAgentTask } from '../../lib/agents/orchestrator';
-import { runPrompt } from '../../lib/scheduler/engine';
+import * as adapterFactory from '../../lib/core/adapterFactory';
+import type { LLMAdapter, LLMRequest } from '../../lib/core/adapter';
+import { runAgentTask } from '../../lib/extensions/agents/orchestrator';
+import { runPrompt } from '../../lib/extensions/automation/scheduler/engine';
 
 const mockComplete = jest.fn();
 const mockDestroy = jest.fn();

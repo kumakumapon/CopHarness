@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listSkills, listActiveSkills } from '../../../../lib/skill';
-import { listSkillExecutionSummaries } from '../../../../lib/logs/skillExecutionLog';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { describeSkillPolicy } from '../../../../lib/toolPolicy/policy';
-import '../../../../lib/skills/index';
+import { listSkills, listActiveSkills } from '../../../../lib/core/skill';
+import { listSkillExecutionSummaries } from '../../../../lib/core/logs/skillExecutionLog';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { describeSkillPolicy } from '../../../../lib/core/toolPolicy/policy';
+import '../../../../lib/core/skills/index';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

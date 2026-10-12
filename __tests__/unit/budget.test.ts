@@ -1,5 +1,5 @@
-import { assertBudgetAvailable, BudgetExceededError, getBudgetSummary, recordBudgetUsage, _resetBudgetsForTests } from '../../lib/telemetry/budget';
-import { listApprovalRequests, resolveApprovalRequest } from '../../lib/humanInLoop/store';
+import { assertBudgetAvailable, BudgetExceededError, getBudgetSummary, recordBudgetUsage, _resetBudgetsForTests } from '../../lib/extensions/telemetry/budget';
+import { listApprovalRequests, resolveApprovalRequest } from '../../lib/core/humanInLoop/store';
 
 const original = { ...process.env };
 

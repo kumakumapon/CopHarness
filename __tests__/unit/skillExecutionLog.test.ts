@@ -1,17 +1,17 @@
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { registerSkill, type SkillDefinition } from '../../lib/skill';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { registerSkill, type SkillDefinition } from '../../lib/core/skill';
 import {
   _resetSkillExecutionLogForTests,
   listSkillExecutionSummaries,
   listSkillExecutions,
   querySkillExecutions,
   recordSkillExecution,
-} from '../../lib/logs/skillExecutionLog';
-import { withSkillExecutionContext } from '../../lib/utils/executionContext';
-import { _resetRecentSpansForTests, getRecentSpans } from '../../lib/events/tracer';
+} from '../../lib/core/logs/skillExecutionLog';
+import { withSkillExecutionContext } from '../../lib/core/utils/executionContext';
+import { _resetRecentSpansForTests, getRecentSpans } from '../../lib/core/events/tracer';
 
 describe('skill execution logging', () => {
   let tmpDir: string;

@@ -1,12 +1,12 @@
 /**
- * Unit tests for lib/adapters/healthCheck.ts
+ * Unit tests for lib/core/healthCheck.ts
  */
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared before imports
 // ---------------------------------------------------------------------------
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   createAdapter: jest.fn(),
   resolveApiKey: jest.fn().mockReturnValue(undefined),
   resolveModel: jest.fn().mockImplementation((provider?: string) => {
@@ -17,11 +17,11 @@ jest.mock('../../lib/adapterFactory', () => ({
   }),
 }));
 
-jest.mock('../../lib/telemetry/instrumentedAdapter', () => ({
+jest.mock('../../lib/extensions/telemetry/instrumentedAdapter', () => ({
   InstrumentedAdapter: jest.fn().mockImplementation((inner: unknown) => inner),
 }));
 
-jest.mock('../../lib/cache/responseCache', () => ({
+jest.mock('../../lib/extensions/cache/responseCache', () => ({
   isCacheEnabled: jest.fn().mockReturnValue(false),
 }));
 
@@ -29,9 +29,9 @@ jest.mock('../../lib/cache/responseCache', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { checkAdapterHealth, checkAllProviders } from '../../lib/healthCheck';
-import { type LLMAdapter } from '../../lib/adapter';
-import { createAdapter, resolveModel } from '../../lib/adapterFactory';
+import { checkAdapterHealth, checkAllProviders } from '../../lib/core/healthCheck';
+import { type LLMAdapter } from '../../lib/core/adapter';
+import { createAdapter, resolveModel } from '../../lib/core/adapterFactory';
 
 const mockCreateAdapter = createAdapter as jest.MockedFunction<typeof createAdapter>;
 const mockResolveModel = resolveModel as jest.MockedFunction<typeof resolveModel>;

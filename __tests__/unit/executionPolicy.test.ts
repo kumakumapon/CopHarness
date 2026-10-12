@@ -1,5 +1,5 @@
 /**
- * Tests for lib/execution/policy.ts and its integration with LocalBackend.
+ * Tests for lib/core/execution/policy.ts and its integration with LocalBackend.
  */
 
 import * as fs from 'fs';
@@ -25,8 +25,8 @@ import {
   enforceAllowedPath,
   getNetworkPolicy,
   enforceNetworkPolicy,
-} from '../../lib/execution/policy';
-import { LocalBackend } from '../../lib/execution/localBackend';
+} from '../../lib/core/execution/policy';
+import { LocalBackend } from '../../lib/core/execution/localBackend';
 
 // ---------------------------------------------------------------------------
 // Helpers

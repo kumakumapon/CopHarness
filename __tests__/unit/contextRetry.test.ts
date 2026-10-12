@@ -1,9 +1,9 @@
 /**
- * Unit tests for lib/utils/contextRetry
+ * Unit tests for lib/core/utils/contextRetry
  */
 
-import { isContextLengthError, buildFallbackMessages, withContextFallback } from '../../lib/utils/contextRetry';
-import type { LLMMessage } from '../../lib/adapter';
+import { isContextLengthError, buildFallbackMessages, withContextFallback } from '../../lib/core/utils/contextRetry';
+import type { LLMMessage } from '../../lib/core/adapter';
 
 // ── isContextLengthError ──────────────────────────────────────────────────────
 

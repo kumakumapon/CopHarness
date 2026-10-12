@@ -9,26 +9,26 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { _resetTaskLedgerForTests, getTask, listTasks } from '../../lib/tasks/ledger';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { _resetTaskLedgerForTests, getTask, listTasks } from '../../lib/extensions/tasks/ledger';
 import {
   _resetTaskCancellationForTests,
   hasTaskAbortController,
   isAbortError,
   requestTaskCancellation,
-} from '../../lib/tasks/cancellation';
+} from '../../lib/extensions/tasks/cancellation';
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   createAdapter: jest.fn(),
   createAdapterWithFallback: jest.fn(),
   resolveProvider: jest.fn(),
   resolveModel: jest.fn(),
 }));
 
-import * as adapterFactory from '../../lib/adapterFactory';
-import type { LLMAdapter, LLMRequest } from '../../lib/adapter';
-import { runAgentTask } from '../../lib/agents/orchestrator';
-import { runPrompt } from '../../lib/scheduler/engine';
+import * as adapterFactory from '../../lib/core/adapterFactory';
+import type { LLMAdapter, LLMRequest } from '../../lib/core/adapter';
+import { runAgentTask } from '../../lib/extensions/agents/orchestrator';
+import { runPrompt } from '../../lib/extensions/automation/scheduler/engine';
 
 const mockComplete = jest.fn();
 const mockDestroy = jest.fn();

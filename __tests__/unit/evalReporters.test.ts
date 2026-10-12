@@ -1,10 +1,10 @@
-import type { EvalResult } from '../../lib/eval/evaluator';
-import type { CiGateResult } from '../../lib/eval/ciGate';
+import type { EvalResult } from '../../lib/extensions/eval/evaluator';
+import type { CiGateResult } from '../../lib/extensions/eval/ciGate';
 import {
   createEvalReport,
   formatJsonReport,
   formatJunitReport,
-} from '../../lib/eval/reporters';
+} from '../../lib/extensions/eval/reporters';
 
 const results: EvalResult[] = [
   {

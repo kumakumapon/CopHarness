@@ -1,15 +1,15 @@
 import { NextRequest } from 'next/server';
-import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../../lib/adapterFactory';
-import { type LLMMessage, type LLMAttachment } from '../../../../lib/adapter';
-import { resolveSkills, listActiveSkills } from '../../../../lib/skill';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/rateLimit';
-import { resolveConversationKey } from '../../../../lib/identity/store';
-import { withSkillExecutionContext } from '../../../../lib/utils/executionContext';
-import { finishTask, startTask } from '../../../../lib/tasks/ledger';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/tasks/cancellation';
-import { auditRequest, auditResponse } from '../../../../lib/logs/auditLogger';
-import '../../../../lib/skills/index';
+import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../../lib/core/adapterFactory';
+import { type LLMMessage, type LLMAttachment } from '../../../../lib/core/adapter';
+import { resolveSkills, listActiveSkills } from '../../../../lib/core/skill';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/core/rateLimit';
+import { resolveConversationKey } from '../../../../lib/extensions/channels/identity/store';
+import { withSkillExecutionContext } from '../../../../lib/core/utils/executionContext';
+import { finishTask, startTask } from '../../../../lib/extensions/tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/extensions/tasks/cancellation';
+import { auditRequest, auditResponse } from '../../../../lib/core/logs/auditLogger';
+import '../../../../lib/core/skills/index';
 
 export async function POST(req: NextRequest) {
   const unauthorized = requireApiKey(req);

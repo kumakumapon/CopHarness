@@ -3,9 +3,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/api/dashboard/identities/route';
-import { _resetIdentityStoreForTests, linkIdentity, resolveIdentity } from '../../lib/identity/store';
-import { _resetTaskLedgerForTests, finishTask, startTask } from '../../lib/tasks/ledger';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetIdentityStoreForTests, linkIdentity, resolveIdentity } from '../../lib/extensions/channels/identity/store';
+import { _resetTaskLedgerForTests, finishTask, startTask } from '../../lib/extensions/tasks/ledger';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 describe('GET /api/dashboard/identities', () => {
   let tmpDir: string;

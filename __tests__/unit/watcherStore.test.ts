@@ -1,14 +1,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   addWatcher,
   listWatchers,
   markWatcherTriggered,
   removeWatcher,
   updateWatcher,
-} from '../../lib/watchers/store';
+} from '../../lib/extensions/automation/watchers/store';
 
 describe('watcher store', () => {
   let tmpDir: string;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../../lib/apiAuth';
-import { loadHistory, clearHistory } from '../../../../../lib/history/store';
+import { requireApiKey } from '../../../../../lib/core/apiAuth';
+import { loadHistory, clearHistory } from '../../../../../lib/extensions/conversations/store';
 
 export async function GET(
   req: NextRequest,

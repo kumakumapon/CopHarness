@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { dispatchWatcherEvent, findMatchingWatchers, triggerWatcher } from '../../lib/watchers/engine';
-import type { WatcherPromptRunner } from '../../lib/watchers/engine';
-import { addWatcher, listWatchers } from '../../lib/watchers/store';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { dispatchWatcherEvent, findMatchingWatchers, triggerWatcher } from '../../lib/extensions/automation/watchers/engine';
+import type { WatcherPromptRunner } from '../../lib/extensions/automation/watchers/engine';
+import { addWatcher, listWatchers } from '../../lib/extensions/automation/watchers/store';
 
 describe('watcher engine', () => {
   let tmpDir: string;

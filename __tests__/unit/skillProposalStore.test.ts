@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   _resetSkillProposalsForTests,
   createSkillProposal,
@@ -11,7 +11,7 @@ import {
   querySkillProposals,
   updateSkillProposal,
   type SkillProposal,
-} from '../../lib/skillProposals/store';
+} from '../../lib/extensions/skill-proposals/store';
 
 // Minimal valid input for creating a proposal
 function makeInput(overrides: Partial<Omit<SkillProposal, 'id' | 'status' | 'createdAt' | 'updatedAt'>> = {}) {

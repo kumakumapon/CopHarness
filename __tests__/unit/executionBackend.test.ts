@@ -33,13 +33,13 @@ jest.mock('node:child_process', () => {
 import { spawn } from 'node:child_process';
 const spawnMock = spawn as jest.MockedFunction<typeof spawn>;
 
-import { LocalBackend } from '../../lib/execution/localBackend';
-import { DockerBackend, createDockerBackend } from '../../lib/execution/dockerBackend';
-import { SshBackend, shellQuote } from '../../lib/execution/sshBackend';
+import { LocalBackend } from '../../lib/core/execution/localBackend';
+import { DockerBackend, createDockerBackend } from '../../lib/core/execution/dockerBackend';
+import { SshBackend, shellQuote } from '../../lib/core/execution/sshBackend';
 import {
   getExecutionBackend,
   _resetExecutionBackendForTests,
-} from '../../lib/execution/index';
+} from '../../lib/core/execution/index';
 
 // ---------------------------------------------------------------------------
 // Helper: build a fake ChildProcess-like object

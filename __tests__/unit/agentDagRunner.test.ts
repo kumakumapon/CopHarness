@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { retryAgentDagNode, runAgentDag } from '../../lib/agents/dagRunner';
-import type { AgentPlanRunner } from '../../lib/agents/dagRunner';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
-import { _resetTaskLedgerForTests, getTask, listTasks } from '../../lib/tasks/ledger';
+import { retryAgentDagNode, runAgentDag } from '../../lib/extensions/agents/dagRunner';
+import type { AgentPlanRunner } from '../../lib/extensions/agents/dagRunner';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
+import { _resetTaskLedgerForTests, getTask, listTasks } from '../../lib/extensions/tasks/ledger';
 
 describe('agent DAG runner', () => {
   let tmpDir: string;

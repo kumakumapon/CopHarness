@@ -1,11 +1,11 @@
 /**
- * Tests for lib/memory/nudge.ts — Phase 2 memory nudging.
+ * Tests for lib/extensions/memory/nudge.ts — Phase 2 memory nudging.
  */
 
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _resetDataDirCache } from '../../lib/utils/dataDir';
+import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 import {
   isMemoryNudgeEnabled,
   detectMemoryCandidate,
@@ -17,8 +17,8 @@ import {
   maybeCreateNudge,
   _resetMemoryNudgesForTests,
   type MemoryNudgeCandidate,
-} from '../../lib/memory/nudge';
-import { MemoryStore } from '../../lib/memory/store';
+} from '../../lib/extensions/memory/nudge';
+import { MemoryStore } from '../../lib/extensions/memory/store';
 
 // ---------------------------------------------------------------------------
 // Test setup

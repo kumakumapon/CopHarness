@@ -1,5 +1,5 @@
-import { redactBusEvent } from '../../lib/events/redact';
-import type { BusEvent, SkillStartPayload } from '../../lib/events/bus';
+import { redactBusEvent } from '../../lib/core/events/redact';
+import type { BusEvent, SkillStartPayload } from '../../lib/core/events/bus';
 
 function makeSkillStartEvent(args: Record<string, unknown>): BusEvent<SkillStartPayload> {
   return {

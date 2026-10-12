@@ -13,7 +13,7 @@ jest.mock('@line/bot-sdk', () => ({
   },
 }));
 
-jest.mock('../../lib/history/store', () => ({
+jest.mock('../../lib/extensions/conversations/store', () => ({
   loadHistory: jest.fn().mockReturnValue([]),
   saveHistory: jest.fn().mockResolvedValue(undefined),
   clearHistory: jest.fn().mockResolvedValue(undefined),
@@ -23,15 +23,15 @@ import * as lineBot from '@line/bot-sdk';
 import { POST } from '../../app/api/line/route';
 import { NextRequest } from 'next/server';
 
-jest.mock('../../lib/adapterFactory', () => ({
+jest.mock('../../lib/core/adapterFactory', () => ({
   createAdapter: jest.fn(),
   createAdapterWithFallback: jest.fn(),
   resolveProvider: jest.fn(),
   resolveModel: jest.fn(),
 }));
 
-import * as adapterFactory from '../../lib/adapterFactory';
-import * as adapterModule from '../../lib/adapter';
+import * as adapterFactory from '../../lib/core/adapterFactory';
+import * as adapterModule from '../../lib/core/adapter';
 
 const mockComplete = jest.fn();
 const mockReplyMessage = jest.fn().mockResolvedValue({});

@@ -23,24 +23,24 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateSignature, messagingApi } from '@line/bot-sdk';
-import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../lib/adapterFactory';
-import { type LLMMessage } from '../../../lib/adapter';
-import { loadHistory, saveHistory } from '../../../lib/history/store';
-import { resolveConversationKey } from '../../../lib/identity/store';
-import { withSkillExecutionContext } from '../../../lib/utils/executionContext';
-import { finishTask, startTask } from '../../../lib/tasks/ledger';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/tasks/cancellation';
-import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
+import { createAdapterWithFallback, resolveProvider, resolveModel } from '../../../lib/core/adapterFactory';
+import { type LLMMessage } from '../../../lib/core/adapter';
+import { loadHistory, saveHistory } from '../../../lib/extensions/conversations/store';
+import { resolveConversationKey } from '../../../lib/extensions/channels/identity/store';
+import { withSkillExecutionContext } from '../../../lib/core/utils/executionContext';
+import { finishTask, startTask } from '../../../lib/extensions/tasks/ledger';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/extensions/tasks/cancellation';
+import { trimHistoryToTokenBudget } from '../../../lib/core/context/trimmer';
 import {
   getSession as getWizardSession,
   clearSession as clearWizardSession,
   enterSelectingMode,
   selectTemplate as wizSelectTemplate,
   continueWizard as wizContinue,
-} from '../../../lib/promptWizardSession';
-import { consumePendingNudge, maybeCreateNudge } from '../../../lib/memory/nudge';
-import { runWithRalphLoop } from '../../../lib/agents/ralphLoop';
-import { parseAgentCommand, executeAgentCommand } from '../../../lib/channels/agentCommands';
+} from '../../../lib/extensions/prompt-wizard/promptWizardSession';
+import { consumePendingNudge, maybeCreateNudge } from '../../../lib/extensions/memory/nudge';
+import { runWithRalphLoop } from '../../../lib/extensions/agents/ralphLoop';
+import { parseAgentCommand, executeAgentCommand } from '../../../lib/extensions/channels/agentCommands';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.LINE_MAX_HISTORY) || 20);
 const SYSTEM_PROMPT = process.env.COPILOT_SYSTEM_PROMPT ?? '';

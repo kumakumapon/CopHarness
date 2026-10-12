@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { dispatchWatcherEvent } from '../../../../lib/watchers/engine';
-import type { WatcherEvent } from '../../../../lib/watchers/types';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { dispatchWatcherEvent } from '../../../../lib/extensions/automation/watchers/engine';
+import type { WatcherEvent } from '../../../../lib/extensions/automation/watchers/types';
 
 function eventFromBody(body: Partial<WatcherEvent>): WatcherEvent | { error: string } {
   const source = typeof body.source === 'string' && body.source.trim() ? body.source.trim() : '';

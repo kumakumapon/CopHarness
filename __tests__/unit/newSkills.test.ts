@@ -8,10 +8,10 @@ import {
   resolveSkills,
   getSkill,
   type SkillDefinition,
-} from '../../lib/skill';
+} from '../../lib/core/skill';
 
 // Import to trigger registration
-import '../../lib/skills/index';
+import '../../lib/core/skills/index';
 
 // ---------------------------------------------------------------------------
 // Metadata helpers
@@ -115,11 +115,11 @@ describe('ENABLED_SKILLS filtering', () => {
 // Phase 1: Utility skills
 // ---------------------------------------------------------------------------
 
-import { calculator } from '../../lib/skills/calculator';
-import { randomNumber } from '../../lib/skills/randomNumber';
-import { uuidGenerate } from '../../lib/skills/uuidGenerate';
-import { base64Encode, base64Decode } from '../../lib/skills/base64';
-import { jsonFormat } from '../../lib/skills/jsonFormat';
+import { calculator } from '../../lib/core/skills/calculator';
+import { randomNumber } from '../../lib/extensions/skill-packs/utilities/randomNumber';
+import { uuidGenerate } from '../../lib/extensions/skill-packs/utilities/uuidGenerate';
+import { base64Encode, base64Decode } from '../../lib/extensions/skill-packs/utilities/base64';
+import { jsonFormat } from '../../lib/extensions/skill-packs/utilities/jsonFormat';
 
 describe('calculator skill', () => {
   async function calc(expression: string) {
@@ -262,10 +262,10 @@ describe('jsonFormat skill', () => {
 // Phase 2: File skills
 // ---------------------------------------------------------------------------
 
-import { readFile } from '../../lib/skills/readFile';
-import { writeFile } from '../../lib/skills/writeFile';
-import { listDirectory } from '../../lib/skills/listDirectory';
-import { searchInFiles } from '../../lib/skills/searchInFiles';
+import { readFile } from '../../lib/core/skills/readFile';
+import { writeFile } from '../../lib/core/skills/writeFile';
+import { listDirectory } from '../../lib/core/skills/listDirectory';
+import { searchInFiles } from '../../lib/core/skills/searchInFiles';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -361,9 +361,9 @@ describe('file skills', () => {
 // Phase 4: System skills
 // ---------------------------------------------------------------------------
 
-import { getSystemInfo } from '../../lib/skills/getSystemInfo';
-import { getEnvVariable } from '../../lib/skills/getEnvVariable';
-import { runCommand } from '../../lib/skills/runCommand';
+import { getSystemInfo } from '../../lib/core/skills/getSystemInfo';
+import { getEnvVariable } from '../../lib/core/skills/getEnvVariable';
+import { runCommand } from '../../lib/core/skills/runCommand';
 
 describe('getSystemInfo skill', () => {
   it('returns system info string', async () => {
@@ -440,7 +440,7 @@ describe('runCommand skill', () => {
 // Phase 5: Memory skills
 // ---------------------------------------------------------------------------
 
-import { memoryUpsert, memorySearch, memoryForget } from '../../lib/skills/memory';
+import { memoryUpsert, memorySearch, memoryForget } from '../../lib/extensions/memory/skills/memory';
 
 describe('memory skills', () => {
   let tmpMemoryFile: string;
@@ -498,11 +498,11 @@ describe('memory skills', () => {
 // New utility skills
 // ---------------------------------------------------------------------------
 
-import { hashText } from '../../lib/skills/hashText';
-import { regexMatch } from '../../lib/skills/regexMatch';
-import { textStats } from '../../lib/skills/textStats';
-import { generatePassword } from '../../lib/skills/generatePassword';
-import { csvParse } from '../../lib/skills/csvParse';
+import { hashText } from '../../lib/extensions/skill-packs/utilities/hashText';
+import { regexMatch } from '../../lib/extensions/skill-packs/utilities/regexMatch';
+import { textStats } from '../../lib/extensions/skill-packs/utilities/textStats';
+import { generatePassword } from '../../lib/extensions/skill-packs/utilities/generatePassword';
+import { csvParse } from '../../lib/extensions/skill-packs/utilities/csvParse';
 
 describe('hashText skill', () => {
   it('computes sha256 hash of empty string', async () => {
@@ -666,10 +666,10 @@ describe('csvParse skill', () => {
 // Phase 7: Extended skills
 // ---------------------------------------------------------------------------
 
-import { diffText } from '../../lib/skills/diffText';
-import { colorConvert } from '../../lib/skills/colorConvert';
-import { markdownToHtmlSkill } from '../../lib/skills/markdownToHtml';
-import { noteCreate, noteRead, noteList, noteDelete } from '../../lib/skills/notes';
+import { diffText } from '../../lib/extensions/skill-packs/utilities/diffText';
+import { colorConvert } from '../../lib/extensions/skill-packs/utilities/colorConvert';
+import { markdownToHtmlSkill } from '../../lib/extensions/skill-packs/office/markdownToHtml';
+import { noteCreate, noteRead, noteList, noteDelete } from '../../lib/extensions/skill-packs/personal/notes';
 
 describe('diffText skill', () => {
   it('reports identical texts', async () => {
@@ -866,9 +866,9 @@ describe('note skills (noteCreate / noteRead / noteList / noteDelete)', () => {
 // Phase 8: Web news / trend skills
 // ---------------------------------------------------------------------------
 
-import { techNews, FEEDS, NEWS_TOPICS, fetchFeedItems } from '../../lib/skills/techNews';
-import { trendSearch } from '../../lib/skills/trendSearch';
-import { newsBrief } from '../../lib/skills/newsBrief';
+import { techNews, FEEDS, NEWS_TOPICS, fetchFeedItems } from '../../lib/extensions/skill-packs/research/techNews';
+import { trendSearch } from '../../lib/extensions/skill-packs/research/trendSearch';
+import { newsBrief } from '../../lib/extensions/skill-packs/research/newsBrief';
 
 // Minimal RSS 2.0 XML helper
 function makeRss(items: Array<{ title: string; link: string; pubDate: string; description: string }>): string {
@@ -1236,7 +1236,7 @@ describe('newsBrief skill handler', () => {
 // deepResearch skill
 // ---------------------------------------------------------------------------
 
-import { deepResearch } from '../../lib/skills/deepResearch';
+import { deepResearch } from '../../lib/extensions/skill-packs/research/deepResearch';
 
 describe('deepResearch skill metadata', () => {
   it('has correct name, category, and riskLevel', () => {
@@ -1391,7 +1391,7 @@ describe('deepResearch skill handler', () => {
 // freeResearch skill
 // ---------------------------------------------------------------------------
 
-import { freeResearch } from '../../lib/skills/freeResearch';
+import { freeResearch } from '../../lib/extensions/skill-packs/research/freeResearch';
 
 describe('freeResearch skill metadata', () => {
   it('has correct name, category, and riskLevel', () => {
@@ -1598,7 +1598,7 @@ describe('freeResearch skill handler', () => {
 // rssFeed skill
 // ---------------------------------------------------------------------------
 
-import { rssFeed } from '../../lib/skills/rssFeed';
+import { rssFeed } from '../../lib/extensions/skill-packs/research/rssFeed';
 
 describe('rssFeed skill metadata', () => {
   it('has correct name, category, and riskLevel', () => {

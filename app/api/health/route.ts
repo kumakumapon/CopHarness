@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { resolveProvider, resolveModel } from '../../../lib/adapterFactory';
+import { resolveProvider, resolveModel } from '../../../lib/core/adapterFactory';
 
 const startedAt = Date.now();
 

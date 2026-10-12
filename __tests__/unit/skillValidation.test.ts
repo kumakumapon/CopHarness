@@ -1,26 +1,26 @@
 /**
- * Unit tests for the validateSkillArgs function in lib/skill.ts.
+ * Unit tests for the validateSkillArgs function in lib/core/skill.ts.
  * Covers required-param checks, type validation (string/number/integer/boolean/array),
  * enum validation, multiple errors, unknown parameters, and empty schemas.
  */
 
-jest.mock('../../lib/guardrails/outputValidator', () => ({
+jest.mock('../../lib/core/guardrails/outputValidator', () => ({
   validateSkillOutput: jest.fn().mockReturnValue({ valid: true, errors: [] }),
 }));
-jest.mock('../../lib/guardrails/violationLog', () => ({
+jest.mock('../../lib/core/guardrails/violationLog', () => ({
   recordViolation: jest.fn(),
 }));
-jest.mock('../../lib/logs/skillExecutionLog', () => ({
+jest.mock('../../lib/core/logs/skillExecutionLog', () => ({
   recordSkillExecution: jest.fn().mockResolvedValue({ id: 'exec-1' }),
 }));
-jest.mock('../../lib/utils/executionContext', () => ({
+jest.mock('../../lib/core/utils/executionContext', () => ({
   getSkillExecutionContext: jest.fn().mockReturnValue(undefined),
 }));
-jest.mock('../../lib/events/tracer', () => ({
+jest.mock('../../lib/core/events/tracer', () => ({
   startSpan: jest.fn().mockReturnValue({ end: jest.fn() }),
 }));
 
-import { validateSkillArgs, type SkillParameterSchema } from '../../lib/skill';
+import { validateSkillArgs, type SkillParameterSchema } from '../../lib/core/skill';
 
 // ---------------------------------------------------------------------------
 // 1. Required parameters

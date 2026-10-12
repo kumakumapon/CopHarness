@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
-import { runAgentLoop, type AgentStopReason } from '../lib/agents/agentLoop';
-import type { LLMRequest } from '../lib/adapter';
+import { runAgentLoop, type AgentStopReason } from '../lib/core/agents/agentLoop';
+import type { LLMRequest } from '../lib/core/adapter';
 
 async function main() {
   const scenarios: Array<{ name: string; expected: AgentStopReason; complete: (r: LLMRequest) => Promise<{ content: string }> }> = [

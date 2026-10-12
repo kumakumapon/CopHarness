@@ -1,5 +1,5 @@
 /**
- * Unit tests for listHistoryKeys in lib/history/store
+ * Unit tests for listHistoryKeys in lib/extensions/conversations/store
  */
 
 import * as fs from 'fs';
@@ -28,7 +28,7 @@ beforeEach(() => {
 
 async function getStore() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../../lib/history/store') as typeof import('../../lib/history/store');
+  return require('../../lib/extensions/conversations/store') as typeof import('../../lib/extensions/conversations/store');
 }
 
 describe('listHistoryKeys', () => {

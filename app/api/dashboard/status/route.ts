@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveProvider, resolveModel } from '../../../../lib/adapterFactory';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { responseCache, isCacheEnabled } from '../../../../lib/cache/responseCache';
+import { resolveProvider, resolveModel } from '../../../../lib/core/adapterFactory';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { responseCache, isCacheEnabled } from '../../../../lib/extensions/cache/responseCache';
 
 interface ComponentStatus {
   name: string;

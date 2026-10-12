@@ -1,11 +1,11 @@
 /**
- * Unit tests for the TokenUsage interface from lib/adapter.ts.
+ * Unit tests for the TokenUsage interface from lib/core/adapter.ts.
  *
  * These tests verify that mock LLMResponse objects with a `usage` field
  * are correctly typed and that all three token count properties are accessible.
  */
 
-import type { LLMResponse, TokenUsage } from '../../lib/adapter';
+import type { LLMResponse, TokenUsage } from '../../lib/core/adapter';
 
 describe('TokenUsage interface', () => {
   it('allows all three token count properties to be set', () => {

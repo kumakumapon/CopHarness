@@ -1,5 +1,5 @@
 /**
- * Unit tests for lib/rateLimit.ts
+ * Unit tests for lib/core/rateLimit.ts
  */
 
 jest.mock('next/server', () => ({
@@ -17,7 +17,7 @@ import {
   rateLimitResponse,
   resolveRateLimitKey,
   GLOBAL_RATE_LIMIT_KEY,
-} from '../../lib/rateLimit';
+} from '../../lib/core/rateLimit';
 
 /** Minimal request stand-in: resolveRateLimitKey only reads headers. */
 function makeRequest(headers: Record<string, string> = {}) {

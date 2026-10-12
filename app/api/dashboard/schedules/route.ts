@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listSchedules, setEnabled, addSchedule } from '../../../../lib/scheduler/store';
-import { isValidCronInput, nextRunDate, normalizeCron } from '../../../../lib/scheduler/cron';
-import { requireApiKey } from '../../../../lib/apiAuth';
+import { listSchedules, setEnabled, addSchedule } from '../../../../lib/extensions/automation/scheduler/store';
+import { isValidCronInput, nextRunDate, normalizeCron } from '../../../../lib/extensions/automation/scheduler/cron';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
 
 export async function GET(req: NextRequest) {
   const unauthorized = requireApiKey(req);

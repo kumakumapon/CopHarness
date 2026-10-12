@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdapterWithFallback, resolveModel, resolveProvider } from '../../../lib/adapterFactory';
-import { type LLMMessage } from '../../../lib/adapter';
-import { normalizeSlackEvent, type SlackEventEnvelope, validateSlackSignature } from '../../../lib/channels/slack';
-import { executeAgentCommand, parseAgentCommand } from '../../../lib/channels/agentCommands';
-import { resolveConversationKey } from '../../../lib/identity/store';
-import { loadHistory, saveHistory } from '../../../lib/history/store';
-import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
-import { withSkillExecutionContext } from '../../../lib/utils/executionContext';
-import { startTask, finishTask } from '../../../lib/tasks/ledger';
-import { runWithRalphLoop } from '../../../lib/agents/ralphLoop';
+import { createAdapterWithFallback, resolveModel, resolveProvider } from '../../../lib/core/adapterFactory';
+import { type LLMMessage } from '../../../lib/core/adapter';
+import { normalizeSlackEvent, type SlackEventEnvelope, validateSlackSignature } from '../../../lib/extensions/channels/slack';
+import { executeAgentCommand, parseAgentCommand } from '../../../lib/extensions/channels/agentCommands';
+import { resolveConversationKey } from '../../../lib/extensions/channels/identity/store';
+import { loadHistory, saveHistory } from '../../../lib/extensions/conversations/store';
+import { trimHistoryToTokenBudget } from '../../../lib/core/context/trimmer';
+import { withSkillExecutionContext } from '../../../lib/core/utils/executionContext';
+import { startTask, finishTask } from '../../../lib/extensions/tasks/ledger';
+import { runWithRalphLoop } from '../../../lib/extensions/agents/ralphLoop';
 
 const MAX_HISTORY = Math.max(1, Number(process.env.SLACK_MAX_HISTORY) || 20);
 const MAX_MESSAGE_LENGTH = 3900;

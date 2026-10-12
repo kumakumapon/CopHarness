@@ -1,10 +1,10 @@
 /**
- * Unit tests for lib/cache/cachedAdapter.ts
+ * Unit tests for lib/extensions/cache/cachedAdapter.ts
  */
 
-import { CachedAdapter } from '../../lib/cache/cachedAdapter';
-import { ResponseCache } from '../../lib/cache/responseCache';
-import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/adapter';
+import { CachedAdapter } from '../../lib/extensions/cache/cachedAdapter';
+import { ResponseCache } from '../../lib/extensions/cache/responseCache';
+import type { LLMAdapter, LLMRequest, LLMResponse } from '../../lib/core/adapter';
 
 function makeResponse(content = 'cached-content'): LLMResponse {
   return { content, model: 'test-model', provider: 'test' };

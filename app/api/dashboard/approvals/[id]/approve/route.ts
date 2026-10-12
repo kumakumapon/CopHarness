@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveApprovalRequest } from '../../../../../../lib/humanInLoop/store';
-import { requireApiKey } from '../../../../../../lib/apiAuth';
+import { resolveApprovalRequest } from '../../../../../../lib/core/humanInLoop/store';
+import { requireApiKey } from '../../../../../../lib/core/apiAuth';
 
 export async function POST(
   req: NextRequest,

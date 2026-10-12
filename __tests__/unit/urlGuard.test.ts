@@ -6,7 +6,7 @@ import {
   isPrivateAddress,
   safeFetch,
   UnsafeUrlError,
-} from '../../lib/utils/urlGuard';
+} from '../../lib/core/utils/urlGuard';
 
 // `import * as` would copy the namespace and defeat jest.spyOn; use the real module objects.
 /* eslint-disable @typescript-eslint/no-require-imports */

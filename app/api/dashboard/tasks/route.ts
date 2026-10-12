@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiKey } from '../../../../lib/apiAuth';
-import { queryTasks, type TaskStatus } from '../../../../lib/tasks/ledger';
+import { requireApiKey } from '../../../../lib/core/apiAuth';
+import { queryTasks, type TaskStatus } from '../../../../lib/extensions/tasks/ledger';
 
 const VALID_STATUSES = new Set<TaskStatus>(['running', 'succeeded', 'failed', 'cancelled', 'iteration_limit', 'stalled', 'waiting_input']);
 

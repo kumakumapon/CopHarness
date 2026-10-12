@@ -1,9 +1,9 @@
 /**
- * Unit tests for lib/cache/responseCache.ts
+ * Unit tests for lib/extensions/cache/responseCache.ts
  */
 
-import { ResponseCache } from '../../lib/cache/responseCache';
-import type { LLMResponse, LLMMessage } from '../../lib/adapter';
+import { ResponseCache } from '../../lib/extensions/cache/responseCache';
+import type { LLMResponse, LLMMessage } from '../../lib/core/adapter';
 
 function makeResponse(content = 'hello'): LLMResponse {
   return { content, model: 'test-model', provider: 'test' };
