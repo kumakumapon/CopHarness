@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SkillDefinition, SkillRiskLevel } from '../skill';
-import { getSkillExecutionContext } from '../skills/executionContext';
+import { getSkillExecutionContext } from '../utils/executionContext';
 import { dataPath } from '../utils/dataDir';
 import { hasSessionPermission } from './sessionPermissions';
 

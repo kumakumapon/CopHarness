@@ -6,9 +6,9 @@
 
 import { validateSkillOutput } from './guardrails/outputValidator';
 import { recordViolation } from './guardrails/violationLog';
-import { recordSkillExecution } from './skills/executionLog';
-import { getSkillExecutionContext, withSkillExecutionContext } from './skills/executionContext';
-import { startSpan } from './telemetry/tracer';
+import { recordSkillExecution } from './logs/skillExecutionLog';
+import { getSkillExecutionContext, withSkillExecutionContext } from './utils/executionContext';
+import { startSpan } from './events/tracer';
 import { eventBus } from './events/bus';
 
 /** A single property definition within a skill's parameter schema. */

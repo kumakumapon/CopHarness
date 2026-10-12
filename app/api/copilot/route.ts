@@ -5,7 +5,7 @@ import { resolveSkills, listActiveSkills } from '../../../lib/skill';
 import { requireApiKey } from '../../../lib/apiAuth';
 import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../lib/rateLimit';
 import { resolveConversationKey } from '../../../lib/identity/store';
-import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
+import { withSkillExecutionContext } from '../../../lib/utils/executionContext';
 import { finishTask, startTask } from '../../../lib/tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/tasks/cancellation';
 import { runWithRalphLoop } from '../../../lib/context/ralphLoop';

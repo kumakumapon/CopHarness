@@ -15,7 +15,7 @@
 
 import type { LLMAdapter, LLMMessage, LLMRequest, LLMResponse } from '../adapter';
 import { compactMessages, needsCompaction, writeProgressArtifact } from './compactor';
-import { getSkillExecutionContext } from '../skills/executionContext';
+import { getSkillExecutionContext } from '../utils/executionContext';
 import { updateTaskMetadata } from '../tasks/ledger';
 
 export interface RalphLoopOptions {

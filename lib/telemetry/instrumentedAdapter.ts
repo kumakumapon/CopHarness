@@ -1,7 +1,7 @@
-import { startSpan } from './tracer';
+import { startSpan } from '../events/tracer';
 import { recordTokenUsage } from './tokenTracker';
 import { assertBudgetAvailable, recordBudgetUsage } from './budget';
-import { getSkillExecutionContext } from '../skills/executionContext';
+import { getSkillExecutionContext } from '../utils/executionContext';
 import { eventBus } from '../events/bus';
 import { isRetryableError } from '../adapters/retryAdapter';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../adapter';

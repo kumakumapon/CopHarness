@@ -51,7 +51,7 @@ import { compactMessages, estimateConversationTokens } from '../lib/context/comp
 
 import { acquireAgentSession, loadAgentSession, listAgentSessions, newAgentSessionId, runAgentSession, validateResume } from '../lib/agents/sessions';
 import { startTask, finishTask, updateTaskMetadata } from '../lib/tasks/ledger';
-import { withSkillExecutionContext } from '../lib/skills/executionContext';
+import { withSkillExecutionContext } from '../lib/utils/executionContext';
 import { getExecutionBackend } from '../lib/execution';
 
 function buildAdapter(provider: ProviderType, model: string, apiKey: string | undefined): LLMAdapter {

@@ -9,9 +9,9 @@ import {
   listSkillExecutions,
   querySkillExecutions,
   recordSkillExecution,
-} from '../../lib/skills/executionLog';
-import { withSkillExecutionContext } from '../../lib/skills/executionContext';
-import { _resetRecentSpansForTests, getRecentSpans } from '../../lib/telemetry/tracer';
+} from '../../lib/logs/skillExecutionLog';
+import { withSkillExecutionContext } from '../../lib/utils/executionContext';
+import { _resetRecentSpansForTests, getRecentSpans } from '../../lib/events/tracer';
 
 describe('skill execution logging', () => {
   let tmpDir: string;

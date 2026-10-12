@@ -4,9 +4,9 @@ import * as path from 'path';
 import { NextRequest } from 'next/server';
 import { GET } from '../../app/api/dashboard/tasks/[id]/route';
 import { startTask, _resetTaskLedgerForTests } from '../../lib/tasks/ledger';
-import { recordSkillExecution, _resetSkillExecutionLogForTests } from '../../lib/skills/executionLog';
+import { recordSkillExecution, _resetSkillExecutionLogForTests } from '../../lib/logs/skillExecutionLog';
 import { createApprovalRequest, resolveApprovalRequest, cleanupOldRequests } from '../../lib/humanInLoop/store';
-import { withSkillExecutionContext } from '../../lib/skills/executionContext';
+import { withSkillExecutionContext } from '../../lib/utils/executionContext';
 import { _resetDataDirCache } from '../../lib/utils/dataDir';
 
 let dir: string;

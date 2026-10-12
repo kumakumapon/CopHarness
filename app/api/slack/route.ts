@@ -6,7 +6,7 @@ import { executeAgentCommand, parseAgentCommand } from '../../../lib/channels/ag
 import { resolveConversationKey } from '../../../lib/identity/store';
 import { loadHistory, saveHistory } from '../../../lib/history/store';
 import { trimHistoryToTokenBudget } from '../../../lib/history/trimmer';
-import { withSkillExecutionContext } from '../../../lib/skills/executionContext';
+import { withSkillExecutionContext } from '../../../lib/utils/executionContext';
 import { startTask, finishTask } from '../../../lib/tasks/ledger';
 import { runWithRalphLoop } from '../../../lib/context/ralphLoop';
 

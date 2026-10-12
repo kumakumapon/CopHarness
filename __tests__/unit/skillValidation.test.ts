@@ -10,13 +10,13 @@ jest.mock('../../lib/guardrails/outputValidator', () => ({
 jest.mock('../../lib/guardrails/violationLog', () => ({
   recordViolation: jest.fn(),
 }));
-jest.mock('../../lib/skills/executionLog', () => ({
+jest.mock('../../lib/logs/skillExecutionLog', () => ({
   recordSkillExecution: jest.fn().mockResolvedValue({ id: 'exec-1' }),
 }));
-jest.mock('../../lib/skills/executionContext', () => ({
+jest.mock('../../lib/utils/executionContext', () => ({
   getSkillExecutionContext: jest.fn().mockReturnValue(undefined),
 }));
-jest.mock('../../lib/telemetry/tracer', () => ({
+jest.mock('../../lib/events/tracer', () => ({
   startSpan: jest.fn().mockReturnValue({ end: jest.fn() }),
 }));
 
