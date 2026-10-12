@@ -4,7 +4,7 @@ import * as path from 'path';
 import { _resetDataDirCache } from '../../lib/core/utils/dataDir';
 
 // Must import skills before toolsets so the skill registry is populated
-import '../../lib/core/skills/index';
+import '../../lib/bootstrap';
 import { listSkills } from '../../lib/core/skill';
 import {
   listToolsets,

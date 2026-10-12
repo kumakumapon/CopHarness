@@ -984,8 +984,8 @@ ENABLED_SKILLS=
 ### 手順 1: スキルファイルを作成
 
 ```typescript
-// lib/core/skills/myCustomSkill.ts
-import { type SkillDefinition } from '../skill';
+// lib/extensions/skill-packs/utilities/myCustomSkill.ts
+import { type SkillDefinition } from '../../../core/skill';
 
 export const myCustomSkill: SkillDefinition = {
   name: 'myCustomSkill',           // LLM がツールを呼ぶときに使う名前
@@ -1021,24 +1021,22 @@ export const myCustomSkill: SkillDefinition = {
 };
 ```
 
-### 手順 2: `lib/core/skills/index.ts` に登録
+### 手順 2: スキルを登録する
+
+置き場所は、そのスキルが何に属するかで決めます。
+
+- **コアのスキル**(ファイル・Web・システムなど、これが無いと基本の動作が成り立たないもの): `lib/core/skills/` に置き、`lib/core/skills/index.ts` の `registerSkillSet([...])` に追加します。
+- **それ以外**: 該当する拡張(`lib/extensions/<name>/`)に置き、その拡張の `builtinSkills.ts` の `builtinSkills` 配列に追加します(ユーティリティ・調査・文書生成などの汎用スキルは `lib/extensions/skill-packs/builtinSkills.ts`)。`lib/core` から拡張を import してはいけません(CI の境界テストが検出します)。
 
 ```typescript
-// lib/core/skills/index.ts に追記
+// lib/extensions/skill-packs/builtinSkills.ts に追記
 
-import { myCustomSkill } from './myCustomSkill';
+import { myCustomSkill } from './utilities/myCustomSkill';
 
-// allSkills 配列に追加
-const allSkills = [
+export const builtinSkills: SkillDefinition[] = [
   // ... 既存スキル ...
   myCustomSkill,
 ];
-
-// export にも追加
-export {
-  // ... 既存スキル ...
-  myCustomSkill,
-};
 ```
 
 これだけで CLI・Discord Bot・LINE Bot・HTTP API すべてで自動的に使用可能になります。

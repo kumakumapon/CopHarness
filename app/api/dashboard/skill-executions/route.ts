@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireApiKey } from '../../../../lib/core/apiAuth';
 import { listSkills } from '../../../../lib/core/skill';
 import { querySkillExecutions, type SkillExecutionStatus } from '../../../../lib/core/logs/skillExecutionLog';
-import '../../../../lib/core/skills/index';
+import '../../../../lib/bootstrap';
 
 const VALID_STATUSES = new Set<SkillExecutionStatus>(['success', 'error', 'exception']);
 const VALID_RISK_LEVELS = new Set(['low', 'medium', 'high']);

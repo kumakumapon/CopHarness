@@ -13,7 +13,7 @@ import {
   unregisterTaskAbortController,
 } from '../../tasks/cancellation';
 import type { ScheduledPrompt } from './types';
-import '../../../core/skills/index';
+import '../../../bootstrap';
 import { listActiveSkills, resolveSkills } from '../../../core/skill';
 import { resolveToolsetSkillNames } from '../../../core/toolPolicy/toolsets';
 

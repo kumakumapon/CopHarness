@@ -9,7 +9,7 @@ import { withSkillExecutionContext } from '../../../../lib/core/utils/executionC
 import { finishTask, startTask } from '../../../../lib/extensions/tasks/ledger';
 import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/extensions/tasks/cancellation';
 import { auditRequest, auditResponse } from '../../../../lib/core/logs/auditLogger';
-import '../../../../lib/core/skills/index';
+import '../../../../lib/bootstrap';
 
 export async function POST(req: NextRequest) {
   const unauthorized = requireApiKey(req);

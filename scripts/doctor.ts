@@ -1,6 +1,6 @@
 import { loadEnvConfig } from '@next/env';
 loadEnvConfig(process.cwd());
-import '../lib/core/skills/index';
+import '../lib/bootstrap';
 import { diagnoseRuntime } from '../lib/core/diagnostics';
 import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/core/adapterFactory';
 async function main() {

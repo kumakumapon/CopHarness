@@ -12,7 +12,7 @@ jest.mock('../../lib/core/adapterFactory', () => ({
   resolveRuntimeConfig: () => ({ provider: 'mock', model: 'mock', configured: true }),
   createAdapterWithFallback: jest.fn(),
 }));
-jest.mock('../../lib/core/skills/index', () => ({}));
+jest.mock('../../lib/bootstrap', () => ({}));
 jest.mock('../../lib/core/skill', () => ({ listActiveSkills: () => [], resolveSkills: () => [] }));
 jest.mock('../../lib/core/rateLimit', () => ({ defaultRateLimiter: { consume: () => ({ allowed: true }) }, resolveRateLimitKey: () => 'test' }));
 jest.mock('../../lib/extensions/channels/identity/store', () => ({ resolveConversationKey: async () => ({ personId: 'test', channelKey: 'api:test', conversationKey: 'test' }) }));

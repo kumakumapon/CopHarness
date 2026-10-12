@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import '../../lib/core/skills/index';
+import '../../lib/bootstrap';
 import { listSkills } from '../../lib/core/skill';
 
 /**

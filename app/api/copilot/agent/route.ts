@@ -9,7 +9,7 @@ import { finishTask, startTask, updateTaskMetadata } from '../../../../lib/exten
 import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/extensions/tasks/cancellation';
 import { acquireAgentSession, loadAgentSession, newAgentSessionId, runAgentSession, SessionError, validateResume } from '../../../../lib/extensions/agents/sessions';
 import { getExecutionBackend } from '../../../../lib/core/execution';
-import '../../../../lib/core/skills/index';
+import '../../../../lib/bootstrap';
 
 export async function POST(req: NextRequest) {
   const unauthorized = requireApiKey(req);

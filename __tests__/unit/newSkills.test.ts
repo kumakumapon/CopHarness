@@ -11,7 +11,7 @@ import {
 } from '../../lib/core/skill';
 
 // Import to trigger registration
-import '../../lib/core/skills/index';
+import '../../lib/bootstrap';
 
 // ---------------------------------------------------------------------------
 // Metadata helpers

@@ -7,8 +7,10 @@
  *
  * KNOWN_CORE_TO_EXTENSION is the list of violations that still exist. It may only shrink: removing a
  * dependency without deleting its line here fails the test too, so the list cannot go stale.
- *   - skills/index.ts registers extension skills directly -> each extension should register its own.
  *   - adapterFactory.ts wraps adapters with telemetry/cache -> they should register as decorators.
+ *
+ * lib/bootstrap.ts is the composition root (it registers every extension's skills). Library code should not
+ * import it; the only exception is listed below until entry points call it explicitly.
  */
 import { libFileEdges } from '../fixtures/importGraph';
 
@@ -16,42 +18,10 @@ const KNOWN_CORE_TO_EXTENSION = [
   'lib/core/adapterFactory.ts -> lib/extensions/cache/cachedAdapter.ts',
   'lib/core/adapterFactory.ts -> lib/extensions/cache/responseCache.ts',
   'lib/core/adapterFactory.ts -> lib/extensions/telemetry/instrumentedAdapter.ts',
-  'lib/core/skills/index.ts -> lib/extensions/agents/spawnAgent.ts',
-  'lib/core/skills/index.ts -> lib/extensions/memory/skills/memory.ts',
-  'lib/core/skills/index.ts -> lib/extensions/memory/skills/searchHistory.ts',
-  'lib/core/skills/index.ts -> lib/extensions/prompt-wizard/promptWizard.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/office/createDocument.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/office/createPresentation.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/office/createSlideshow.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/office/markdownToHtml.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/personal/notes.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/personal/sendNotification.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/personal/translateText.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/arXivSearch.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/deepResearch.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/freeResearch.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/getWeather.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/githubRepo.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/githubSearch.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/newsBrief.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/rssFeed.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/techNews.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/trendSearch.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/research/youtubeInfo.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/base64.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/colorConvert.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/csvParse.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/diffText.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/generatePassword.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/hashText.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/jsonFormat.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/randomNumber.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/regexMatch.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/textStats.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-packs/utilities/uuidGenerate.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-proposals/generated/index.ts',
-  'lib/core/skills/index.ts -> lib/extensions/skill-proposals/proposeSkill.ts',
 ];
+
+/** Files under lib/ that may import the composition root (lib/bootstrap.ts). */
+const BOOTSTRAP_IMPORTERS = ['lib/extensions/automation/scheduler/engine.ts'];
 
 /** "from -> to" extension dependencies that are allowed today. */
 const DECLARED_EXTENSION_DEPENDENCIES = [
@@ -87,5 +57,10 @@ describe('core / extension boundary', () => {
       .filter(([a, b]) => a && b && a !== b)
       .map(([a, b]) => `${a} -> ${b}`);
     expect([...new Set(actual)].sort()).toEqual([...DECLARED_EXTENSION_DEPENDENCIES].sort());
+  });
+
+  it('only the listed library files import the composition root', () => {
+    const importers = edges.filter(({ to }) => to === 'lib/bootstrap.ts').map(({ from }) => from);
+    expect([...new Set(importers)].sort()).toEqual([...BOOTSTRAP_IMPORTERS].sort());
   });
 });

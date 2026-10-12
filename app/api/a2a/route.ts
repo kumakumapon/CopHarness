@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { runAgentTask } from '../../../lib/extensions/agents/orchestrator';
 import { requireApiKey } from '../../../lib/core/apiAuth';
 import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../lib/core/rateLimit';
-import '../../../lib/core/skills/index';
+import '../../../lib/bootstrap';
 
 interface A2ARequest {
   task: {
