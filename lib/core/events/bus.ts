@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../runtimeProfile';
 /**
  * Internal Event Bus — pub/sub backbone for real-time observability.
  *
@@ -168,6 +169,7 @@ export class EventBus {
   }
 
   emit<T extends EventType>(type: T, payload: EventPayloadMap[T]): void {
+    if (isMinimalRuntime()) return;
     const event: BusEvent<EventPayloadMap[T]> = {
       type,
       timestamp: new Date().toISOString(),

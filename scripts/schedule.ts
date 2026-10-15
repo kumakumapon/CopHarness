@@ -1,3 +1,5 @@
+import '../lib/loadEnv';
+import { isMinimalRuntime } from '../lib/core/runtimeProfile';
 /**
  * CopHarness Scheduler CLI
  *
@@ -14,23 +16,6 @@
  *        "* /15 * * * *"  (every 15 minutes — remove space before /)
  * Shorthand: "HH:MM"  e.g. "09:30"  →  daily at 09:30
  */
-
-import * as fs from 'fs';
-import * as path from 'path';
-
-// Load .env.local
-const envPath = path.resolve(process.cwd(), '.env.local');
-if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const eq = t.indexOf('=');
-    if (eq === -1) continue;
-    const k = t.slice(0, eq).trim();
-    const v = t.slice(eq + 1).trim();
-    if (k && !(k in process.env)) process.env[k] = v;
-  }
-}
 
 import {
   listSchedules,
@@ -244,6 +229,7 @@ function cmdStop(args: string[]): void {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  if (isMinimalRuntime()) throw new Error('Scheduler is disabled in the minimal profile');
   const [, , command, ...rest] = process.argv;
 
   switch (command) {

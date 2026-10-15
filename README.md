@@ -20,6 +20,40 @@
 
 ---
 
+## 最小構成で使う
+
+実装の中核は **LLM 接続、会話・ツール呼び出し、単一エージェントの実行、実行制御** です。
+Bot、定期実行、監視、長期メモリ、資料生成、スキル自動生成、マルチエージェント、ダッシュボードは付加機能です。
+
+`.env.local` に以下を設定し、プロセスを再起動すると付加機能を停止できます。
+
+```env
+COPHARNESS_PROFILE=minimal
+COPILOT_PROVIDER=openai
+OPENAI_API_KEY=your_key
+ENABLED_SKILLS=none
+```
+
+```bash
+npm run cli          # 基本チャット
+npm run agent-cli    # チャットと /agent による単一エージェント実行
+npm run dev          # HTTP API（Discord は起動しません）
+```
+
+- 利用可能な HTTP API: `/api/copilot`、`/api/copilot/stream`、`/api/copilot/agent`、`/api/health`。
+- 承認が必要なツールのため、`/api/dashboard/approvals` とその approve/reject API も利用可能です。API 認証は引き続き適用されます。
+- ツールは初期状態でゼロです。必要なら `ENABLED_SKILLS=currentDateTime,calculator` のように中核ツールだけを明示します。拡張スキル名は起動時に拒否します。
+- メモリ・生成スキル・MCP を読み込まず、Bot・スケジューラー・監視を起動しません。付加機能の API・画面は 404 を返します。
+- 会話・ユーザー識別・タスク・監査ログ・ツール実行記録を保存せず、自動要約・応答キャッシュ・詳細計測・別プロバイダーへのフォールバックを行いません。既存のデータは削除しません。
+- タイムアウト、中断、反復上限、引数検証、ツール権限・承認、リトライは維持します。リトライも止める場合は `RETRY_MAX_RETRIES=0` を設定します。
+- 設定済みの予算制限は詳細計測と独立して動作します。最小構成の予算・承認はプロセス内だけで保持し、再起動や別プロセスとは共有しません。使用量はプロバイダーが返す値を使います。
+- 会話保存・セッション再開は無効です。`agent-cli` の保存・再開・要約コマンドは使えず、終了時も保存しません。
+- Copilot では SDK 内蔵ツールを許可せず、明示されたハーネスのツールだけを SDK に渡します。SDK の自動コンテキスト圧縮・長期メモリ・共有セッションストア・スキル探索・ファイルフックも停止します。SDK本体の認証情報・診断ログ等はハーネスの保存設定の対象外です。
+
+`COPHARNESS_PROFILE=full`（未指定時の既定値）で従来の構成になります。`ENABLED_SKILLS=none` は両構成で全ツール無効、空指定は `full` では低リスクツール、`minimal` ではツールなしを意味します。CLI/API 内の履歴は引き続きリクエスト処理に使われます。ライブラリから利用する場合は `lib/bootstrap` を先に読み込むと構成が適用されます。`lib/core/adapterFactory` 単体は拡張を読み込みません。
+
+実行確認: `npm test -- --runInBand`、`npm run lint`、`npm run typecheck`、`npm run eval:mock`、`npm run build` の後に `npm run smoke:profiles`。最後の確認はローカルの固定応答サーバーを使い、両構成の本番HTTP・CLI・保存動作を検証します。外部LLMへの接続は行いません。
+
 ## セットアップ
 
 ### 1. 環境変数の設定
@@ -393,6 +427,7 @@ const mySkill: SkillDefinition = {
 
 ```typescript
 import { registerSkill, resolveSkills } from './lib/core/skill';
+import './lib/bootstrap'; // 選択した構成のスキル・任意の計測を初期化
 import { createAdapter } from './lib/core/adapterFactory';
 
 registerSkill(mySkill);

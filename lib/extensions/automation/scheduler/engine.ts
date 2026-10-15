@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../../../core/runtimeProfile';
 import { listSchedules, setRunNow, setStopRequested, updateLastRun } from './store';
 import { matchesCron, normalizeCron, isValidCronInput } from './cron';
 import { createAdapterWithFallback, resolveProvider, resolveModel, resolveApiKey } from '../../../core/adapterFactory';
@@ -361,6 +362,7 @@ const POLL_INTERVAL_MS = 5_000;
 
 /** Start the scheduler daemon. Returns true if started, false if already running. */
 export function startScheduler(onResult?: ScheduleResultCallback): boolean {
+  if (isMinimalRuntime()) return false;
   if (schedulerStarted) {
     console.warn('Scheduler daemon is already running — ignoring duplicate startScheduler() call.');
     if (onResult) resultCallback = onResult;

@@ -1,3 +1,5 @@
+import type { SkillDefinition } from './skill';
+import { isMinimalRuntime } from './runtimeProfile';
 import type { CopilotClient as SdkCopilotClient, CopilotSession, ProviderConfig } from '@github/copilot-sdk';
 
 // The SDK types are the contract: everything below (and lib/core/adapters/copilotAdapter.ts) is type-checked
@@ -40,7 +42,7 @@ export async function stopClient() {
   } catch (e) {}
 }
 
-export async function createSession(opts?: { model?: string; streaming?: boolean }): Promise<CopilotSession> {
+export async function createSession(opts?: { model?: string; streaming?: boolean; skills?: SkillDefinition[] }): Promise<CopilotSession> {
   const model = opts?.model ?? MODEL;
   const provider: ProviderConfig | undefined = BYOK_API_KEY && BYOK_BASE ? {
     type: 'openai',
@@ -50,7 +52,31 @@ export async function createSession(opts?: { model?: string; streaming?: boolean
   await startClient();
   try {
     const session = await copilotClient.createSession({
-      onPermissionRequest: approveAll,
+      onPermissionRequest: isMinimalRuntime() ? () => ({ kind: 'denied-interactively-by-user' as const }) : approveAll,
+      ...(isMinimalRuntime() ? {
+        availableTools: (opts?.skills ?? []).map(skill => skill.name),
+        infiniteSessions: { enabled: false },
+        memory: { enabled: false },
+        enableSessionStore: false,
+        enableSkills: false,
+        enableConfigDiscovery: false,
+        enableFileHooks: false,
+        enableOnDemandInstructionDiscovery: false,
+        enableHostGitOperations: false,
+        largeOutput: { enabled: false },
+        skipEmbeddingRetrieval: true,
+        embeddingCacheStorage: 'in-memory',
+        tools: (opts?.skills ?? []).map(skill => ({
+          name: skill.name, description: skill.description, parameters: { ...skill.parameters },
+          // Permissions are handled by the harness gate, never by SDK auto-approval.
+          skipPermission: true,
+          // The harness handler retains validation, tool policy and approval checks.
+          handler: async (args: Record<string, unknown>) => {
+            const result = await skill.handler(args);
+            return { textResultForLlm: result.content, resultType: result.isError ? 'failure' as const : 'success' as const };
+          },
+        })),
+      } : {}),
       model,
       streaming: opts?.streaming ?? true,
       provider,

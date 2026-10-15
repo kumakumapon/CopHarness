@@ -4,10 +4,10 @@ import { type LLMMessage, type LLMAttachment } from '../../../../lib/core/adapte
 import { resolveSkills, listActiveSkills } from '../../../../lib/core/skill';
 import { requireApiKey } from '../../../../lib/core/apiAuth';
 import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/core/rateLimit';
-import { resolveConversationKey } from '../../../../lib/extensions/channels/identity/store';
+import { resolveConversationKey } from '../../../../lib/runtime/services';
 import { withSkillExecutionContext } from '../../../../lib/core/utils/executionContext';
-import { finishTask, startTask } from '../../../../lib/extensions/tasks/ledger';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/extensions/tasks/cancellation';
+import { finishTask, startTask } from '../../../../lib/runtime/services';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/core/tasks/cancellation';
 import { auditRequest, auditResponse } from '../../../../lib/core/logs/auditLogger';
 import '../../../../lib/bootstrap';
 

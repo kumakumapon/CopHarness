@@ -1,3 +1,6 @@
+import * as readline from 'readline';
+import '../lib/loadEnv';
+import { isMinimalRuntime } from '../lib/core/runtimeProfile';
 /**
  * CopHarness Agent CLI
  * Enhanced interactive CLI supporting both normal chat and agent mode.
@@ -15,27 +18,6 @@
  *   /help             - Show available commands
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as readline from 'readline';
-
-// Load .env.local if present (dev convenience)
-const envPath = path.resolve(process.cwd(), '.env.local');
-if (fs.existsSync(envPath)) {
-  const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const value = trimmed.slice(eqIdx + 1).trim();
-    if (key && !(key in process.env)) {
-      process.env[key] = value;
-    }
-  }
-}
-
 import { createAdapterWithFallback, resolveRuntimeConfig } from '../lib/core/adapterFactory';
 import { type LLMAdapter, type LLMMessage, type ProviderType } from '../lib/core/adapter';
 import {
@@ -43,14 +25,14 @@ import {
   loadConversation,
   listConversations,
   deleteConversation,
-} from '../lib/extensions/conversations/conversationPersistence';
+} from '../lib/runtime/services';
 import '../lib/bootstrap';
 import { listActiveSkills } from '../lib/core/skill';
 import { type AgentLoopCallbacks, type AgentLoopResult } from '../lib/core/agents/agentLoop';
 import { compactMessages, estimateConversationTokens } from '../lib/core/context/compactor';
 
-import { acquireAgentSession, loadAgentSession, listAgentSessions, newAgentSessionId, runAgentSession, validateResume } from '../lib/extensions/agents/sessions';
-import { startTask, finishTask, updateTaskMetadata } from '../lib/extensions/tasks/ledger';
+import { acquireAgentSession, loadAgentSession, listAgentSessions, newAgentSessionId, runAgentSession, validateResume } from '../lib/runtime/services';
+import { startTask, finishTask, updateTaskMetadata } from '../lib/runtime/services';
 import { withSkillExecutionContext } from '../lib/core/utils/executionContext';
 import { getExecutionBackend } from '../lib/core/execution';
 
@@ -71,6 +53,10 @@ function argsToSummary(args: Record<string, unknown>): string {
 }
 
 function printHelp(): void {
+  if (isMinimalRuntime()) {
+    console.log('Commands: /agent <goal>, /skills, /model <name>, /provider <name>, /clear, /help. History stays in memory; exit does not save.');
+    return;
+  }
   console.log(`
 Available commands:
   /agent <goal>       Run the agent loop toward a specific goal
@@ -149,6 +135,7 @@ async function runAgentMode(
     },
   };
 
+  if (isMinimalRuntime()) callbacks.onRequestInput = question => new Promise(resolve => rl.question(question + '\nYou: ', resolve));
   const timeoutMs = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
 
   getExecutionBackend();
@@ -172,7 +159,7 @@ async function runAgentMode(
     await updateTaskMetadata(sessionId, { stopReason: result.stopReason, sessionId, pendingQuestion: result.pendingQuestion, summary: result.summary });
     await finishTask(sessionId, result.stopReason, result.error);
     if (result.pendingQuestion) console.log('Question: ' + result.pendingQuestion);
-    if (!result.completed) console.log('Continue: /resume ' + sessionId + ' [answer or instruction]');
+    if (!isMinimalRuntime() && !result.completed) console.log('Continue: /resume ' + sessionId + ' [answer or instruction]');
     return result;
   } catch (err) {
     if (started) await finishTask(sessionId, abortController.signal.aborted ? 'cancelled' : 'failed', err);
@@ -187,7 +174,8 @@ async function main() {
   let adapter = buildAdapter(provider, model, apiKey);
 
   console.log(`CopHarness Agent CLI — provider: ${provider}, model: ${model}`);
-  console.log('Commands: /agent, /resume, /sessions, /skills, /model, /provider, /compact, /clear, /save, /load, /conversations, /delete, /autosave, /help');
+  if (isMinimalRuntime()) printHelp();
+  else console.log('Commands: /agent, /resume, /sessions, /skills, /model, /provider, /compact, /clear, /save, /load, /conversations, /delete, /autosave, /help');
   console.log('Type your message or use a command. Type "exit" to quit.\n');
 
   const messages: LLMMessage[] = [];
@@ -248,7 +236,7 @@ async function main() {
 
       if (trimmed.toLowerCase() === 'exit' || trimmed.toLowerCase() === 'quit') {
         const userMessages = messages.filter((m) => m.role === 'user');
-        if (userMessages.length > 0) {
+        if (!isMinimalRuntime() && userMessages.length > 0) {
           try {
             const savedId = saveConversation(messages, provider, model, currentConvId);
             console.log(`Conversation saved (id: ${savedId})`);
@@ -268,6 +256,11 @@ async function main() {
         const command = spaceIdx === -1 ? trimmed.toLowerCase() : trimmed.slice(0, spaceIdx).toLowerCase();
         const rest = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1).trim();
 
+        if (isMinimalRuntime() && ['/resume', '/sessions', '/save', '/load', '/conversations', '/list', '/delete', '/autosave', '/compact'].includes(command)) {
+          console.log('This command is disabled in the minimal profile.\n');
+          ask();
+          return;
+        }
         switch (command) {
           case '/help': {
             printHelp();

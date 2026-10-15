@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../runtimeProfile';
 import type { LLMAdapter, LLMMessage } from '../adapter';
 import type { SkillDefinition } from '../skill';
 import { needsCompaction, compactMessages } from '../context/compactor';
@@ -128,7 +129,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<AgentLoop
     checkpoint();
     while (iterations < maxIterations && !terminal) {
       if (abortSignal?.aborted) { terminal = 'cancelled'; break; }
-      if (needsCompaction(messages)) {
+      if (!isMinimalRuntime() && needsCompaction(messages)) {
         const before = messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
         const compacted = await compactMessages(messages, adapter);
         const after = compacted.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);

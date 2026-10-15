@@ -1,3 +1,7 @@
+import { lookup as mockDnsLookup } from 'node:dns/promises';
+jest.mock('node:dns/promises', () => ({ lookup: jest.fn() }));
+// These unit tests mock HTTP; use a fixed public DNS answer as well.
+beforeEach(() => { (mockDnsLookup as jest.Mock).mockResolvedValue([{ address: '93.184.216.34', family: 4 }]); });
 /**
  * Unit tests for new built-in skills (Phase 1–6).
  */

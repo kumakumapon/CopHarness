@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../../core/runtimeProfile';
 import { registerSkill } from '../../core/skill';
 import { loadMcpSkills } from './skillBridge';
 import type { McpServerConfig } from './types';
@@ -48,6 +49,7 @@ async function _init(): Promise<void> {
 }
 
 export async function initMcpSkills(): Promise<void> {
+  if (isMinimalRuntime()) return;
   if (_initPromise) return _initPromise;
   _initPromise = _init();
   return _initPromise;

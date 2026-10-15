@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SkillDefinition, SkillRiskLevel } from '../skill';
 import { getSkillExecutionContext } from '../utils/executionContext';
-import { dataPath } from '../utils/dataDir';
 import { hasSessionPermission } from './sessionPermissions';
 
 export type ApprovalMode = 'alwaysAllow' | 'allowWithDryRun' | 'requireApproval' | 'deny' | 'allowForSession';
@@ -52,7 +51,7 @@ let cachedPolicy: ToolPolicyConfig | null = null;
 export function getPolicyFilePath(): string {
   const raw = process.env.TOOL_POLICY_FILE;
   if (raw && raw.trim()) return path.resolve(raw);
-  return dataPath(DEFAULT_POLICY_FILE);
+  return path.resolve(process.env.DATA_DIR || process.cwd(), DEFAULT_POLICY_FILE);
 }
 
 export function loadToolPolicyConfig(): ToolPolicyConfig | null {

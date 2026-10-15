@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../runtimeProfile';
 /**
  * Context Compactor — prevents Context Rot in long-running agent sessions.
  *
@@ -40,6 +41,7 @@ export async function compactMessages(
   adapter: LLMAdapter,
   keepRecent: number = DEFAULT_KEEP_RECENT,
 ): Promise<LLMMessage[]> {
+  if (isMinimalRuntime()) return messages;
   const systemMessages = messages.filter((m) => m.role === 'system');
   const nonSystem = messages.filter((m) => m.role !== 'system');
 
@@ -85,6 +87,7 @@ export async function compactMessages(
  * Uses the COMPACTOR_TOKEN_THRESHOLD env var if set.
  */
 export function needsCompaction(messages: LLMMessage[]): boolean {
+  if (isMinimalRuntime()) return false;
   const threshold =
     Number(process.env.COMPACTOR_TOKEN_THRESHOLD) || DEFAULT_TOKEN_THRESHOLD;
   return estimateConversationTokens(messages) > threshold;
@@ -98,6 +101,7 @@ export function needsCompaction(messages: LLMMessage[]): boolean {
  * The workspace directory defaults to ./workspace but may be overridden via WORKSPACE_DIR.
  */
 export async function writeProgressArtifact(goal: string, summary: string, taskId?: string): Promise<void> {
+  if (isMinimalRuntime()) return;
   try {
     const { promises: fsp } = await import('fs');
     const path = await import('path');

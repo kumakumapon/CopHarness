@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../runtimeProfile';
 /**
  * Transcript logger.
  *
@@ -28,7 +29,7 @@ interface TranscriptEntry {
 
 /** Return true when transcript logging is enabled via env var. */
 function isEnabled(): boolean {
-  return (process.env.TRANSCRIPT_LOGGING ?? '').toLowerCase() === 'true';
+  return !isMinimalRuntime() && (process.env.TRANSCRIPT_LOGGING ?? '').toLowerCase() === 'true';
 }
 
 /** YYYY-MM-DD for the current date (UTC). */
