@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../../../core/runtimeProfile';
 import { listWatchers } from './store';
 import { RssWatcherAdapter } from './adapters/rssAdapter';
 import { FileWatcherAdapter } from './adapters/fileAdapter';
@@ -21,6 +22,7 @@ function createAdapter(watcher: WatcherDefinition): AnyAdapter | null {
 }
 
 export function startWatcherAdapters(): void {
+  if (isMinimalRuntime()) return;
   const watchers = listWatchers();
   for (const watcher of watchers) {
     if (!watcher.enabled) continue;

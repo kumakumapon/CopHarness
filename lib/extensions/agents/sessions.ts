@@ -27,9 +27,8 @@ export interface AgentSession {
   pendingQuestion?: string;
   result?: Omit<AgentLoopResult, 'messages'>;
 }
-export class SessionError extends Error {
-  constructor(message: string, public readonly status = 409) { super(message); }
-}
+export { SessionError } from '../../core/agents/sessionError';
+import { SessionError } from '../../core/agents/sessionError';
 function sessionPath(id: string): string {
   if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) throw new SessionError('Invalid session ID', 400);
   return dataPath('agent-sessions', `${id}.json`);

@@ -1,7 +1,5 @@
 import { startSpan } from '../../core/events/tracer';
 import { recordTokenUsage } from './tokenTracker';
-import { assertBudgetAvailable, recordBudgetUsage } from './budget';
-import { getSkillExecutionContext } from '../../core/utils/executionContext';
 import { eventBus } from '../../core/events/bus';
 import { isRetryableError } from '../../core/adapters/retryAdapter';
 import type { LLMAdapter, LLMRequest, LLMResponse } from '../../core/adapter';
@@ -13,8 +11,6 @@ export class InstrumentedAdapter implements LLMAdapter {
   constructor(private readonly inner: LLMAdapter) {}
 
   async complete(request: LLMRequest): Promise<LLMResponse> {
-    const budgetContext = getSkillExecutionContext();
-    assertBudgetAvailable(budgetContext);
     const span = startSpan('llm.complete', {
       'llm.provider': this.inner.provider,
       'llm.model': this.inner.model,
@@ -43,7 +39,6 @@ export class InstrumentedAdapter implements LLMAdapter {
       if (resp.usage) {
         const model = resp.model ?? this.inner.model;
         recordTokenUsage(this.inner.provider, model, resp.usage);
-        recordBudgetUsage(this.inner.provider, model, resp.usage, budgetContext);
       }
 
       eventBus.emit('adapter:response', {
@@ -78,8 +73,6 @@ export class InstrumentedAdapter implements LLMAdapter {
   }
 
   async *stream(request: LLMRequest): AsyncGenerator<string> {
-    const budgetContext = getSkillExecutionContext();
-    assertBudgetAvailable(budgetContext);
     if (!this.inner.stream) {
       const resp = await this.complete(request);
       yield resp.content;
@@ -116,7 +109,6 @@ export class InstrumentedAdapter implements LLMAdapter {
       });
       if (streamUsage) {
         recordTokenUsage(this.inner.provider, this.inner.model, streamUsage);
-        recordBudgetUsage(this.inner.provider, this.inner.model, streamUsage, budgetContext);
       }
 
       eventBus.emit('adapter:response', {

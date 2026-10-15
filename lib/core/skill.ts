@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from './runtimeProfile';
 /**
  * Skill (tool/function calling) abstraction layer.
  * Defines the interfaces for declaring and executing skills that LLM adapters
@@ -193,6 +194,14 @@ export function registerSkill(skill: SkillDefinition): void {
         isError: true,
       };
     }
+    if (isMinimalRuntime()) {
+      const result = await originalHandler(args);
+      if (schema && !result.isError) {
+        const validation = validateSkillOutput(result.content, schema);
+        if (!validation.valid) return { content: `Invalid output for skill "${skill.name}": ${validation.errors.join('; ')}`, isError: true };
+      }
+      return result;
+    }
     const startedAt = new Date();
     const startMs = Date.now();
     const initialContext = getSkillExecutionContext();
@@ -340,6 +349,7 @@ export function listActiveSkills(): SkillDefinition[] {
 /** Build the set of allowed skill names from ENABLED_SKILLS env var, or null if unrestricted. */
 function buildEnabledSet(): Set<string> | null {
   const env = process.env.ENABLED_SKILLS;
-  if (!env || env.trim() === '') return null;
+  if (!env || env.trim() === '') return isMinimalRuntime() ? new Set() : null;
+  if (env.trim() === 'none') return new Set();
   return new Set(env.split(',').map((s) => s.trim()).filter(Boolean));
 }

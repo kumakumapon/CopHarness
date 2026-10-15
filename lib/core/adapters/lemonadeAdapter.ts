@@ -12,6 +12,7 @@ export class LemonadeAdapter implements LLMAdapter {
   readonly provider = 'lemonade';
   readonly model: string;
   private readonly delegate: OpenAIAdapter;
+  get lastStreamUsage() { return this.delegate.lastStreamUsage; }
 
   constructor(model: string, apiBaseUrl?: string, timeoutMs = 30_000) {
     const baseURL = apiBaseUrl ?? process.env.LEMONADE_BASE_URL ?? LEMONADE_DEFAULT_BASE_URL;

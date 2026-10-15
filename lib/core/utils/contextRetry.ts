@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../runtimeProfile';
 /**
  * Context-length overflow detection and retry utility.
  *
@@ -75,7 +76,7 @@ export async function withContextFallback<T>(
   try {
     return await fn(messages);
   } catch (err) {
-    if (!isContextLengthError(err)) throw err;
+    if (isMinimalRuntime() || !isContextLengthError(err)) throw err;
 
     const fallback = buildFallbackMessages(messages);
     console.warn(

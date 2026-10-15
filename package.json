@@ -10,12 +10,13 @@
     "test": "jest",
     "cli": "tsx scripts/cli.ts",
     "agent-cli": "tsx scripts/agentCli.ts",
-    "discord": "tsx discord/bot.ts",
+    "discord": "node scripts/run-discord-maybe.js",
     "schedule": "tsx scripts/schedule.ts",
     "eval": "tsx scripts/eval.ts",
     "typecheck": "tsc --noEmit",
     "doctor": "tsx scripts/doctor.ts",
-    "eval:mock": "tsx scripts/evalMock.ts"
+    "eval:mock": "tsx scripts/evalMock.ts",
+    "smoke:profiles": "tsx scripts/smokeProfiles.ts"
   },
   "dependencies": {
     "@github/copilot-sdk": "^1.0.19",

@@ -7,18 +7,13 @@
  *
  * KNOWN_CORE_TO_EXTENSION is the list of violations that still exist. It may only shrink: removing a
  * dependency without deleting its line here fails the test too, so the list cannot go stale.
- *   - adapterFactory.ts wraps adapters with telemetry/cache -> they should register as decorators.
  *
- * lib/bootstrap.ts is the composition root (it registers every extension's skills). Library code should not
+ * lib/bootstrap.ts selects the composition profile. Library code should not
  * import it; the only exception is listed below until entry points call it explicitly.
  */
 import { libFileEdges } from '../fixtures/importGraph';
 
-const KNOWN_CORE_TO_EXTENSION = [
-  'lib/core/adapterFactory.ts -> lib/extensions/cache/cachedAdapter.ts',
-  'lib/core/adapterFactory.ts -> lib/extensions/cache/responseCache.ts',
-  'lib/core/adapterFactory.ts -> lib/extensions/telemetry/instrumentedAdapter.ts',
-];
+const KNOWN_CORE_TO_EXTENSION: string[] = [];
 
 /** Files under lib/ that may import the composition root (lib/bootstrap.ts). */
 const BOOTSTRAP_IMPORTERS = ['lib/extensions/automation/scheduler/engine.ts'];

@@ -22,7 +22,7 @@ export class CopilotAdapter implements LLMAdapter {
         return `Assistant: ${m.content}`;
       })
       .join('\n\n');
-    const session = await createSession({ model, streaming: false });
+    const session = await createSession({ model, streaming: false, skills: request.skills });
     try {
       const sendPromise = session.sendAndWait(
         {

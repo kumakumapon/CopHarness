@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../runtimeProfile';
 /**
  * Core skills registry.
  * Importing this module registers the skills the core needs on its own: time, calculator, files,
@@ -17,7 +18,7 @@ import { getSystemInfo } from './getSystemInfo';
 import { getEnvVariable } from './getEnvVariable';
 import { registerSkillSet } from './registerSkillSet';
 
-registerSkillSet([
+const coreSkills = [
   currentDateTime,
   calculator,
   readFile,
@@ -29,4 +30,13 @@ registerSkillSet([
   runCommand,
   getSystemInfo,
   getEnvVariable,
-]);
+];
+
+if (isMinimalRuntime()) {
+  const selected = (process.env.ENABLED_SKILLS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const unknown = selected.filter(name => name !== 'none' && !coreSkills.some(skill => skill.name === name));
+  if (unknown.length) throw new Error(`Minimal profile supports core skills only: ${unknown.join(', ')}`);
+  registerSkillSet(coreSkills.filter(skill => selected.includes(skill.name)));
+} else {
+  registerSkillSet(coreSkills);
+}

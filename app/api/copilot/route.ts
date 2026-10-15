@@ -4,11 +4,11 @@ import { type LLMMessage, type LLMAttachment } from '../../../lib/core/adapter';
 import { resolveSkills, listActiveSkills } from '../../../lib/core/skill';
 import { requireApiKey } from '../../../lib/core/apiAuth';
 import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../lib/core/rateLimit';
-import { resolveConversationKey } from '../../../lib/extensions/channels/identity/store';
+import { resolveConversationKey } from '../../../lib/runtime/services';
 import { withSkillExecutionContext } from '../../../lib/core/utils/executionContext';
-import { finishTask, startTask } from '../../../lib/extensions/tasks/ledger';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/extensions/tasks/cancellation';
-import { runWithRalphLoop } from '../../../lib/extensions/agents/ralphLoop';
+import { finishTask, startTask } from '../../../lib/runtime/services';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../lib/core/tasks/cancellation';
+import { runWithRalphLoop } from '../../../lib/runtime/services';
 import { auditRequest, auditResponse, auditError } from '../../../lib/core/logs/auditLogger';
 import '../../../lib/bootstrap';
 

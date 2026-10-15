@@ -1,13 +1,14 @@
+import { isMinimalRuntime } from '../../../../lib/core/runtimeProfile';
 import { NextRequest } from 'next/server';
 import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../../lib/core/adapterFactory';
 import { resolveSkills, listActiveSkills } from '../../../../lib/core/skill';
 import { requireApiKey } from '../../../../lib/core/apiAuth';
 import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/core/rateLimit';
-import { resolveConversationKey } from '../../../../lib/extensions/channels/identity/store';
+import { resolveConversationKey } from '../../../../lib/runtime/services';
 import { withSkillExecutionContext } from '../../../../lib/core/utils/executionContext';
-import { finishTask, startTask, updateTaskMetadata } from '../../../../lib/extensions/tasks/ledger';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/extensions/tasks/cancellation';
-import { acquireAgentSession, loadAgentSession, newAgentSessionId, runAgentSession, SessionError, validateResume } from '../../../../lib/extensions/agents/sessions';
+import { finishTask, startTask, updateTaskMetadata } from '../../../../lib/runtime/services';
+import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/core/tasks/cancellation';
+import { acquireAgentSession, loadAgentSession, newAgentSessionId, runAgentSession, SessionError, validateResume } from '../../../../lib/runtime/services';
 import { getExecutionBackend } from '../../../../lib/core/execution';
 import '../../../../lib/bootstrap';
 
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
       (maxIterations !== undefined && (!Number.isInteger(maxIterations) || Number(maxIterations) < 1 || Number(maxIterations) > 1000))) {
     return Response.json({ error: 'Invalid agent request: provide goal or sessionId; maxIterations must be 1–1000' }, { status: 400 });
   }
+  if (isMinimalRuntime() && sessionId) return Response.json({ error: 'Session resume is disabled in the minimal profile' }, { status: 400 });
   const config = resolveRuntimeConfig();
   if (!config.configured) return Response.json({ error: 'Missing provider API key. Run npm run doctor.' }, { status: 401 });
   const subject = String(requestedSubject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';

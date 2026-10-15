@@ -32,6 +32,11 @@ if (fs.existsSync(envPath)) {
   }
 }
 
+if ((process.env.COPHARNESS_PROFILE || '').trim().toLowerCase() === 'minimal') {
+  console.log('[Discord] Disabled in the minimal profile.');
+  process.exit(0);
+}
+
 if (!process.env.DISCORD_BOT_TOKEN) {
   console.log('[Discord] DISCORD_BOT_TOKEN not set — Discord bot skipped.');
   process.exit(0);

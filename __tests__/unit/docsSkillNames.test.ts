@@ -40,7 +40,7 @@ function tableSkillNames(text: string): string[] {
 function enabledSkillsExamples(text: string): string[] {
   const names: string[] = [];
   for (const m of text.matchAll(/^ENABLED_SKILLS=([^\s#]+)/gm)) names.push(...m[1].split(','));
-  return names.filter(Boolean);
+  return names.filter(name => Boolean(name) && name !== 'none');
 }
 
 describe('documented skill names exist in the registry', () => {

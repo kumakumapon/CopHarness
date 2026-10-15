@@ -7,9 +7,10 @@ import { LemonadeAdapter } from './adapters/lemonadeAdapter';
 import { AntigravityAdapter } from './adapters/antigravityAdapter';
 import { FallbackAdapter } from './adapters/fallbackAdapter';
 import { RetryAdapter } from './adapters/retryAdapter';
-import { InstrumentedAdapter } from '../extensions/telemetry/instrumentedAdapter';
-import { CachedAdapter } from '../extensions/cache/cachedAdapter';
-import { isCacheEnabled } from '../extensions/cache/responseCache';
+import { BudgetAdapter } from './adapters/budgetAdapter';
+import { isMinimalRuntime } from './runtimeProfile';
+
+import { instrumentAdapter, cacheAdapter } from './adapterDecorators';
 
 /**
  * Creates a raw (unwrapped) LLM adapter for the given options.
@@ -63,12 +64,9 @@ export function createAdapter(options: AdapterOptions): LLMAdapter {
 function wrapAdapter(adapter: LLMAdapter): LLMAdapter {
   // Each attempt is individually instrumented before retry wraps it, so
   // telemetry reflects per-attempt behaviour rather than only the final success.
-  let wrapped: LLMAdapter = new InstrumentedAdapter(adapter);
-  wrapped = new RetryAdapter(wrapped);
-  if (isCacheEnabled()) {
-    wrapped = new CachedAdapter(wrapped);
-  }
-  return wrapped;
+  const budgeted = new BudgetAdapter(adapter);
+  const wrapped = new RetryAdapter(isMinimalRuntime() ? budgeted : instrumentAdapter(budgeted));
+  return isMinimalRuntime() ? wrapped : cacheAdapter(wrapped);
 }
 
 /**
@@ -115,7 +113,7 @@ export function resolveApiKey(provider: ProviderType): string | undefined {
  * If FALLBACK_PROVIDERS is not set, behaves identically to createAdapter.
  */
 export function createAdapterWithFallback(options: AdapterOptions): LLMAdapter {
-  const fallbackEnv = process.env.FALLBACK_PROVIDERS;
+  const fallbackEnv = isMinimalRuntime() ? undefined : process.env.FALLBACK_PROVIDERS;
   if (!fallbackEnv || !fallbackEnv.trim()) {
     return createAdapter(options);
   }

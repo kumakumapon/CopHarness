@@ -1,3 +1,4 @@
+import { isMinimalRuntime } from '../runtimeProfile';
 /**
  * Audit logger.
  *
@@ -49,6 +50,7 @@ function ensureDir(filePath: string): void {
  * All errors are swallowed — the caller should never have to handle them.
  */
 export function auditLog(entry: Omit<AuditEntry, 'ts'> & { ts?: string }): void {
+  if (isMinimalRuntime()) return;
   try {
     const logPath = resolveLogPath();
     ensureDir(logPath);
