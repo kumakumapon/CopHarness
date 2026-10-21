@@ -539,7 +539,7 @@ Node.js のバージョンは？
 OS: Linux x64 (5.15.0)
 CPU: 4 cores
 Memory: 4.2 GB free / 8.0 GB total
-Node.js: v22.0.0
+Node.js: v24.22.1
 Uptime: 3600 seconds
 ```
 

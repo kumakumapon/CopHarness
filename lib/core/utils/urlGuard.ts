@@ -1,7 +1,12 @@
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { lookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
-import { Agent } from 'undici';
+import { Agent, fetch as undiciFetch } from 'undici';
+
+// Keep fetch and its dispatcher on the same Undici version. Node 26's bundled
+// fetch uses a newer dispatcher handler API than the installed Undici Agent.
+// This function accepts URLs and standard Fetch options, and returns a Fetch response.
+const guardedFetch = undiciFetch as unknown as typeof fetch;
 
 const MAX_REDIRECTS = 5;
 
@@ -141,7 +146,7 @@ export async function safeFetch(rawUrl: string, init: RequestInit = {}): Promise
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
     let response: Response;
     try {
-      response = await fetch(url, guarded);
+      response = await guardedFetch(url, guarded);
     } catch (error) {
       // undici wraps connect-time failures as "fetch failed"; surface our own verdict.
       // Across realms (e.g. jest) the cause can arrive re-wrapped as `Error("UnsafeUrlError: ...")`,
