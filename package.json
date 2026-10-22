@@ -22,18 +22,18 @@
     "smoke:profiles": "tsx scripts/smokeProfiles.ts"
   },
   "dependencies": {
-    "@github/copilot-sdk": "^1.0.19",
-    "@google/genai": "^2.8.0",
-    "@line/bot-sdk": "^11.0.0",
+    "@github/copilot-sdk": "^1.0.22",
+    "@google/genai": "^2.30.0",
+    "@line/bot-sdk": "^11.3.0",
     "@sentry/node": "^10.56.0",
     "discord.js": "^14.26.3",
-    "lucide-react": "^1.14.0",
+    "lucide-react": "^1.59.0",
     "next": "^15.5.15",
     "openai": "^4.98.0",
     "pptxgenjs": "^3.12.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "swr": "^2.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "swr": "^2.5.1",
     "undici": "^6.29.0"
   },
   "devDependencies": {
@@ -42,7 +42,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.2",
     "autoprefixer": "^10",
     "concurrently": "^10.0.0",
     "eslint": "^9",
@@ -51,8 +51,8 @@
     "jest-environment-node": "^29",
     "postcss": "^8",
     "tailwindcss": "^3",
-    "ts-jest": "^29.4.9",
-    "tsx": "^4.21.0",
+    "ts-jest": "^29.4.15",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "overrides": {
