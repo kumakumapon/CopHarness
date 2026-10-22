@@ -56,6 +56,18 @@ npm run dev          # HTTP API（Discord は起動しません）
 
 ## セットアップ
 
+### Node.js の準備
+
+Node.js **22.23.4 以上の 22 系、24.22.1 以上の 24 系、26.12.1 以上の 26 系**を使用してください。既定・推奨バージョンは `.nvmrc` の **24.22.1** です。
+
+```bash
+nvm install
+nvm use
+node --version
+```
+
+`package.json` の `engines` と `.npmrc` の `engine-strict=true` により、指定した下限未満の Node.js では依存パッケージをインストールできません。CI は3系統の下限バージョンで検証します。運用環境でも Node.js を更新し、`npm ci`、`npm run build` を実行してからサービスを再起動してください。設定ファイルの更新だけでは稼働中のプロセスは切り替わりません。
+
 ### 1. 環境変数の設定
 
 ```bash

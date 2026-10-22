@@ -2,6 +2,9 @@
   "name": "copharness",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
+  },
   "scripts": {
     "dev": "concurrently --names \"next,discord\" --prefix-colors \"cyan,magenta\" \"next dev\" \"node scripts/run-discord-maybe.js\"",
     "build": "next build",
