@@ -1,142 +1,20 @@
-import { NextRequest } from 'next/server';
-import { createAdapterWithFallback, resolveRuntimeConfig } from '../../../../lib/core/adapterFactory';
-import { type LLMMessage, type LLMAttachment } from '../../../../lib/core/adapter';
-import { resolveSkills, listActiveSkills } from '../../../../lib/core/skill';
-import { requireApiKey } from '../../../../lib/core/apiAuth';
-import { defaultRateLimiter, rateLimitResponse, resolveRateLimitKey } from '../../../../lib/core/rateLimit';
-import { resolveConversationKey } from '../../../../lib/runtime/services';
-import { withSkillExecutionContext } from '../../../../lib/core/utils/executionContext';
-import { finishTask, startTask } from '../../../../lib/runtime/services';
-import { registerTaskAbortController, unregisterTaskAbortController } from '../../../../lib/core/tasks/cancellation';
-import { auditRequest, auditResponse } from '../../../../lib/core/logs/auditLogger';
-import '../../../../lib/bootstrap';
+/** v1 compatibility: `data: {"token"}` chunks, then `{"done": true, "reply"}` and `[DONE]`. */
+import { compatRequest } from '../../../../lib/server/compat';
+import { route, sse } from '../../../../lib/server/http';
 
-export async function POST(req: NextRequest) {
-  const unauthorized = requireApiKey(req);
-  if (unauthorized) return unauthorized;
+export const dynamic = 'force-dynamic';
 
-  const rl = defaultRateLimiter.consume(resolveRateLimitKey(req));
-  if (!rl.allowed) return rateLimitResponse(rl);
-
-  const config = resolveRuntimeConfig();
-  const { provider, model, apiKey } = config;
-  if (!config.configured) return Response.json({ error: 'Missing API key for selected provider. Run npm run doctor.' }, { status: 401 });
-
-  let body: {
-    messages?: LLMMessage[];
-    attachments?: LLMAttachment[];
-    timeoutMs?: number;
-    skills?: string[];
-    subject?: string;
-    displayName?: string;
-    taskId?: string;
-  };
-  try {
-    body = (await req.json()) as typeof body;
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 });
-  }
-
-  const { messages, attachments } = body;
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return new Response(JSON.stringify({ error: 'messages array is required' }), {
-      status: 400,
-    });
-  }
-
-  const defaultTimeout = Number(process.env.COPILOT_TIMEOUT_MS) || 120_000;
-  const timeoutMs =
-    body.timeoutMs != null
-      ? Math.min(Math.max(1, body.timeoutMs), defaultTimeout)
-      : defaultTimeout;
-
-  const adapter = createAdapterWithFallback({ provider, model, apiKey, timeoutMs });
-  const skills = Array.isArray(body.skills) ? resolveSkills(body.skills) : listActiveSkills();
-  const subject = String(body.subject ?? req.headers.get('x-copharness-subject') ?? 'anonymous').trim() || 'anonymous';
-  const identity = await resolveConversationKey('api', subject, { displayName: body.displayName });
-  const task = await startTask({
-    id: body.taskId,
-    kind: 'api',
-    personId: identity.personId,
-    channelKey: identity.channelKey,
-    conversationKey: identity.conversationKey,
-    title: messages[messages.length - 1]?.content?.slice(0, 120),
-    metadata: { stream: true },
-  });
-
-  auditRequest(task.id, identity.personId, messages[messages.length - 1]?.content);
-  const taskAbort = new AbortController();
-  registerTaskAbortController(task.id, taskAbort);
-  const abortSignal = req.signal
-    ? AbortSignal.any([req.signal, taskAbort.signal])
-    : taskAbort.signal;
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      let fullContent = '';
-      try {
-        await withSkillExecutionContext(
-          {
-            personId: identity.personId,
-            channelKey: identity.channelKey,
-            taskId: task.id,
-          },
-          async () => {
-            const gen = adapter.stream
-              ? adapter.stream({ messages, attachments, timeoutMs, abortSignal, skills })
-              : (async function* fallback() {
-                  const resp = await adapter.complete({
-                    messages,
-                    attachments,
-                    timeoutMs,
-                    abortSignal,
-                    skills,
-                  });
-                  yield resp.content;
-                })();
-
-            for await (const chunk of gen) {
-              fullContent += chunk;
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ token: chunk })}\n\n`),
-              );
-            }
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ done: true, reply: fullContent })}\n\n`),
-            );
-          },
-        );
-        await finishTask(task.id, 'succeeded');
-        auditResponse(task.id, fullContent);
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      } catch (err) {
-        // A stop request via the cancellation registry has already finished
-        // the ledger entry as cancelled; report the cancellation downstream.
-        if (taskAbort.signal.aborted) {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: 'Task cancelled', taskId: task.id })}\n\n`),
-          );
-        } else {
-          const message = err instanceof Error ? err.message : String(err);
-          await finishTask(task.id, 'failed', err);
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: message, taskId: task.id })}\n\n`),
-          );
-        }
-      } finally {
-        unregisterTaskAbortController(task.id);
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  });
-}
+export const POST = route(async (req, { runtime }) => {
+  const { sessionId, text, images } = await compatRequest(runtime, req);
+  return sse((send, close) => {
+    runtime.send(sessionId, text, {
+      interactive: false,
+      images,
+      onEvent: e => { if (e.type === 'text_delta' && !e.agent) send({ token: e.text }); },
+    }).then(result => {
+      if (result.stopReason === 'error') send({ error: result.error, taskId: sessionId });
+      else send({ done: true, reply: result.text, taskId: sessionId });
+      close();
+    }, err => { send({ error: err instanceof Error ? err.message : String(err) }); close(); });
+  }, { 'X-Session-Id': sessionId });
+}, { rateLimit: true });

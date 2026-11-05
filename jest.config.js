@@ -1,16 +1,10 @@
 /** @type {import('jest').Config} */
-const nextJest = require('next/jest')
+const nextJest = require('next/jest');
 
-const createJestConfig = nextJest({ dir: './' })
+const createJestConfig = nextJest({ dir: './' });
 
-const customJestConfig = {
+module.exports = createJestConfig({
   testEnvironment: 'node',
-  testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1',
-    '^@github/copilot-sdk$': '<rootDir>/__mocks__/copilot-sdk.ts',
-  },
-  setupFilesAfterEnv: ['./jest.setup.ts'],
-}
-
-module.exports = createJestConfig(customJestConfig)
+  testMatch: ['**/__tests__/**/*.test.ts'],
+  moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },
+});
