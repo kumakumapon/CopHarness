@@ -20,10 +20,21 @@ export function splitText(text: string, max: number): string[] {
   return chunks;
 }
 
-async function post(url: string, body: unknown, headers: Record<string, string>, send: (url: string, init: RequestInit) => Promise<Response> = fetch): Promise<Response> {
-  const res = await send(url, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', ...headers }, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`${url} → HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+async function check(res: Response): Promise<Response> {
+  if (!res.ok) throw new Error(`${new URL(res.url || 'http://invalid').host} → HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
   return res;
+}
+
+const jsonHeaders = (headers: Record<string, string>) => ({ 'Content-Type': 'application/json; charset=utf-8', ...headers });
+
+/** POST to a fixed platform API host (the path is built from validated ids). */
+async function post(url: string, body: unknown, headers: Record<string, string>): Promise<Response> {
+  return check(await fetch(url, { method: 'POST', headers: jsonHeaders(headers), body: JSON.stringify(body) }));
+}
+
+/** POST to an operator-configured URL; internal addresses are refused by safeFetch. */
+async function postToWebhook(url: string, body: unknown): Promise<Response> {
+  return check(await safeFetch(url, { method: 'POST', headers: jsonHeaders({}), body: JSON.stringify(body) }));
 }
 
 /** Platform ids (channels, users) are plain tokens; reject anything that could alter the request path. */
@@ -62,7 +73,7 @@ export async function deliver(target: DeliveryTarget, text: string, env: Record<
     case 'webhook':
       // `text` for Slack-style webhooks, `content` for Discord webhooks.
       // The URL is operator-configured but may point anywhere: refuse internal addresses.
-      await post(target.to, { text, content: text.slice(0, 2000) }, {}, safeFetch);
+      await postToWebhook(target.to, { text, content: text.slice(0, 2000) });
       return;
   }
 }
