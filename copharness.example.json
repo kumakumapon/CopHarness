@@ -1,0 +1,48 @@
+{
+  "model": "anthropic/claude-opus-5-5",
+  "workspace": "./workspace",
+  "systemPrompt": "回答は日本語で、結論から簡潔に。",
+
+  "permissions": {
+    "mode": "default",
+    "allow": ["bash(git status*)", "bash(git diff*)", "bash(ls*)", "mcp__github__get_*"],
+    "ask": [],
+    "deny": ["bash(rm -rf*)", "bash(sudo *)"],
+    "approvalTimeoutMs": 600000
+  },
+
+  "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" },
+      "disabled": true
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./workspace"],
+      "disabled": true
+    }
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "bash", "command": "node hooks/block-secrets.js" }
+    ]
+  },
+
+  "channels": {
+    "allowedUsers": ["discord:123456789012345678", "line:Uxxxxxxxxxxxxxxxx"],
+    "approvers": ["discord:123456789012345678"]
+  },
+
+  "limits": { "dailyCostUsd": 5 },
+  "maxTurns": 50,
+  "compaction": { "thresholdTokens": 120000 },
+
+  "providers": {
+    "local": { "type": "openai", "baseUrl": "http://localhost:8080/v1" }
+  },
+
+  "tools": { "disabled": [] },
+  "pricing": { "local/my-model": { "input": 0, "output": 0 } }
+}

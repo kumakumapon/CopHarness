@@ -1,7 +1,9 @@
-import { isMinimalRuntime } from './lib/core/runtimeProfile';
+/**
+ * Background services for `npm run dev` / `npm start`: scheduler, Discord
+ * bot and MCP connections run inside the Next.js server process.
+ */
 export async function register() {
-  if (!isMinimalRuntime() && process.env.NEXT_RUNTIME === 'nodejs') {
-    const { startWatcherAdapters } = await import('./lib/extensions/automation/watchers/adapterDaemon');
-    startWatcherAdapters();
-  }
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  const { startServices } = await import('./lib/server/services');
+  await startServices();
 }

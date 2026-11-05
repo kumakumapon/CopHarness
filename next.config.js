@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // The Copilot SDK 1.x loads a native runtime through koffi (.node binaries) and platform-specific
-  // optional packages; webpack cannot bundle those, so load them from node_modules at runtime.
-  serverExternalPackages: ['@github/copilot-sdk', 'koffi'],
-}
+  // Loaded from node_modules at runtime: native bindings (Copilot SDK), optional
+  // gateway dependencies (discord.js) and child-process transports (MCP).
+  serverExternalPackages: ['@github/copilot-sdk', 'koffi', 'discord.js', '@discordjs/ws', '@modelcontextprotocol/sdk'],
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

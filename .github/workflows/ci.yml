@@ -36,17 +36,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run all tests
-        run: npm test
-
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Deterministic agent evaluation
-        run: npm run eval:mock
+      - name: Tests
+        run: npm test
 
       - name: Production build
         run: npm run build
 
-      - name: Minimal and full production runtime smoke checks
-        run: npm run smoke:profiles
+      - name: End-to-end smoke test (local fake LLM, no external calls)
+        run: npm run smoke
