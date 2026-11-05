@@ -132,11 +132,14 @@ export interface RateLimitKeyCarrier {
 /** Shared bucket used whenever no trustworthy per-client identity exists. */
 export const GLOBAL_RATE_LIMIT_KEY = 'global';
 
-/** Bucket key derived from a token so the token itself is never kept (not password storage). */
-const BUCKET_KEY_LABEL = 'copharness-rate-limit-bucket';
+/**
+ * Opaque, fixed-length bucket id for a caller. The raw credential is never
+ * stored in the limiter; this is an identifier, not password storage.
+ */
+const BUCKET_ID_LABEL = 'copharness-rate-limit-bucket';
 
-function hashToken(token: string): string {
-  return createHmac('sha256', BUCKET_KEY_LABEL).update(token).digest('hex').slice(0, 32);
+function bucketIdFor(callerValue: string): string {
+  return createHmac('sha256', BUCKET_ID_LABEL).update(callerValue).digest('hex').slice(0, 32);
 }
 
 /** Strip an optional port and IPv6 brackets from a forwarded-for entry. */
@@ -239,9 +242,9 @@ function resolveClientIpFromForwardedFor(header: string | null): string | null {
  * `global`) so the classes cannot collide.
  */
 export function resolveRateLimitKey(req: RateLimitKeyCarrier): string {
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : req.headers.get('x-api-key')?.trim();
-  if (token) return `key:${hashToken(token)}`;
+  const scheme = req.headers.get('authorization');
+  const caller = scheme?.toLowerCase().startsWith('bearer ') ? scheme.slice(7).trim() : req.headers.get('x-api-key')?.trim();
+  if (caller) return `key:${bucketIdFor(caller)}`;
 
   const clientIp = resolveClientIpFromForwardedFor(req.headers.get('x-forwarded-for'));
   return clientIp ? `ip:${clientIp}` : GLOBAL_RATE_LIMIT_KEY;
