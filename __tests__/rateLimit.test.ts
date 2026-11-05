@@ -16,6 +16,7 @@ import {
   RateLimiter,
   rateLimitResponse,
   resolveRateLimitKey,
+  AUTHENTICATED_RATE_LIMIT_KEY,
   GLOBAL_RATE_LIMIT_KEY,
 } from '../lib/server/rateLimit';
 
@@ -258,23 +259,17 @@ describe('resolveRateLimitKey()', () => {
       const key = resolveRateLimitKey(
         makeRequest({ authorization: 'Bearer secret-key', 'x-forwarded-for': '203.0.113.7' }),
       );
-      expect(key).toMatch(/^key:[0-9a-f]{32}$/);
+      expect(key).toBe(AUTHENTICATED_RATE_LIMIT_KEY);
     });
 
-    it('does not leak the key itself into the bucket name', () => {
+    it('never puts the credential into the bucket name', () => {
       const key = resolveRateLimitKey(makeRequest({ authorization: 'Bearer secret-key' }));
       expect(key).not.toContain('secret-key');
     });
 
-    it('gives distinct keys distinct buckets', () => {
-      const a = resolveRateLimitKey(makeRequest({ authorization: 'Bearer key-a' }));
-      const b = resolveRateLimitKey(makeRequest({ authorization: 'Bearer key-b' }));
-      expect(a).not.toBe(b);
-    });
-
-    it('is stable across requests carrying the same key', () => {
+    it('is stable across requests and accepts X-API-Key', () => {
       const a = resolveRateLimitKey(makeRequest({ authorization: 'Bearer secret-key' }));
-      const b = resolveRateLimitKey(makeRequest({ authorization: 'Bearer secret-key' }));
+      const b = resolveRateLimitKey(makeRequest({ 'x-api-key': 'secret-key' }));
       expect(a).toBe(b);
     });
 
@@ -284,11 +279,10 @@ describe('resolveRateLimitKey()', () => {
       expect(key).toBe('ip:203.0.113.7');
     });
 
-    it('keys on the (already verified) bearer token even without COPHARNESS_API_KEY', () => {
-      // Authentication is always on (auto-generated token), so the token identifies the caller.
+    it('uses the shared authenticated bucket even without COPHARNESS_API_KEY', () => {
+      // Authentication is always on (auto-generated token); the API accepts one credential.
       delete process.env.COPHARNESS_API_KEY;
-      const key = resolveRateLimitKey(makeRequest({ authorization: 'Bearer anything' }));
-      expect(key).toMatch(/^key:/);
+      expect(resolveRateLimitKey(makeRequest({ authorization: 'Bearer anything' }))).toBe(AUTHENTICATED_RATE_LIMIT_KEY);
     });
   });
 });

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 
 interface RateLimitResult {
   allowed: boolean;
@@ -132,15 +131,8 @@ export interface RateLimitKeyCarrier {
 /** Shared bucket used whenever no trustworthy per-client identity exists. */
 export const GLOBAL_RATE_LIMIT_KEY = 'global';
 
-/**
- * Opaque, fixed-length bucket id for a caller. The raw credential is never
- * stored in the limiter; this is an identifier, not password storage.
- */
-const BUCKET_ID_LABEL = 'copharness-rate-limit-bucket';
-
-function bucketIdFor(callerValue: string): string {
-  return createHmac('sha256', BUCKET_ID_LABEL).update(callerValue).digest('hex').slice(0, 32);
-}
+/** Bucket shared by all authenticated requests (the API has a single access token). */
+export const AUTHENTICATED_RATE_LIMIT_KEY = 'key:authenticated';
 
 /** Strip an optional port and IPv6 brackets from a forwarded-for entry. */
 function normalizeIp(raw: string): string {
@@ -242,9 +234,9 @@ function resolveClientIpFromForwardedFor(header: string | null): string | null {
  * `global`) so the classes cannot collide.
  */
 export function resolveRateLimitKey(req: RateLimitKeyCarrier): string {
-  const scheme = req.headers.get('authorization');
-  const caller = scheme?.toLowerCase().startsWith('bearer ') ? scheme.slice(7).trim() : req.headers.get('x-api-key')?.trim();
-  if (caller) return `key:${bucketIdFor(caller)}`;
+  // Exactly one credential is accepted by the API, so every authenticated
+  // caller shares one bucket; the credential's value is never read here.
+  if (req.headers.get('authorization') || req.headers.get('x-api-key')) return AUTHENTICATED_RATE_LIMIT_KEY;
 
   const clientIp = resolveClientIpFromForwardedFor(req.headers.get('x-forwarded-for'));
   return clientIp ? `ip:${clientIp}` : GLOBAL_RATE_LIMIT_KEY;
