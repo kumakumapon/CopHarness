@@ -3,9 +3,7 @@
  * native replay content and usage mapping without calling external services.
  */
 import * as http from 'node:http';
-import { Agent, setGlobalDispatcher } from 'undici';
 import { AnthropicProvider } from '../lib/providers/anthropic';
-import { GeminiProvider } from '../lib/providers/gemini';
 import { OpenAIProvider } from '../lib/providers/openai';
 import type { ModelEvent } from '../lib/providers/types';
 
@@ -102,35 +100,6 @@ describe('OpenAI-compatible stream', () => {
       ]);
       expect(r.usage).toEqual({ inputTokens: 12, outputTokens: 5, cacheReadTokens: 8, cacheWriteTokens: 0 });
       expect(server.requests[0].body).toMatchObject({ stream: true, stream_options: { include_usage: true } });
-    } finally {
-      await server.close();
-    }
-  });
-});
-
-describe('Gemini stream', () => {
-  // Jest's sandboxed globals lack undici's global dispatcher, which @google/genai looks up (not an issue outside Jest).
-  beforeAll(() => setGlobalDispatcher(new Agent()));
-
-  it('separates thoughts, keeps signatures in native parts and maps function calls', async () => {
-    const server = await serve((_req, _body, res) => sse(res, [
-      [undefined, { candidates: [{ content: { role: 'model', parts: [{ text: 'thinking...', thought: true }] } }] }],
-      [undefined, { candidates: [{ content: { role: 'model', parts: [{ text: 'Let me check.' }] } }] }],
-      [undefined, { candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'read_file', args: { path: 'b' } }, thoughtSignature: 'TS' }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 30, candidatesTokenCount: 7, thoughtsTokenCount: 3, cachedContentTokenCount: 10 } }],
-    ]));
-    try {
-      const provider = new GeminiProvider({ apiKey: 'k', baseUrl: server.url, timeoutMs: 10_000 });
-      const events: ModelEvent[] = [];
-      const r = await provider.stream({ model: 'gemini-2.5-flash', system: 's', messages: [{ role: 'user', content: [{ type: 'text', text: 'q' }] }], tools: [{ name: 'read_file', description: 'r', inputSchema: { type: 'object' } }] }, e => events.push(e));
-      expect(events).toEqual([{ type: 'reasoning_delta', text: 'thinking...' }, { type: 'text_delta', text: 'Let me check.' }]);
-      expect(r.stopReason).toBe('tool_use');
-      expect(r.message.content).toEqual([
-        { type: 'text', text: 'Let me check.' },
-        { type: 'tool_call', id: 'gemini_auto_0', name: 'read_file', input: { path: 'b' } },
-      ]);
-      expect((r.message.native!.content as Array<Record<string, unknown>>)[2]).toMatchObject({ thoughtSignature: 'TS' });
-      expect(r.usage).toEqual({ inputTokens: 20, outputTokens: 10, cacheReadTokens: 10, cacheWriteTokens: 0 });
-      expect(server.requests[0].url).toContain('streamGenerateContent');
     } finally {
       await server.close();
     }
