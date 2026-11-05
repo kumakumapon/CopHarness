@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 
 interface RateLimitResult {
   allowed: boolean;
@@ -132,8 +132,11 @@ export interface RateLimitKeyCarrier {
 /** Shared bucket used whenever no trustworthy per-client identity exists. */
 export const GLOBAL_RATE_LIMIT_KEY = 'global';
 
+/** Bucket key derived from a token so the token itself is never kept (not password storage). */
+const BUCKET_KEY_LABEL = 'copharness-rate-limit-bucket';
+
 function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex').slice(0, 32);
+  return createHmac('sha256', BUCKET_KEY_LABEL).update(token).digest('hex').slice(0, 32);
 }
 
 /** Strip an optional port and IPv6 brackets from a forwarded-for entry. */

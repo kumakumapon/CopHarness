@@ -34,7 +34,8 @@ async function lineApi(path: string, body: unknown, token: string): Promise<void
 }
 
 async function fetchImage(messageId: string, token: string): Promise<ImagePart | undefined> {
-  const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!/^\d{1,32}$/.test(messageId)) return undefined; // LINE message ids are numeric
+  const res = await fetch(`https://api-data.line.me/v2/bot/message/${encodeURIComponent(messageId)}/content`, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) return undefined;
   const mimeType = (res.headers.get('content-type') ?? 'image/jpeg').split(';')[0];
   return { type: 'image', mimeType, data: Buffer.from(await res.arrayBuffer()).toString('base64') };

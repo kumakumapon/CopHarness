@@ -1,4 +1,5 @@
 /** Push a message to a chat channel or webhook (used by schedules and channel bots). */
+import { safeFetch } from '../util/urlGuard';
 
 export type DeliveryTarget =
   | { channel: 'discord'; to: string }
@@ -19,10 +20,16 @@ export function splitText(text: string, max: number): string[] {
   return chunks;
 }
 
-async function post(url: string, body: unknown, headers: Record<string, string>): Promise<Response> {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', ...headers }, body: JSON.stringify(body) });
+async function post(url: string, body: unknown, headers: Record<string, string>, send: (url: string, init: RequestInit) => Promise<Response> = fetch): Promise<Response> {
+  const res = await send(url, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', ...headers }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`${url} → HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
   return res;
+}
+
+/** Platform ids (channels, users) are plain tokens; reject anything that could alter the request path. */
+function platformId(id: string): string {
+  if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(id)) throw new Error(`配信先の ID の形式が正しくありません: ${id.slice(0, 40)}`);
+  return encodeURIComponent(id);
 }
 
 export async function deliver(target: DeliveryTarget, text: string, env: Record<string, string | undefined> = process.env): Promise<void> {
@@ -31,7 +38,7 @@ export async function deliver(target: DeliveryTarget, text: string, env: Record<
       const token = env.DISCORD_BOT_TOKEN;
       if (!token) throw new Error('DISCORD_BOT_TOKEN が設定されていません');
       for (const content of splitText(text, 2000)) {
-        await post(`https://discord.com/api/v10/channels/${encodeURIComponent(target.to)}/messages`, { content }, { Authorization: `Bot ${token}` });
+        await post(`https://discord.com/api/v10/channels/${platformId(target.to)}/messages`, { content }, { Authorization: `Bot ${token}` });
       }
       return;
     }
@@ -54,7 +61,8 @@ export async function deliver(target: DeliveryTarget, text: string, env: Record<
     }
     case 'webhook':
       // `text` for Slack-style webhooks, `content` for Discord webhooks.
-      await post(target.to, { text, content: text.slice(0, 2000) }, {});
+      // The URL is operator-configured but may point anywhere: refuse internal addresses.
+      await post(target.to, { text, content: text.slice(0, 2000) }, {}, safeFetch);
       return;
   }
 }

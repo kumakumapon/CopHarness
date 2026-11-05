@@ -30,6 +30,8 @@ export interface ChannelReply {
   typing?(): void;
 }
 
+const COMMANDS = new Set(['help', 'new', 'stop', 'status', 'approve', 'deny']);
+
 const HELP = [
   'CopHarness の使い方:',
   '・メッセージを送ると AI が答えます（必要に応じてツールを使います）',
@@ -83,8 +85,12 @@ export class ChannelGateway {
       return;
     }
     const text = msg.text.trim();
-    const command = text.match(/^[/!](help|new|stop|status|approve|deny)\b\s*(.*)$/i);
-    if (command) return this.command(msg, reply, command[1].toLowerCase(), command[2].trim());
+    // Split instead of matching a regex against user text (no backtracking on long input).
+    if (text[0] === '/' || text[0] === '!') {
+      const space = text.search(/\s/);
+      const name = (space < 0 ? text.slice(1) : text.slice(1, space)).toLowerCase();
+      if (COMMANDS.has(name)) return this.command(msg, reply, name, space < 0 ? '' : text.slice(space).trim());
+    }
     if (!text && !msg.images?.length) return;
 
     let sessionId = this.sessionFor(msg.conversationKey);

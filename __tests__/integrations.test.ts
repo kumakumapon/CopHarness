@@ -214,3 +214,26 @@ describe('webhook signatures', () => {
     expect(chunks.every(c => c.length <= 2000)).toBe(true);
   });
 });
+
+describe('delivery hardening', () => {
+  it('rejects ids that could change the request path', async () => {
+    const { deliver } = await import('../lib/channels/notify');
+    await expect(deliver({ channel: 'discord', to: '123/../../users/@me' }, 'x', { DISCORD_BOT_TOKEN: 't' })).rejects.toThrow(/形式/);
+  });
+
+  it('refuses webhook deliveries to internal addresses', async () => {
+    const { deliver } = await import('../lib/channels/notify');
+    await expect(deliver({ channel: 'webhook', to: 'http://169.254.169.254/latest' }, 'x', {})).rejects.toThrow();
+  });
+
+  it('parses chat commands without regex backtracking on long input', async () => {
+    const provider = new ScriptedProvider([]);
+    const runtime = testRuntime(provider);
+    const gateway = new ChannelGateway(runtime);
+    const sent: string[] = [];
+    const started = Date.now();
+    await gateway.handle({ channel: 'discord', userId: 'u', conversationKey: 'k', owner: 'o', text: `/approve${' '.repeat(200_000)}x` }, { send: async t => { sent.push(t); } });
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(sent[0]).toContain('承認する権限がありません'); // recognised as /approve with an argument
+  });
+});
